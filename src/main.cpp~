@@ -1,0 +1,101 @@
+/* 
+ * File:   main.cpp
+ * Author: bx
+ *
+ * Created on August 15, 2017, 2:47 PM
+ */
+#include "Kmer_handler.h"
+#include <unistd.h>
+
+
+using namespace std;
+
+int main(int argc, char** argv) {                
+    uint64_t contig_num;
+
+    //get current directory
+    char cwd[1024];
+    //char filename[50] = "k1mer.dict";
+    
+    if (getcwd(cwd,sizeof(cwd)) != NULL)
+        printf("Current work dir: %s\n", cwd);
+    else
+        printf("getcwd error");
+      
+    //char filename[50] = "k1mer.dict";
+    std::string filename("Shannon_cmake/test_data/kmer_contig.dict");
+    
+    Kmer_handler kmer_handler(5);    
+    kmer_handler.read_sequence_from_file(filename);
+    kmer_handler.sort_kmer_descending_count(); 
+    contig_num = kmer_handler.find_contig();
+    printf("number of contig is %" PRIu64 "\n", contig_num);
+    /*
+    char file_name[50] = "base_string.txt"; 
+    char base_string[26];
+    char back_string[26];
+    back_string[25] = '\0';
+    uint8_t byte_list[10] = {0};
+    read_input(base_string, file_name);        
+    
+    uint16_t out_length;
+    uint16_t in_length = 25;
+    uint64_t byte=1;
+    encode_kmer(base_string, &byte, in_length);          
+    printf("out length %u\n", out_length);       
+    
+    decode_kmer(back_string, &byte, in_length);
+    printf("%s\n", back_string);
+    */
+    
+    /*
+    uint8_t info = 0x00;    
+    kmer_handler.write_kmer_info(3, false, NULL);
+    char out='Q';
+    out =kmer_handler.parse_kmer_info_prefix(info);
+    printf("prefix %c\n",out);
+    out =kmer_handler.parse_kmer_info_suffix(info);
+    printf("suffix %c\n",out);       
+    */
+    /*
+    uint8_t kmer_length = 10;
+    uint64_t byte;
+    char base[11] = "ACTTCAGGAT";
+    char back[11];
+    back[10]='\0';
+    encode_kmer( base, &byte, kmer_length);
+    decode_kmer( back, &byte, kmer_length);
+    printf("%s\n", back);
+    */       
+    return 0;
+}
+
+
+/* old tests */
+/*
+ char base[5];
+
+    base[0] = 'T';
+    base[1] = 'T';
+    base[2] = 'A';
+    base[3] = 'A';
+    base[4] = '\0';
+  
+    
+    char file_name[50] = "base_string.txt"; 
+    char base_string[31];
+    char back_string[31];
+    back_string[30] = '\0';
+    uint8_t byte_list[10] = {0};
+    read_input(base_string, file_name);        
+    
+    uint16_t out_length;
+    double in_length = 30;
+    out_length = encode_base_string(base_string, byte_list, in_length);
+    
+    printf("out length %u\n", out_length);
+    print_byte_list(byte_list, out_length);
+    decode_byte_list(byte_list, back_string, in_length);
+    printf("%s\n", back_string);
+ 
+ */
