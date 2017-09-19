@@ -89,7 +89,7 @@ void Contig_graph_handler::break_and_keep_component()
         shc_log_info(shc_logname, "Starting metis \n");
         create_metis_array_input();
         metis_setup.num_vertices = num_vertices;
-        metis_setup.num_partition = std::min(100, 
+        metis_setup.num_partition = std::min(static_cast<idx_t>(100), 
                 num_vertices/metis_setup.partition_size + 1);
         shc_log_info(shc_logname, "metis to asked to break %d partition\n", metis_setup.num_partition);
         idx_t ufactor = static_cast<idx_t>(METIS_IMBALANCE_PRECISION 
@@ -321,10 +321,10 @@ void Contig_graph_handler::assign_reads_to_components(
     typedef boost::filesystem::path dir_t;
     typedef boost::filesystem::path filename_t;
     path_t base_path = boost::filesystem::current_path();    
-    dir_t comp_read_local("output/components_reads");
-    path_t dir_path = base_path / comp_read_local;  
-    
-    add_directory(dir_path);
+    std::string base_path_str(base_path.c_str()); 
+    std::string dir_path = base_path_str + "/output/components_reads";  
+    path_t create_path(dir_path);
+    add_directory(create_path);
     shc_log_info(shc_logname, "Created dir %s\n", dir_path.c_str());
             
     //create files    
@@ -332,8 +332,8 @@ void Contig_graph_handler::assign_reads_to_components(
     
     for(comp_num_t i=0; i<curr_component_num; i++)
     {
-        path_t file_path = dir_path / 
-                        (std::string("comp") + std::to_string(i));
+        std::string file_path = dir_path + 
+                        (std::string("/comp") + std::to_string(i));
         std::shared_ptr<std::ofstream> file(new std::ofstream);
         file->open(file_path.c_str());
         
@@ -412,12 +412,13 @@ void Contig_graph_handler::assign_kmer_to_components()
     typedef boost::filesystem::path dir_t;
     typedef boost::filesystem::path filename_t;
     path_t base_path = boost::filesystem::current_path();    
-    dir_t comp_read_local("output/components_kmer");
-    path_t dir_path = base_path / comp_read_local;  
+    std::string base_path_str(base_path.c_str()); 
+    std::string dir_path = base_path_str + "/output/components_reads"; 
+    path_t create_path(dir_path);
     char bases[33];
     bases[kh->kmer_length] = '\0';
     
-    add_directory(dir_path);
+    add_directory(create_path);
     shc_log_info(shc_logname, "Created dir %s\n", dir_path.c_str());
             
     //create files    
@@ -425,8 +426,8 @@ void Contig_graph_handler::assign_kmer_to_components()
     
     for(comp_num_t i=0; i<curr_component_num; i++)
     {
-        path_t file_path = dir_path / 
-                        (std::string("kmer") + std::to_string(i));
+        std::string file_path = dir_path + 
+                        (std::string("/kmer") + std::to_string(i));
         std::shared_ptr<std::ofstream> file(new std::ofstream);
         file->open(file_path.c_str());
         

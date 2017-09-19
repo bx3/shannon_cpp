@@ -124,11 +124,11 @@ void test_Contig_graph()
         
     typedef boost::filesystem::path path_t;
     path_t base_path = boost::filesystem::current_path();
-    path_t input_kmer_filename_path = base_path / "test_data/kmer_read.dict";
-    path_t input_read_filename_path = base_path / "test_data/SE_read.fasta";
-    path_t log_filename_path = base_path / "log/default_shannonC_log";
-    std::string input_kmer_filename( input_kmer_filename_path.c_str() );
-    std::string input_read_filename( input_read_filename_path.c_str() );
+    std::string base_path_str(base_path.c_str());
+    std::string input_kmer_filename = base_path_str + "/test_data/kmer_read.dict";
+    std::string input_read_filename = base_path_str + "/test_data/SE_read.fasta";
+    std::string log_filename_path = base_path_str + "/log/default_shannonC_log";
+    
     memcpy(shc_logname, log_filename_path.c_str(), log_filename_path.size());    
     
     std::cout << "current work dir is " << base_path << std::endl;
@@ -182,12 +182,14 @@ void test_Kmer()
         
     typedef boost::filesystem::path path_t;
     path_t base_path = boost::filesystem::current_path();
-    path_t input_kmer_filename_path = base_path / "test_data/kmer_read.dict";
-    path_t input_read_filename_path = base_path / "test_data/SE_read.fasta";
-    path_t log_filename_path = base_path / "log/default_shannonC_log";
-    std::string input_kmer_filename( input_kmer_filename_path.c_str() );
-    std::string input_read_filename( input_read_filename_path.c_str() );
-    memcpy(shc_logname, log_filename_path.c_str(), log_filename_path.size());
+    std::string base_path_str(base_path.c_str());
+    std::string input_kmer_filename = base_path_str + "/test_data/kmer_read.dict";
+    std::string input_read_filename = base_path_str + "/test_data/SE_read.fasta";
+    std::string log_filename_path = base_path_str + "/log/default_shannonC_log";
+    
+    memcpy(shc_logname, log_filename_path.c_str(), log_filename_path.size());    
+    
+    std::cout << "current work dir is " << base_path << std::endl;
     
     std::cout << "current work dir is " << base_path << std::endl;
     
@@ -230,12 +232,14 @@ void test_Kmer_without_filter()
     
     typedef boost::filesystem::path path_t;
     path_t base_path = boost::filesystem::current_path();
-    path_t input_kmer_filename_path = base_path / "test_data/kmer_read.dict";
-    path_t input_read_filename_path = base_path / "test_data/SE_read.fasta";
-    path_t log_filename_path = base_path / "log/default_shannonC_log";
-    std::string input_kmer_filename( input_kmer_filename_path.c_str() );
-    std::string input_read_filename( input_read_filename_path.c_str() );
-    memcpy(shc_logname, log_filename_path.c_str(), log_filename_path.size());
+    std::string base_path_str(base_path.c_str());
+    std::string input_kmer_filename = base_path_str + "/test_data/kmer_read.dict";
+    std::string input_read_filename = base_path_str + "/test_data/SE_read.fasta";
+    std::string log_filename_path = base_path_str + "/log/default_shannonC_log";
+    
+    memcpy(shc_logname, log_filename_path.c_str(), log_filename_path.size());    
+    
+    std::cout << "current work dir is " << base_path << std::endl;
     
     std::cout << "current work dir is " << base_path << std::endl;
             
