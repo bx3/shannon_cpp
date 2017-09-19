@@ -1,0 +1,488 @@
+SHC Log File: [Tue Sep 19 00:33:34 2017
+] 
+[test_Contig_graph][INFO] Shannon C is starting
+[read_sequence_from_file][INFO] Reading kmers from the file
+[read_sequence_from_file][INFO] Finish reading kmers from the file
+[sort_kmer_descending_count][INFO] Sorting 16714 25mer based on counts
+[sort_kmer_descending_count][INFO] Finish Sorting
+[find_contig][INFO] Finding contig
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Finish contig decision, first contig
+[declare_new_contig][INFO] contig number increase to 0
+[declare_new_contig][INFO] delimitor adds an interval 0->418 
+[declare_new_contig][INFO] new contig has length 1669
+[declare_new_contig][INFO] new contig has byte length 418
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[use_list_to_filter][INFO] Finish list filter, Passing
+[declare_new_contig][INFO] contig number increase to 1
+[declare_new_contig][INFO] delimitor adds an interval 418->440 
+[declare_new_contig][INFO] new contig has length 88
+[declare_new_contig][INFO] new contig has byte length 22
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 2
+[declare_new_contig][INFO] delimitor adds an interval 440->637 
+[declare_new_contig][INFO] new contig has length 786
+[declare_new_contig][INFO] new contig has byte length 197
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 3
+[declare_new_contig][INFO] delimitor adds an interval 637->814 
+[declare_new_contig][INFO] new contig has length 708
+[declare_new_contig][INFO] new contig has byte length 177
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 4
+[declare_new_contig][INFO] delimitor adds an interval 814->842 
+[declare_new_contig][INFO] new contig has length 112
+[declare_new_contig][INFO] new contig has byte length 28
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 5
+[declare_new_contig][INFO] delimitor adds an interval 842->880 
+[declare_new_contig][INFO] new contig has length 151
+[declare_new_contig][INFO] new contig has byte length 38
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 6
+[declare_new_contig][INFO] delimitor adds an interval 880->1007 
+[declare_new_contig][INFO] new contig has length 506
+[declare_new_contig][INFO] new contig has byte length 127
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[use_list_to_filter][INFO] Finish list filter, Passing
+[declare_new_contig][INFO] contig number increase to 7
+[declare_new_contig][INFO] delimitor adds an interval 1007->1041 
+[declare_new_contig][INFO] new contig has length 136
+[declare_new_contig][INFO] new contig has byte length 34
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 8
+[declare_new_contig][INFO] delimitor adds an interval 1041->1305 
+[declare_new_contig][INFO] new contig has length 1056
+[declare_new_contig][INFO] new contig has byte length 264
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 9
+[declare_new_contig][INFO] delimitor adds an interval 1305->1355 
+[declare_new_contig][INFO] new contig has length 197
+[declare_new_contig][INFO] new contig has byte length 50
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 10
+[declare_new_contig][INFO] delimitor adds an interval 1355->1414 
+[declare_new_contig][INFO] new contig has length 236
+[declare_new_contig][INFO] new contig has byte length 59
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 11
+[declare_new_contig][INFO] delimitor adds an interval 1414->1515 
+[declare_new_contig][INFO] new contig has length 402
+[declare_new_contig][INFO] new contig has byte length 101
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 12
+[declare_new_contig][INFO] delimitor adds an interval 1515->1568 
+[declare_new_contig][INFO] new contig has length 211
+[declare_new_contig][INFO] new contig has byte length 53
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 13
+[declare_new_contig][INFO] delimitor adds an interval 1568->1643 
+[declare_new_contig][INFO] new contig has length 300
+[declare_new_contig][INFO] new contig has byte length 75
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[use_list_to_filter][INFO] Finish list filter, Passing
+[declare_new_contig][INFO] contig number increase to 14
+[declare_new_contig][INFO] delimitor adds an interval 1643->1665 
+[declare_new_contig][INFO] new contig has length 87
+[declare_new_contig][INFO] new contig has byte length 22
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[use_list_to_filter][INFO] Finish list filter, Passing
+[declare_new_contig][INFO] contig number increase to 15
+[declare_new_contig][INFO] delimitor adds an interval 1665->1698 
+[declare_new_contig][INFO] new contig has length 132
+[declare_new_contig][INFO] new contig has byte length 33
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 16
+[declare_new_contig][INFO] delimitor adds an interval 1698->1742 
+[declare_new_contig][INFO] new contig has length 175
+[declare_new_contig][INFO] new contig has byte length 44
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 17
+[declare_new_contig][INFO] delimitor adds an interval 1742->1924 
+[declare_new_contig][INFO] new contig has length 726
+[declare_new_contig][INFO] new contig has byte length 182
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 18
+[declare_new_contig][INFO] delimitor adds an interval 1924->1947 
+[declare_new_contig][INFO] new contig has length 90
+[declare_new_contig][INFO] new contig has byte length 23
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 19
+[declare_new_contig][INFO] delimitor adds an interval 1947->1985 
+[declare_new_contig][INFO] new contig has length 150
+[declare_new_contig][INFO] new contig has byte length 38
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 20
+[declare_new_contig][INFO] delimitor adds an interval 1985->2045 
+[declare_new_contig][INFO] new contig has length 239
+[declare_new_contig][INFO] new contig has byte length 60
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 21
+[declare_new_contig][INFO] delimitor adds an interval 2045->2068 
+[declare_new_contig][INFO] new contig has length 92
+[declare_new_contig][INFO] new contig has byte length 23
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 22
+[declare_new_contig][INFO] delimitor adds an interval 2068->2102 
+[declare_new_contig][INFO] new contig has length 133
+[declare_new_contig][INFO] new contig has byte length 34
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 23
+[declare_new_contig][INFO] delimitor adds an interval 2102->2149 
+[declare_new_contig][INFO] new contig has length 185
+[declare_new_contig][INFO] new contig has byte length 47
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 24
+[declare_new_contig][INFO] delimitor adds an interval 2149->2184 
+[declare_new_contig][INFO] new contig has length 140
+[declare_new_contig][INFO] new contig has byte length 35
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 25
+[declare_new_contig][INFO] delimitor adds an interval 2184->2214 
+[declare_new_contig][INFO] new contig has length 117
+[declare_new_contig][INFO] new contig has byte length 30
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 26
+[declare_new_contig][INFO] delimitor adds an interval 2214->2246 
+[declare_new_contig][INFO] new contig has length 126
+[declare_new_contig][INFO] new contig has byte length 32
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 27
+[declare_new_contig][INFO] delimitor adds an interval 2246->2284 
+[declare_new_contig][INFO] new contig has length 152
+[declare_new_contig][INFO] new contig has byte length 38
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 28
+[declare_new_contig][INFO] delimitor adds an interval 2284->2317 
+[declare_new_contig][INFO] new contig has length 131
+[declare_new_contig][INFO] new contig has byte length 33
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 29
+[declare_new_contig][INFO] delimitor adds an interval 2317->2340 
+[declare_new_contig][INFO] new contig has length 92
+[declare_new_contig][INFO] new contig has byte length 23
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 30
+[declare_new_contig][INFO] delimitor adds an interval 2340->2391 
+[declare_new_contig][INFO] new contig has length 201
+[declare_new_contig][INFO] new contig has byte length 51
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 31
+[declare_new_contig][INFO] delimitor adds an interval 2391->2418 
+[declare_new_contig][INFO] new contig has length 107
+[declare_new_contig][INFO] new contig has byte length 27
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 32
+[declare_new_contig][INFO] delimitor adds an interval 2418->2443 
+[declare_new_contig][INFO] new contig has length 98
+[declare_new_contig][INFO] new contig has byte length 25
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[use_list_to_filter][INFO] Finish list filter, Passing
+[declare_new_contig][INFO] contig number increase to 33
+[declare_new_contig][INFO] delimitor adds an interval 2443->2470 
+[declare_new_contig][INFO] new contig has length 106
+[declare_new_contig][INFO] new contig has byte length 27
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 34
+[declare_new_contig][INFO] delimitor adds an interval 2470->2492 
+[declare_new_contig][INFO] new contig has length 86
+[declare_new_contig][INFO] new contig has byte length 22
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 35
+[declare_new_contig][INFO] delimitor adds an interval 2492->2514 
+[declare_new_contig][INFO] new contig has length 87
+[declare_new_contig][INFO] new contig has byte length 22
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 36
+[declare_new_contig][INFO] delimitor adds an interval 2514->2542 
+[declare_new_contig][INFO] new contig has length 112
+[declare_new_contig][INFO] new contig has byte length 28
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 37
+[declare_new_contig][INFO] delimitor adds an interval 2542->2567 
+[declare_new_contig][INFO] new contig has length 97
+[declare_new_contig][INFO] new contig has byte length 25
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 38
+[declare_new_contig][INFO] delimitor adds an interval 2567->2592 
+[declare_new_contig][INFO] new contig has length 98
+[declare_new_contig][INFO] new contig has byte length 25
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 39
+[declare_new_contig][INFO] delimitor adds an interval 2592->2611 
+[declare_new_contig][INFO] new contig has length 76
+[declare_new_contig][INFO] new contig has byte length 19
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 40
+[declare_new_contig][INFO] delimitor adds an interval 2611->2634 
+[declare_new_contig][INFO] new contig has length 92
+[declare_new_contig][INFO] new contig has byte length 23
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 41
+[declare_new_contig][INFO] delimitor adds an interval 2634->2655 
+[declare_new_contig][INFO] new contig has length 84
+[declare_new_contig][INFO] new contig has byte length 21
+[use_list_to_filter][INFO] Start list filter
+[use_list_to_filter][INFO] Start length count filter
+[use_list_to_filter][INFO] Creating contig count filter
+[declare_new_contig][INFO] contig number increase to 42
+[declare_new_contig][INFO] delimitor adds an interval 2655->2675 
+[declare_new_contig][INFO] new contig has length 79
+[declare_new_contig][INFO] new contig has byte length 20
+[deallocate_kmer_descend_list][INFO] Start deallocate kmer sorting list
+[deallocate_kmer_descend_list][INFO] Finish deallocate kmer sorting list
+[deallocate_rmer_contig_map][INFO] Start deallocate rmer contig map for rmer list
+[deallocate_rmer_contig_map][INFO] Finish deallocate rmer contig map for rmer list
+[deallocate_contig_count_map][INFO] Start deallocate contig count map for rmer list
+[deallocate_contig_count_map][INFO] Finish deallocate contig count map for rmer list
+[find_contig][INFO] Finish finding contig, 43 contigs
+[group_components][INFO] Start constructing contig graph
+[group_components][INFO] creating kmer out file for 0
+[increment_edge_weight][INFO] Added contig 7 with vd 1
+[increment_edge_weight][INFO] Edge between 0 7
+[increment_edge_weight][INFO] Added contig 14 with vd 2
+[increment_edge_weight][INFO] Edge between 0 14
+[increment_edge_weight][INFO] Added contig 15 with vd 3
+[increment_edge_weight][INFO] Edge between 0 15
+[increment_edge_weight][INFO] edge between 0 15 : weight increased to 2
+[increment_edge_weight][INFO] Added contig 33 with vd 4
+[increment_edge_weight][INFO] Edge between 0 33
+[increment_edge_weight][INFO] Added contig 1 with vd 5
+[increment_edge_weight][INFO] Edge between 0 1
+[increment_edge_weight][INFO] edge between 1 0 : weight increased to 2
+[increment_edge_weight][INFO] edge between 33 0 : weight increased to 2
+[increment_edge_weight][INFO] edge between 15 0 : weight increased to 3
+[increment_edge_weight][INFO] edge between 15 0 : weight increased to 4
+[increment_edge_weight][INFO] edge between 14 0 : weight increased to 2
+[increment_edge_weight][INFO] edge between 7 0 : weight increased to 2
+[group_components][INFO] close kmer out file for 0
+[break_and_keep_component][INFO] Starting metis 
+[create_metis_array_input][INFO] Start creating metis array input for component
+[break_and_keep_component][INFO] metis to asked to break 2 partition
+[break_and_keep_component][INFO] metis component 0 has contig 0
+[break_and_keep_component][INFO] metis component 0 has contig 7
+[break_and_keep_component][INFO] metis component 1 has contig 14
+[break_and_keep_component][INFO] metis component 0 has contig 15
+[break_and_keep_component][INFO] metis component 1 has contig 33
+[break_and_keep_component][INFO] metis component 1 has contig 1
+[break_and_keep_component][INFO] metis breaks to 2 partition
+[group_components][INFO] creating kmer out file for 2
+[increment_edge_weight][INFO] Added contig 4 with vd 1
+[increment_edge_weight][INFO] Edge between 2 4
+[increment_edge_weight][INFO] edge between 4 2 : weight increased to 2
+[group_components][INFO] close kmer out file for 2
+[group_components][INFO] creating kmer out file for 3
+[increment_edge_weight][INFO] Added contig 11 with vd 1
+[increment_edge_weight][INFO] Edge between 3 11
+[increment_edge_weight][INFO] Added contig 8 with vd 2
+[increment_edge_weight][INFO] Edge between 3 8
+[increment_edge_weight][INFO] Edge between 8 11
+[increment_edge_weight][INFO] edge between 8 3 : weight increased to 2
+[increment_edge_weight][INFO] edge between 11 8 : weight increased to 2
+[increment_edge_weight][INFO] edge between 11 3 : weight increased to 2
+[group_components][INFO] close kmer out file for 3
+[group_components][INFO] creating kmer out file for 4
+[group_components][INFO] close kmer out file for 4
+[group_components][INFO] creating kmer out file for 5
+[group_components][INFO] close kmer out file for 5
+[group_components][INFO] creating kmer out file for 6
+[group_components][INFO] close kmer out file for 6
+[group_components][INFO] creating kmer out file for 7
+[increment_edge_weight][INFO] Added contig 17 with vd 1
+[increment_edge_weight][INFO] Edge between 10 17
+[increment_edge_weight][INFO] edge between 17 10 : weight increased to 2
+[group_components][INFO] close kmer out file for 7
+[group_components][INFO] creating kmer out file for 8
+[increment_edge_weight][INFO] Added contig 24 with vd 1
+[increment_edge_weight][INFO] Edge between 12 24
+[increment_edge_weight][INFO] edge between 24 12 : weight increased to 2
+[group_components][INFO] close kmer out file for 8
+[group_components][INFO] creating kmer out file for 9
+[group_components][INFO] close kmer out file for 9
+[group_components][INFO] creating kmer out file for 10
+[group_components][INFO] close kmer out file for 10
+[group_components][INFO] creating kmer out file for 11
+[group_components][INFO] close kmer out file for 11
+[group_components][INFO] creating kmer out file for 12
+[group_components][INFO] close kmer out file for 12
+[group_components][INFO] creating kmer out file for 13
+[increment_edge_weight][INFO] Added contig 39 with vd 1
+[increment_edge_weight][INFO] Edge between 20 39
+[increment_edge_weight][INFO] edge between 39 20 : weight increased to 2
+[group_components][INFO] close kmer out file for 13
+[group_components][INFO] creating kmer out file for 14
+[group_components][INFO] close kmer out file for 14
+[group_components][INFO] creating kmer out file for 15
+[group_components][INFO] close kmer out file for 15
+[group_components][INFO] creating kmer out file for 16
+[increment_edge_weight][INFO] Added contig 27 with vd 1
+[increment_edge_weight][INFO] Edge between 23 27
+[increment_edge_weight][INFO] edge between 27 23 : weight increased to 2
+[group_components][INFO] close kmer out file for 16
+[group_components][INFO] creating kmer out file for 17
+[group_components][INFO] close kmer out file for 17
+[group_components][INFO] creating kmer out file for 18
+[group_components][INFO] close kmer out file for 18
+[group_components][INFO] creating kmer out file for 19
+[group_components][INFO] close kmer out file for 19
+[group_components][INFO] creating kmer out file for 20
+[group_components][INFO] close kmer out file for 20
+[group_components][INFO] creating kmer out file for 21
+[group_components][INFO] close kmer out file for 21
+[group_components][INFO] creating kmer out file for 22
+[group_components][INFO] close kmer out file for 22
+[group_components][INFO] creating kmer out file for 23
+[group_components][INFO] close kmer out file for 23
+[group_components][INFO] creating kmer out file for 24
+[group_components][INFO] close kmer out file for 24
+[group_components][INFO] creating kmer out file for 25
+[group_components][INFO] close kmer out file for 25
+[group_components][INFO] creating kmer out file for 26
+[group_components][INFO] close kmer out file for 26
+[group_components][INFO] creating kmer out file for 27
+[group_components][INFO] close kmer out file for 27
+[group_components][INFO] creating kmer out file for 28
+[group_components][INFO] close kmer out file for 28
+[group_components][INFO] creating kmer out file for 29
+[group_components][INFO] close kmer out file for 29
+[group_components][INFO] creating kmer out file for 30
+[group_components][INFO] close kmer out file for 30
+[group_components][INFO] creating kmer out file for 31
+[group_components][INFO] close kmer out file for 31
+[group_components][INFO] Finish constructing contig graph
+[log_component_array][INFO] contig: 32 component 
+[log_component_array][INFO] 0   0
+[log_component_array][INFO] 1   1
+[log_component_array][INFO] 2   2
+[log_component_array][INFO] 3   3
+[log_component_array][INFO] 4   2
+[log_component_array][INFO] 5   4
+[log_component_array][INFO] 6   5
+[log_component_array][INFO] 7   0
+[log_component_array][INFO] 8   3
+[log_component_array][INFO] 9   6
+[log_component_array][INFO] 10   7
+[log_component_array][INFO] 11   3
+[log_component_array][INFO] 12   8
+[log_component_array][INFO] 13   9
+[log_component_array][INFO] 14   1
+[log_component_array][INFO] 15   0
+[log_component_array][INFO] 16   10
+[log_component_array][INFO] 17   7
+[log_component_array][INFO] 18   11
+[log_component_array][INFO] 19   12
+[log_component_array][INFO] 20   13
+[log_component_array][INFO] 21   14
+[log_component_array][INFO] 22   15
+[log_component_array][INFO] 23   16
+[log_component_array][INFO] 24   8
+[log_component_array][INFO] 25   17
+[log_component_array][INFO] 26   18
+[log_component_array][INFO] 27   16
+[log_component_array][INFO] 28   19
+[log_component_array][INFO] 29   20
+[log_component_array][INFO] 30   21
+[log_component_array][INFO] 31   22
+[log_component_array][INFO] 32   23
+[log_component_array][INFO] 33   1
+[log_component_array][INFO] 34   24
+[log_component_array][INFO] 35   25
+[log_component_array][INFO] 36   26
+[log_component_array][INFO] 37   27
+[log_component_array][INFO] 38   28
+[log_component_array][INFO] 39   13
+[log_component_array][INFO] 40   29
+[log_component_array][INFO] 41   30
+[log_component_array][INFO] 42   31
+[log_component_array][INFO] Finish log_component_array
+[assign_reads_to_components][INFO] Start assigning read to component
+[assign_reads_to_components][INFO] Created dir /home/bx/Shannon_C_seq/output/components_reads
+[assign_reads_to_components][INFO] Created contig files
+[assign_reads_to_components][INFO] successfully open read file
+[assign_reads_to_components][INFO] Finish assigning read to component
+[assign_kmer_to_components][INFO] Start assigning read to component
+[assign_kmer_to_components][INFO] Created dir /home/bx/Shannon_C_seq/output/components_kmer
+[assign_kmer_to_components][INFO] Created kmer files
+[assign_kmer_to_components][INFO] Finish assigning kmer to component
