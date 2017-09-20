@@ -185,7 +185,7 @@ void Kmer_handler::sort_kmer_descending_count()
             "Sorting %ld %umer based on counts\n", num_kmers, kmer_length);
     
     unsigned long count = 0;
-
+    clock_gettime(CLOCK_MONOTONIC,&kh_nano_start);    
     for (it = kmer_counter.begin(); it != kmer_counter.end(); it++) {
 
         if (it->second.count > 0) {
@@ -198,6 +198,15 @@ void Kmer_handler::sort_kmer_descending_count()
     
     Kmer_sorter sorter;   
     std::sort(kmer_descend_list.begin(), kmer_descend_list.end(), sorter);   
+#ifdef SHOW_PROGRESS
+    clock_gettime(CLOCK_MONOTONIC,&kh_nano_stamp);
+    kh_nTime = (kh_nano_stamp.tv_sec - kh_nano_start.tv_sec);
+    std::cout << "sorting kmer based on count takes " 
+              << kh_nTime/MINUTE_PER_SEC/HOUR_PER_MINUTE << " hours " 
+              << "<=> " << kh_nTime/HOUR_PER_MINUTE << " minutes "
+              << "<=> " << kh_nTime << " sec " << std::endl << std::endl;                  
+#endif
+    
     shc_log_info(shc_logname, "Finish Sorting\n");    
 }
 
@@ -228,10 +237,10 @@ uint8_t Kmer_handler::find_suffix_kmer(const uint64_t *kmer_n, uint64_t *new_kme
         Kmer_counter_map_iterator it = kmer_counter.find(new_byte);                         
         //write_kmer_info(best_base, false, kmer_n);
         if (it != kmer_counter.end())
-        {
-            write_kmer_info(i, false, kmer_n);   //record this kmer its possible prefix string
+        {            
             if (!it->second.used)
-            {           
+            {
+                write_kmer_info(i, false, kmer_n);   //record this kmer its possible prefix string
                 count = it->second.count;
                 //printf("count is %d\n", count);
                 if (count > max_count)
@@ -289,10 +298,10 @@ uint8_t Kmer_handler::find_prefix_kmer(const uint64_t *kmer_n, uint64_t *new_kme
         
          //write_kmer_info(best_base, false, kmer_n);
         if (it != kmer_counter.end())
-        {
-            write_kmer_info(i, true, kmer_n);   //record this kmer its possible prefix string
+        {            
             if(!it->second.used)
             {
+                write_kmer_info(i, true, kmer_n);   //record this kmer its possible prefix string
                 count = it->second.count;
                 if (count > max_count)
                 {
