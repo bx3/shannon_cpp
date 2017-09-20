@@ -19,6 +19,7 @@
 #include <ostream>
 #include <iterator>
 #include "shc_type.h"
+#include <time.h>
 
 //#define LOG_KMER_DETAIL
 
@@ -33,6 +34,9 @@
 #define SHOW_PROGRESS
 #define KMER_PROGRESS_STEP 100000
 #define CONTIG_PROGRESS_STEP 100
+
+#define MINUTE_PER_SEC 60
+#define HOUR_PER_MINUTE 60
 
 #ifdef SHC_CONTIG_LOGGING_ENABLED
     void shc_contig_log_info(const char* format, ...);

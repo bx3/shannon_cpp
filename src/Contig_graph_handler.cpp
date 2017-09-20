@@ -3,6 +3,9 @@
 size_t contig_curr_proc = 0;
 size_t contig_prev_proc = 0;
 
+struct timespec cgh_nano_start, cgh_nano_stamp;
+unsigned long cgh_nTime;
+
 void Contig_graph_handler::group_components()
 {          
     shc_log_info(shc_logname, "Start constructing contig graph\n");  
@@ -16,6 +19,7 @@ void Contig_graph_handler::group_components()
     for(contig_num_t i=0; i<ch->num_contig; i++)
         explorable_contig_set.insert(i);   
     
+    clock_gettime(CLOCK_MONOTONIC,&cgh_nano_start);
     while(!explorable_contig_set.empty())
     {
 #ifdef LOG_CONTIG_GRAPH
@@ -79,8 +83,13 @@ void Contig_graph_handler::group_components()
         graph.clear();
         contig_vertex_map.clear();
     }
+    clock_gettime(CLOCK_MONOTONIC,&cgh_nano_stamp);
+    cgh_nTime = (cgh_nano_stamp.tv_sec - cgh_nano_start.tv_sec);
 #ifdef SHOW_PROGRESS
     std::cout << "[100%] all contig processed in contig graph" << std::endl;
+    std::cout << "using " << cgh_nTime/MINUTE_PER_SEC/HOUR_PER_MINUTE << " hours " 
+              << "<=> " << cgh_nTime/HOUR_PER_MINUTE << " minutes "
+              << "<=> " << cgh_nTime << " sec " << std::endl << std::endl;
 #endif
     
     shc_log_info(shc_logname, "Finish constructing contig graph\n");

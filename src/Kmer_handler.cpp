@@ -7,6 +7,9 @@
 size_t kmer_curr_proc = 0;
 size_t kmer_prev_proc = 0;
 
+struct timespec kh_nano_start, kh_nano_stamp;
+unsigned long kh_nTime;
+
 /**
  * Constructor 
  * @param length : kmer length 
@@ -405,7 +408,7 @@ contig_num_t Kmer_handler::find_contig()
     shc_log_info(shc_logname, "Finding contig\n"); 
     
     
-    
+    clock_gettime(CLOCK_MONOTONIC,&kh_nano_start);        
     for(int i=0; i<kmer_descend_list.size(); i++)
     {          
 #ifdef SHOW_PROGRESS         
@@ -507,8 +510,13 @@ contig_num_t Kmer_handler::find_contig()
             //shc_log_info(shc_logname, "total_kmer_in_contig is %d\n", total_kmer_in_contig);   
         }        
     }
+    clock_gettime(CLOCK_MONOTONIC,&kh_nano_stamp);
+    kh_nTime = (kh_nano_stamp.tv_sec - kh_nano_start.tv_sec);
 #ifdef SHOW_PROGRESS  
-    std::cout << "[100%] all kmer processed in contig formation" <<  std::endl; 
+    std::cout << "[100%] all kmer processed in contig formation" <<  std::endl;
+    std::cout << "using " << kh_nTime/MINUTE_PER_SEC/HOUR_PER_MINUTE << " hours " 
+              << "<=> " << kh_nTime/HOUR_PER_MINUTE << " minutes "
+              << "<=> " << kh_nTime << " sec " << std::endl << std::endl;
 #endif    
     deallocate_kmer_descend_list();
     if(is_use_set)
@@ -525,6 +533,7 @@ contig_num_t Kmer_handler::find_contig()
     kmer_counter.resize(0);
     shc_log_info(shc_logname, "Finish finding contig, %ld contigs\n", 
                                                    ch->num_contig);
+        
     return ch->num_contig;
 }
 
