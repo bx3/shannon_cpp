@@ -270,7 +270,7 @@ void Contig_graph_handler::create_metis_array_input()
             vd = *vi;
             aer = boost::edge(vd_source, vd, graph);
             // since for AAAT, AATG we double counts
-            edge_weight = graph[aer.first].weight/2; 
+            edge_weight = graph[aer.first].weight; 
             metis_input.adjncy.push_back(vd);
             metis_input.adjwgt.push_back(edge_weight);            
         }  
@@ -303,7 +303,7 @@ void Contig_graph_handler::create_metis_format_from_graph()
             vd = *vi;
             aer = boost::edge(vd_source, vd, graph);
             // since for AAAT, AATG we double counts
-            edge_weight = graph[aer.first].weight/2; 
+            edge_weight = graph[aer.first].weight; 
             metis_input.adjncy.push_back(vd);
             metis_input.adjwgt.push_back(edge_weight);
             //outfile << vd+METIS_NODE_OFFSET << " " << edge_weight << " ";
