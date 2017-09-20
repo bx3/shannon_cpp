@@ -30,6 +30,10 @@
 //#define LOG_CONTIG_GRAPH
 //#define LOG_METIS
 
+#define SHOW_PROGRESS
+#define KMER_PROGRESS_STEP 100000
+#define CONTIG_PROGRESS_STEP 100
+
 #ifdef SHC_CONTIG_LOGGING_ENABLED
     void shc_contig_log_info(const char* format, ...);
 #endif

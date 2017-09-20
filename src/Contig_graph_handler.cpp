@@ -1,5 +1,8 @@
 #include "Contig_graph_handler.h"
 
+size_t contig_curr_proc = 0;
+size_t contig_prev_proc = 0;
+
 void Contig_graph_handler::group_components()
 {          
     shc_log_info(shc_logname, "Start constructing contig graph\n");  
@@ -7,20 +10,27 @@ void Contig_graph_handler::group_components()
     Kmer_counter_map_iterator it;
     char kmer_array[KMER_HOLDER_LEN];
     uint64_t byte = 0;
-    kmer_array[kh->kmer_length] = '\0';
-    std::string component_kmer_filename_prefix = "output/components/kmer_";    
-    
+    kmer_array[kh->kmer_length] = '\0';  
+            
     //put every contig into the set
     for(contig_num_t i=0; i<ch->num_contig; i++)
-        explorable_contig_set.insert(i);
+        explorable_contig_set.insert(i);   
     
     while(!explorable_contig_set.empty())
     {
 #ifdef LOG_CONTIG_GRAPH
         shc_log_info(shc_logname, "creating kmer out file for %u\n",curr_component_num);
 #endif
-        //std::ofstream kmer_outfile (component_kmer_filename_prefix + 
-        //                       std::to_string(curr_component_num));
+#ifdef SHOW_PROGRESS
+        if((contig_curr_proc-contig_prev_proc) > CONTIG_PROGRESS_STEP)
+        {
+            int percentage = (100 * contig_curr_proc)/(ch->num_contig);
+            std::cout << "[" << percentage << "%] " <<  contig_curr_proc 
+                 << " contig out of " <<   ch->num_contig
+                 << " is processed" << std::endl;
+            contig_prev_proc = contig_curr_proc;
+        }
+#endif        
         
         contig_num_t root_contig = *explorable_contig_set.begin();
         contig_stack.push(root_contig);
@@ -59,7 +69,8 @@ void Contig_graph_handler::group_components()
                 get_connected_contig_index(it);
             }
         }
-        //kmer_outfile.close();
+        contig_curr_proc = ch->num_contig - explorable_contig_set.size();
+        
 #ifdef LOG_CONTIG_GRAPH
         shc_log_info(shc_logname, "close kmer out file for %u\n",curr_component_num);
 #endif
@@ -68,6 +79,9 @@ void Contig_graph_handler::group_components()
         graph.clear();
         contig_vertex_map.clear();
     }
+#ifdef SHOW_PROGRESS
+    std::cout << "[100%] all contig processed in contig graph" << std::endl;
+#endif
     
     shc_log_info(shc_logname, "Finish constructing contig graph\n");
 }

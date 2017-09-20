@@ -4,7 +4,8 @@
 #include "Kmer_handler.h"
 #include "log.h"
 
-using namespace std;
+size_t kmer_curr_proc = 0;
+size_t kmer_prev_proc = 0;
 
 /**
  * Constructor 
@@ -57,9 +58,9 @@ int Kmer_handler::add_kmer(uint64_t kmer, kmer_count_t count)
  * write all kmer and count into file, separated by space
  * @param filename
  */
-void Kmer_handler::dump_kmers_to_file(string * filename) {
+void Kmer_handler::dump_kmers_to_file(std::string * filename) {
     
-    ofstream outfile (filename->c_str());
+    std::ofstream outfile (filename->c_str());
        
     Kmer_counter_map_iterator it;
     
@@ -72,7 +73,7 @@ void Kmer_handler::dump_kmers_to_file(string * filename) {
                 
         decode_byte_list((uint8_t*) &kmer_val, kmer_base, kmer_length); 
         kmer_base[kmer_length] = '\0';
-        outfile << kmer_base << " " << count << endl;
+        outfile << kmer_base << " " << count << std::endl;
         
     }
     
@@ -86,10 +87,10 @@ void Kmer_handler::dump_kmers_to_file(string * filename) {
  * @param filename
  * @return 
  */
-int Kmer_handler::read_sequence_from_file (string filename) 
+int Kmer_handler::read_sequence_from_file (std::string filename) 
 {
     shc_log_info(shc_logname, "Reading kmers from the file\n");
-    ifstream fileReader (filename.c_str());   
+    std::ifstream fileReader (filename.c_str());   
     std::string line_s;
     std::string kmer_s;
     kmer_count_t count;  
@@ -193,7 +194,7 @@ void Kmer_handler::sort_kmer_descending_count()
     }
     
     Kmer_sorter sorter;   
-    sort(kmer_descend_list.begin(), kmer_descend_list.end(), sorter);   
+    std::sort(kmer_descend_list.begin(), kmer_descend_list.end(), sorter);   
     shc_log_info(shc_logname, "Finish Sorting\n");    
 }
 
@@ -209,9 +210,7 @@ void Kmer_handler::sort_kmer_descending_count()
  *                      -1 if this kmer does not have suffix
  */
 uint8_t Kmer_handler::find_suffix_kmer(const uint64_t *kmer_n, uint64_t *new_kmer_n)
-{
-    char base_s[33];
-    char new_base_s[33];
+{    
     uint64_t new_byte, best_byte;
     int count = 0;
     int max_count = -1;
@@ -242,18 +241,15 @@ uint8_t Kmer_handler::find_suffix_kmer(const uint64_t *kmer_n, uint64_t *new_kme
     }
     
     if (best_base == DEFAULT_NUM)
-    { 
-        // so there is all kmer info entry is 0
-        kmer_counter[*kmer_n].used = true;
+    {         
+        // so there is all kmer info entry is 0               
         return NO_MATCH;
     }
     else
-    {                
-        kmer_counter[*kmer_n].used = true;
+    {                    
         // if there are num_contig contigs, the last contig is numbered as num_contig-1
         kmer_counter[*kmer_n].contig = ch->num_contig; 
-        *new_kmer_n = best_byte;                                     
-        kmer_counter[*new_kmer_n].used = true;   
+        *new_kmer_n = best_byte;                                              
         kmer_counter[*new_kmer_n].contig = ch->num_contig;
         return HAS_MATCH;
     }            
@@ -302,20 +298,18 @@ uint8_t Kmer_handler::find_prefix_kmer(const uint64_t *kmer_n, uint64_t *new_kme
                 }
             }
         }
+        
     }
     
     if (best_base == DEFAULT_NUM)
-    {
-        // so there is all kmer info entry is 0
-        kmer_counter[*kmer_n].used = true;
+    {        
+        // so there is all kmer info entry is 0        
         return NO_MATCH;
     }
     else
-    {                
-        kmer_counter[*kmer_n].used = true;
+    {                 
         kmer_counter[*kmer_n].contig = ch->num_contig;
-        *new_kmer_n = best_byte;                                     
-        kmer_counter[*new_kmer_n].used = true;
+        *new_kmer_n = best_byte;                                             
         kmer_counter[*new_kmer_n].contig = ch->num_contig;
         return HAS_MATCH;
     }            
@@ -405,14 +399,32 @@ contig_num_t Kmer_handler::find_contig()
     Contig_handler::size_type contig_len = 0;
     kmer_count_t contig_mean_count = 0;    
     uint8_t * contig_start;    
+#ifdef SHOW_PROGRESS     
+    size_t ori_kmer_size = kmer_counter.size();
+#endif        
+    shc_log_info(shc_logname, "Finding contig\n"); 
     
-    shc_log_info(shc_logname, "Finding contig\n");    
+    
+    
     for(int i=0; i<kmer_descend_list.size(); i++)
-    {  
+    {          
+#ifdef SHOW_PROGRESS         
+        if((kmer_curr_proc-kmer_prev_proc) > KMER_PROGRESS_STEP)
+        {
+            int percentage = (100 * kmer_curr_proc)/ori_kmer_size;
+            std::cout << "[" << percentage << "%] " <<  kmer_curr_proc 
+                 << " kmer out of " <<  ori_kmer_size 
+                 << " is processed" << std::endl;
+            kmer_prev_proc = kmer_curr_proc;
+        }
+#endif                        
         // start a new contig
-        if (!kmer_counter[kmer_descend_list[i].first].used)                    
-        {            
-            contig_mean_count = 0;
+        uint64_t next_rooot_byte = kmer_descend_list[i].first;
+        bool is_valid_kmer = kmer_counter.find(next_rooot_byte)!=kmer_counter.end();
+        if (is_valid_kmer && !kmer_counter[next_rooot_byte].used)                    
+        {                
+            kmer_counter[kmer_descend_list[i].first].used = true;
+            contig_mean_count = 0;            
             decode_kmer(root_string, &(kmer_descend_list[i].first), kmer_length);
             
             total_count = kmer_counter[kmer_descend_list[i].first].count;
@@ -432,6 +444,7 @@ contig_num_t Kmer_handler::find_contig()
 #endif
                 //print_bit(next_kmer);   
                 this_kmer = next_kmer;
+                kmer_counter[this_kmer].used = true;
                 re = find_prefix_kmer(&this_kmer, &next_kmer);                                
             }
             
@@ -461,6 +474,7 @@ contig_num_t Kmer_handler::find_contig()
                 shc_log_info(shc_logname, "looking at kmer %s\n", base_string);                  
 #endif                
                 this_kmer = next_kmer;
+                kmer_counter[this_kmer].used = true;
                 re = find_suffix_kmer(&this_kmer, &next_kmer);                
             }                                              
             contig_len = total_kmer_in_contig + kmer_length - 1;
@@ -486,10 +500,16 @@ contig_num_t Kmer_handler::find_contig()
                 contig_start = &(ch->contig_list.at(ch->delimitor[ch->num_contig]));    
                 delete_kmer_for_contig(contig_start, contig_len);
                 ch->reject_new_contig();                
-            }                   
+            }
+            
+            kmer_curr_proc += total_kmer_in_contig;
+            //shc_log_info(shc_logname, "kmer_curr_proc is %d\n", kmer_curr_proc);   
+            //shc_log_info(shc_logname, "total_kmer_in_contig is %d\n", total_kmer_in_contig);   
         }        
     }
-    
+#ifdef SHOW_PROGRESS  
+    std::cout << "[100%] all kmer processed in contig formation" <<  std::endl; 
+#endif    
     deallocate_kmer_descend_list();
     if(is_use_set)
     {
