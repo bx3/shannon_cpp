@@ -135,12 +135,13 @@ void Contig_handler::declare_new_contig(kmer_count_t mean_c, size_type contig_le
     delimitor.push_back(delimitor.back()+byte_lenght);
     mean_count.push_back(mean_c);
     contig_len_list.push_back(contig_len);   
-    
+#ifdef LOG_CONTIG    
     shc_log_info(shc_logname, "contig number increase to %u\n", num_contig-1);    
     shc_log_info(shc_logname, "delimitor adds an interval %u->%u \n", 
                                delimitor[delimitor.size()-2], delimitor[delimitor.size()-1]);            
     shc_log_info(shc_logname, "new contig has length %d\n", contig_len);      
     shc_log_info(shc_logname, "new contig has byte length %d\n", byte_lenght);      
+#endif    
 }
 
 /**

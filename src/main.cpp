@@ -128,6 +128,8 @@ void test_Contig_graph()
     std::string input_kmer_filename = base_path_str + "/test_data/kmer_read.dict";
     std::string input_read_filename = base_path_str + "/test_data/SE_read.fasta";
     std::string log_filename_path = base_path_str + "/log/default_shannonC_log";
+    std::string contig_output_path = base_path_str + "/output/contig";
+    std::string comp_output_path = base_path_str + "/output/component_array";
     
     memcpy(shc_logname, log_filename_path.c_str(), log_filename_path.size());    
     
@@ -156,12 +158,12 @@ void test_Contig_graph()
     contig_num = kmer_handler.find_contig();
     //kmer_handler.traverse_kmer_count();
     //std::string contig_output_filename = output_dir + "contig.txt";
-    //contig_handler.dump_all_contig(contig_output_filename);
+    contig_handler.dump_all_contig(contig_output_path);
     
     Contig_graph_handler graph_handler(kmer_length-1, &kmer_handler,
                              &contig_handler, shc_logname);
     graph_handler.group_components();   
-    graph_handler.log_component_array();
+    graph_handler.dump_component_array(comp_output_path);
     graph_handler.assign_reads_to_components(input_read_filename, 3);
     graph_handler.assign_kmer_to_components();
     //graph_handler.record_and_delete_isolated_contig();

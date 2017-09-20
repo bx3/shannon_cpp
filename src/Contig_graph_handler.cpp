@@ -16,7 +16,9 @@ void Contig_graph_handler::group_components()
     
     while(!explorable_contig_set.empty())
     {
+#ifdef LOG_CONTIG_GRAPH
         shc_log_info(shc_logname, "creating kmer out file for %u\n",curr_component_num);
+#endif
         //std::ofstream kmer_outfile (component_kmer_filename_prefix + 
         //                       std::to_string(curr_component_num));
         
@@ -58,7 +60,9 @@ void Contig_graph_handler::group_components()
             }
         }
         //kmer_outfile.close();
+#ifdef LOG_CONTIG_GRAPH
         shc_log_info(shc_logname, "close kmer out file for %u\n",curr_component_num);
+#endif
         //up to here we have a component and its graph
         break_and_keep_component();
         graph.clear();
@@ -86,12 +90,14 @@ void Contig_graph_handler::break_and_keep_component()
     }
     else        //call metis
     {
+#ifdef LOG_METIS
         shc_log_info(shc_logname, "Starting metis \n");
+#endif
         create_metis_array_input();
         metis_setup.num_vertices = num_vertices;
         metis_setup.num_partition = std::min(static_cast<idx_t>(100), 
                 num_vertices/metis_setup.partition_size + 1);
-        shc_log_info(shc_logname, "metis to asked to break %d partition\n", metis_setup.num_partition);
+        //shc_log_info(shc_logname, "metis to asked to break %d partition\n", metis_setup.num_partition);
         idx_t ufactor = static_cast<idx_t>(METIS_IMBALANCE_PRECISION 
                                                    * (metis_setup.overload-1));
         std::vector<idx_t> part(num_vertices);
@@ -117,12 +123,15 @@ void Contig_graph_handler::break_and_keep_component()
             // for vertex ith descriptor, part[i] contains local component num            
             component_array[graph[static_cast<vd_t>(i)].contig_index] = 
                                                  curr_component_num + part[i];            
+#ifdef LOG_METIS
             shc_log_info(shc_logname, "metis component %d has contig %u\n", part[i], graph[i].contig_index);
+#endif
             num_component_in_graph = std::max(num_component_in_graph, part[i]);                        
         }                
         num_component_in_graph = num_component_in_graph + 1;
+#ifdef LOG_METIS
         shc_log_info(shc_logname, "metis breaks to %d partition\n", num_component_in_graph);
-        
+#endif        
         curr_component_num += num_component_in_graph;
         std::vector<idx_t>().swap(part);
     }
@@ -181,7 +190,9 @@ void Contig_graph_handler::increment_edge_weight(contig_num_t i, contig_num_t j)
         vd = boost::add_vertex(graph);
         contig_vertex_map[i] = vd;   
         graph[vd] = bundled_contig_index(i);
+#ifdef LOG_CONTIG_GRAPH
         shc_log_info(shc_logname, "Added contig %u with vd %u\n", i, vd);
+#endif
     }
     
     if(contig_vertex_map.find(j) == contig_vertex_map.end())
@@ -189,7 +200,9 @@ void Contig_graph_handler::increment_edge_weight(contig_num_t i, contig_num_t j)
         vd = boost::add_vertex(graph);
         contig_vertex_map[j] = vd;        
         graph[vd] = bundled_contig_index(j);
+#ifdef LOG_CONTIG_GRAPH
         shc_log_info(shc_logname, "Added contig %u with vd %u\n", j, vd);
+#endif
     }
         
     std::pair<ed_t, bool> aer;
@@ -198,14 +211,18 @@ void Contig_graph_handler::increment_edge_weight(contig_num_t i, contig_num_t j)
     if(aer.second)
     {                
         graph[aer.first].weight++;
+#ifdef LOG_CONTIG_GRAPH
         shc_log_info(shc_logname, "edge between %u %u : weight increased to %u\n",
                 i, j ,graph[aer.first].weight);        
+#endif
     }
     else //add edge
     {
         aer = boost::add_edge(contig_vertex_map[i], contig_vertex_map[j], graph);
         assert(aer.second);
+#ifdef LOG_CONTIG_GRAPH
         shc_log_info(shc_logname, "Edge between %u %u\n", i, j);
+#endif
         graph[aer.first] = bundled_weight(1);                
     }            
 }
@@ -298,15 +315,20 @@ void Contig_graph_handler::log_metis_input_data()
     info_log_str_without_new_line(shc_logname,"\n");
 }
 
-void Contig_graph_handler::log_component_array()
-{
-    shc_log_info(shc_logname, "contig: %u component \n", curr_component_num);
+void Contig_graph_handler::dump_component_array(std::string & filename)
+{    
+    shc_log_info(shc_logname, "Start dumping: %u component \n", curr_component_num);
+    std::ofstream outfile(filename);    
+    outfile << curr_component_num << " components" << std::endl;
+    outfile << "contig"  << "\t"  << "components" << std::endl;
     int i=0;
     for(std::vector<contig_num_t>::iterator it=component_array.begin();
             it != component_array.end(); it++)
     {
-        shc_log_info(shc_logname, "%d   %u\n", i++, *it);
+        outfile << (i++) << "\t" <<(*it) << std::endl;
+        //shc_log_info(shc_logname, "%d   %u\n", i++, *it);
     }
+    outfile.close();
     shc_log_info(shc_logname, "Finish log_component_array\n");
 }
 
@@ -413,7 +435,7 @@ void Contig_graph_handler::assign_kmer_to_components()
     typedef boost::filesystem::path filename_t;
     path_t base_path = boost::filesystem::current_path();    
     std::string base_path_str(base_path.c_str()); 
-    std::string dir_path = base_path_str + "/output/components_reads"; 
+    std::string dir_path = base_path_str + "/output/components_kmer"; 
     path_t create_path(dir_path);
     char bases[33];
     bases[kh->kmer_length] = '\0';

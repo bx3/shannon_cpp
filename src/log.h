@@ -25,6 +25,10 @@
 #define SHC_LOGGING_ENABLED
 #define SHC_CONTIG_LOGGING_ENABLED
 
+//#define LOG_KMER
+//#define LOG_CONTIG
+//#define LOG_CONTIG_GRAPH
+//#define LOG_METIS
 
 #ifdef SHC_CONTIG_LOGGING_ENABLED
     void shc_contig_log_info(const char* format, ...);

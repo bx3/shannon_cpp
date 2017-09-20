@@ -132,7 +132,7 @@ public:
     void assign_reads_to_components();
     void assign_reads_to_components(std::string& read_filename, int num_read );
     void assign_kmer_to_components();
-    
+    void dump_component_array(std::string & filename);
     
     void dump_graph_to_metis_file();
     void create_metis_format_from_graph();        
@@ -141,7 +141,7 @@ public:
     
     //debug
     void log_metis_input_data();
-    void log_component_array();
+    
             
 private:    
     graph_t graph;        

@@ -107,8 +107,10 @@ int Kmer_handler::read_sequence_from_file (string filename)
         kmer_and_count >> count_temp;
         if (count_temp > MAX_COUNT)
         {
+            shc_log_error("MAX_COUNT is  %d\n", MAX_COUNT);        
+            shc_log_error("kmer_count_t unable to hold count %d\n", count_temp);        
             return 1;
-            shc_log_error("kmer_count_t unable to hold count\n");        
+            
         }
         count = (kmer_count_t)count_temp;        
         
@@ -216,13 +218,11 @@ uint8_t Kmer_handler::find_suffix_kmer(const uint64_t *kmer_n, uint64_t *new_kme
     uint8_t best_base = DEFAULT_NUM;    
     
     write_all_prefix_info(kmer_n);
-    
-    decode_kmer(base_s, kmer_n, kmer_length);
-    memcpy(new_base_s, base_s+1, kmer_length-1);
+        
     for(int i=0; i<FOUR_BASE; i++)
-    {         
-        new_base_s[kmer_length-1] = num_to_char[i];
-        encode_kmer(new_base_s, &new_byte, kmer_length);
+    {                
+        new_byte = append_byte(kmer_n, i, kmer_length);
+        
         Kmer_counter_map_iterator it = kmer_counter.find(new_byte);                         
         //write_kmer_info(best_base, false, kmer_n);
         if (it != kmer_counter.end())
@@ -273,23 +273,19 @@ uint8_t Kmer_handler::find_suffix_kmer(const uint64_t *kmer_n, uint64_t *new_kme
  */
 uint8_t Kmer_handler::find_prefix_kmer(const uint64_t *kmer_n, uint64_t *new_kmer_n)
 {
-    char base_s[33];
-    char new_base_s[33];
+    //char base_s[33];
+    //char new_base_s[33];
     uint64_t new_byte, best_byte;
     int count = 0;
     int max_count = -1;
     uint8_t best_base = DEFAULT_NUM;    
     
     write_all_suffix_info(kmer_n);
-    
-    //then work on finding its heaviest prefix
-    decode_kmer(base_s, kmer_n, kmer_length);
-    memcpy(new_base_s+1, base_s, kmer_length-1);
+
     for(int i=0; i<FOUR_BASE; i++)
     {
-        //checking prefix kmer with four value
-        new_base_s[0] = num_to_char[i];
-        encode_kmer(new_base_s, &new_byte, kmer_length);
+        new_byte = prepend_byte(kmer_n, i, kmer_length);
+        
         Kmer_counter_map_iterator it = kmer_counter.find(new_byte); 
         
          //write_kmer_info(best_base, false, kmer_n);
@@ -326,19 +322,13 @@ uint8_t Kmer_handler::find_prefix_kmer(const uint64_t *kmer_n, uint64_t *new_kme
 }
 
 void Kmer_handler::write_all_suffix_info(const uint64_t *kmer_num)
-{
-    char base_s[KMER_HOLDER_LEN];
-    char new_base_s[KMER_HOLDER_LEN];
+{    
     uint64_t new_byte;
     Kmer_counter_map_iterator it;
-    
-    decode_kmer(base_s, kmer_num, kmer_length);
-    memcpy(new_base_s, base_s+1, kmer_length-1);
-    
     for(uint8_t i=0; i<FOUR_BASE; i++)
     {
-        new_base_s[kmer_length-1] = num_to_char[i];
-        encode_kmer(new_base_s, &new_byte, kmer_length);
+        new_byte = append_byte(kmer_num, i, kmer_length);
+        
         it = kmer_counter.find(new_byte); 
         if(it != kmer_counter.end())
         {
@@ -349,19 +339,14 @@ void Kmer_handler::write_all_suffix_info(const uint64_t *kmer_num)
 }
 
 void Kmer_handler::write_all_prefix_info(const uint64_t *kmer_num)
-{
-    char base_s[KMER_HOLDER_LEN];
-    char new_base_s[KMER_HOLDER_LEN];
+{    
     uint64_t new_byte;
     Kmer_counter_map_iterator it;
     
-    decode_kmer(base_s, kmer_num, kmer_length);    
-    memcpy(new_base_s+1, base_s, kmer_length-1);
-    
     for(uint8_t i=0; i<FOUR_BASE; i++)
-    {
-        new_base_s[0] = num_to_char[i];
-        encode_kmer(new_base_s, &new_byte, kmer_length);
+    {       
+        new_byte = prepend_byte(kmer_num, i, kmer_length);
+        
         it = kmer_counter.find(new_byte); 
         if(it != kmer_counter.end())
         {
@@ -484,14 +469,7 @@ contig_num_t Kmer_handler::find_contig()
             shc_log_info(shc_logname, "contig len %u\n", contig_len);
 #endif            
             contig_mean_count = (kmer_count_t)(total_count/total_kmer_in_contig);    
-            
-            
-            //std::AAAAAAAAAAAAAAAAAAAAATCGGstring name = "one_contig.txt";
-            //ch->dump_all_contig(name);
-            //shc_log_info(shc_logname, "hello here\n");
-            //ch->print_contig(ch->delimitor.back(), contig_len);
-            
-            
+                                 
             if(decide_contig_and_build_rmer(contig_mean_count, contig_len))
             {
                 //accept and upadte contig list info
@@ -690,14 +668,10 @@ bool Kmer_handler::use_set_to_filter(kmer_count_t mean_count, Contig_handler::si
         uint64_t common_element = 0;
         Contig_handler::size_type total_rmer_num = len-rmer_len+1;                                    
         
-        shc_log_info(shc_logname, "Calculating common element stat\n");
+        //shc_log_info(shc_logname, "Calculating common element stat\n");
         for(Contig_handler::size_type i=0; i<total_rmer_num; i++)
         {                                                
-            encode_kmer((char*)(contig_start+i), &byte, rmer_len);
-
-            //memcpy(temp,(contig_start+i), rmer_len);               
-            //shc_log_info(shc_logname, "%s\n", temp);
-
+            encode_kmer((char*)(contig_start+i), &byte, rmer_len);           
             if(rmer_count_map.find(byte) != rmer_count_map.end())
                 common_element++;                
         }
@@ -719,12 +693,16 @@ bool Kmer_handler::use_set_to_filter(kmer_count_t mean_count, Contig_handler::si
                 else
                     rmer_count_map[byte] = 1;                    
             }
+#ifdef LOG_KMER
             shc_log_info(shc_logname, "Finish redundancy filter, Passing\n");
+#endif
             return true;
         }
         else
         {
+#ifdef LOG_KMER
             shc_log_info(shc_logname, "Finish redundancy filter, Fail to pass due to high redundance\n");
+#endif
             return false;
         }            
     }                
@@ -732,7 +710,9 @@ bool Kmer_handler::use_set_to_filter(kmer_count_t mean_count, Contig_handler::si
 
 bool Kmer_handler::use_list_to_filter(kmer_count_t mean_count, Contig_handler::size_type len)
 {
+#ifdef LOG_KMER
     shc_log_info(shc_logname, "Start list filter\n");
+#endif
     uint8_t * contig_start = &(ch->contig_list.at(ch->delimitor[ch->num_contig]));        
     char temp[32];    
     temp[rmer_len] = '\0';
@@ -750,11 +730,12 @@ bool Kmer_handler::use_list_to_filter(kmer_count_t mean_count, Contig_handler::s
     }
     else
     {
-        shc_log_info(shc_logname, "Start length count filter\n");
-        uint64_t common_element = 0;
+#ifdef LOG_KMER
+        shc_log_info(shc_logname, "Start length count filter\n");        
+#endif
         Contig_handler::size_type total_rmer_num = len-rmer_len+1;                                    
                
-        shc_log_info(shc_logname, "Creating contig count filter\n");
+        //shc_log_info(shc_logname, "Creating contig count filter\n");
         for(Contig_handler::size_type i=0; i<total_rmer_num; i++)
         {                      
             //get rmer            
@@ -774,7 +755,9 @@ bool Kmer_handler::use_list_to_filter(kmer_count_t mean_count, Contig_handler::s
                 
                 if (thresh >= r_thresh)
                 {
+#ifdef LOG_KMER
                     shc_log_info(shc_logname, "Finish list filter, not Passing due to high redundancy\n");
+#endif
                     contig_count_map.clear();
                     return false;
                 }
@@ -792,7 +775,9 @@ bool Kmer_handler::use_list_to_filter(kmer_count_t mean_count, Contig_handler::s
                         //Change it if needed
                         rmer_contig_map[byte].push_back(ch->num_contig+1);     
                     }    
+#ifdef LOG_KMER                    
                     shc_log_info(shc_logname, "Finish list filter, Passing\n");
+#endif
                     contig_count_map.clear();
                     return true;
                 }
