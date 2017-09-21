@@ -94,39 +94,36 @@ int Kmer_handler::read_sequence_from_file (std::string filename)
 {
     shc_log_info(shc_logname, "Reading kmers from the file\n");
     std::ifstream fileReader (filename.c_str());   
-    std::string line_s;
-    std::string kmer_s;
-    kmer_count_t count;  
-    int count_temp;
-    uint64_t kmer; 
-    char back_string[33];
-    back_string[kmer_length] = '\0';
-    
-    std::getline(fileReader, line_s);
-    
-    while (! fileReader.eof() ) 
-    {     
-        std::stringstream kmer_and_count(line_s);
-        kmer_and_count >> kmer_s; 
-        kmer_and_count >> count_temp;
-        if (count_temp > MAX_COUNT)
+    std::string line_s, count_s;      
+    int count;
+    uint64_t kmer;     
+            
+    clock_gettime(CLOCK_MONOTONIC,&kh_nano_start);
+    while (!fileReader.eof() ) 
+    { 
+        std::getline(fileReader, line_s, '\t') &&         
+        std::getline(fileReader, count_s);
+        if(line_s.empty())
+            break;        
+        count = std::stoi(count_s);
+        if (count > MAX_COUNT)
         {
             shc_log_error("MAX_COUNT is  %d\n", MAX_COUNT);        
-            shc_log_error("kmer_count_t unable to hold count %d\n", count_temp);        
-            return 1;
-            
-        }
-        count = (kmer_count_t)count_temp;        
-        
-        struct Kmer_info kmer_info;
-
-        encode_kmer(line_s.c_str(), &kmer, kmer_length);        
-        
-        kmer_info.count = count;
-        kmer_counter[kmer] = kmer_info;        
-        
-        std::getline(fileReader, line_s);
+            shc_log_error("kmer_count_t unable to hold count %d\n", count);        
+            return 1;            
+        }                  
+        encode_kmer(line_s.c_str(), &kmer, kmer_length);                        
+        kmer_counter[kmer] = Kmer_info((kmer_count_t)count);                        
     }  
+#ifdef SHOW_PROGRESS
+    clock_gettime(CLOCK_MONOTONIC,&kh_nano_stamp);
+    kh_nTime = (kh_nano_stamp.tv_sec - kh_nano_start.tv_sec);
+    std::cout << "building kmer dict with count, using " 
+              << kh_nTime/MINUTE_PER_SEC/HOUR_PER_MINUTE << " hours " 
+              << "<=> " << kh_nTime/HOUR_PER_MINUTE << " minutes "
+              << "<=> " << kh_nTime << " sec " << std::endl << std::endl;                  
+#endif
+    
     shc_log_info(shc_logname, "Finish reading kmers from the file\n");
     return 0;
 }
@@ -176,13 +173,12 @@ inline bool Kmer_handler::is_kmer_info_has_suffix(uint8_t info)
  * store the descending list in a vector.
  */
 void Kmer_handler::sort_kmer_descending_count()
-{
-    unsigned long start, end;
+{    
     unsigned long num_kmers = kmer_counter.size();   
     Kmer_counter_map_iterator it;
     
     shc_log_info(shc_logname, 
-            "Sorting %ld %umer based on counts\n", num_kmers, kmer_length);
+            "Sorting %ld %u mer based on counts\n", num_kmers, kmer_length);
     
     unsigned long count = 0;
     clock_gettime(CLOCK_MONOTONIC,&kh_nano_start);    
@@ -201,7 +197,7 @@ void Kmer_handler::sort_kmer_descending_count()
 #ifdef SHOW_PROGRESS
     clock_gettime(CLOCK_MONOTONIC,&kh_nano_stamp);
     kh_nTime = (kh_nano_stamp.tv_sec - kh_nano_start.tv_sec);
-    std::cout << "sorting kmer based on count takes " 
+    std::cout << "sorting kmer dict based on count, using " 
               << kh_nTime/MINUTE_PER_SEC/HOUR_PER_MINUTE << " hours " 
               << "<=> " << kh_nTime/HOUR_PER_MINUTE << " minutes "
               << "<=> " << kh_nTime << " sec " << std::endl << std::endl;                  
@@ -415,7 +411,8 @@ contig_num_t Kmer_handler::find_contig()
     size_t ori_kmer_size = kmer_counter.size();
 #endif        
     shc_log_info(shc_logname, "Finding contig\n"); 
-    
+        
+    ch->contig_list.reserve(kmer_counter.size());    
     
     clock_gettime(CLOCK_MONOTONIC,&kh_nano_start);        
     for(int i=0; i<kmer_descend_list.size(); i++)
@@ -522,7 +519,7 @@ contig_num_t Kmer_handler::find_contig()
     clock_gettime(CLOCK_MONOTONIC,&kh_nano_stamp);
     kh_nTime = (kh_nano_stamp.tv_sec - kh_nano_start.tv_sec);
 #ifdef SHOW_PROGRESS  
-    std::cout << "[100%] all kmer processed in contig formation" <<  std::endl;
+    std::cout << "[100%] all kmer processed in contig formation, ";
     std::cout << "using " << kh_nTime/MINUTE_PER_SEC/HOUR_PER_MINUTE << " hours " 
               << "<=> " << kh_nTime/HOUR_PER_MINUTE << " minutes "
               << "<=> " << kh_nTime << " sec " << std::endl << std::endl;
@@ -538,6 +535,7 @@ contig_num_t Kmer_handler::find_contig()
         deallocate_contig_count_map();
     }            
     
+    ch->contig_list.shrink_to_fit();
     //update the size, and release memory for kmer dict, see google sparsehash
     kmer_counter.resize(0);
     shc_log_info(shc_logname, "Finish finding contig, %ld contigs\n", 
@@ -822,6 +820,35 @@ bool Kmer_handler::use_list_to_filter(kmer_count_t mean_count, Contig_handler::s
             }                        
         }                    
     }    
+}
+
+std::ifstream::pos_type Kmer_handler::filesize(const std::string & filename)
+{
+    std::ifstream file_reader(filename.c_str(), std::ifstream::ate | std::ifstream::binary);
+    return file_reader.tellg();
+}
+
+size_t Kmer_handler::estimate_num_kmer(const std::string & filename)
+{
+    std::string test_filename("test");
+      
+    std::ofstream test_file(test_filename.c_str());    
+    for (int i=0; i<TEST_NUM_LINE ; i++)
+    {
+        for(int j=0; j<kmer_length; j++)
+            test_file << "A";
+        test_file << "\t" << TEST_NUM_LINE  << std::endl;        
+    }
+    test_file.close();
+    size_t byte_per_line = filesize(test_filename) / TEST_NUM_LINE;
+    size_t estimated_lines = static_cast<size_t>
+                        (static_cast<double>(filesize(filename)) / 
+                         static_cast<double>(byte_per_line)*SIZE_MULTIPLIER);
+    boost::filesystem::path test_file_path(test_filename);
+    remove_file(test_file_path);
+    std::cout << filename <<" is estimated to contain " 
+              <<  estimated_lines << " lines " << std::endl;
+    return estimated_lines;     
 }
 
 

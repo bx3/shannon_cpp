@@ -41,6 +41,8 @@ struct Kmer_info {
     bool used;
     contig_num_t contig;
     Kmer_info(): count(0), info(0), used(false), contig(IMPOSSIBLE_CONTIG_NUM){}
+    Kmer_info(kmer_count_t cp): count(cp), info(0), used(false), 
+                contig(IMPOSSIBLE_CONTIG_NUM){}
 };
 
 

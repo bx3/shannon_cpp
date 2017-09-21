@@ -21,6 +21,7 @@
 #include <inttypes.h>
 #include "Contig_handler.h"
 #include "shc_google_sparsehash.h"
+#include "local_file_structure.h"
 
 #define MAX_KMER_LENGTH 32
 #define KMER_HOLDER_LEN 33
@@ -31,6 +32,8 @@
 #define HAS_MATCH 0
 #define PREFIX_OFFSET 4
 #define SPARSEHASH_DELETE_KEY 123121
+#define TEST_NUM_LINE 1000
+#define SIZE_MULTIPLIER 1.15
 
 typedef std::pair<uint64_t, kmer_count_t> Kmer_Occurence_Pair;
 
@@ -95,6 +98,8 @@ public:
     void get_contig_handler(Contig_handler * c_handler);
     void get_logname(char * logname);        
     
+    std::ifstream::pos_type filesize(const std::string & filename);
+    size_t estimate_num_kmer(const std::string & filename);
 private:
     kmer_len_t kmer_length;
     Kmer_counter_map kmer_counter;

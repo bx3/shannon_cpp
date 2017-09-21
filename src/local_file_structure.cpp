@@ -46,3 +46,8 @@ void remove_directory(boost::filesystem::path & dir_path)
         }            
     }
 }
+
+void remove_file(const boost::filesystem::path & file_path)
+{
+    boost::filesystem::remove(file_path);
+}
