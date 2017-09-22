@@ -22,16 +22,24 @@
 #include "Contig_handler.h"
 #include "shc_google_sparsehash.h"
 #include "local_file_structure.h"
+#include <bits/stringfwd.h>
+#include <string>
+#include "log.h"
+#include <cmath>
+
 
 #define MAX_KMER_LENGTH 32
 #define KMER_HOLDER_LEN 33
 #define MAX_KMER_DICTLINE_LENGTH 50
 #define DEFAULT_NUM 255
-#define MAX_COUNT (sizeof(kmer_count_t)-10)
+#define MAX_COUNT (std::pow(2,sizeof(kmer_count_t)*8)-1)
 #define NO_MATCH -1
 #define HAS_MATCH 0
 #define PREFIX_OFFSET 4
-#define SPARSEHASH_DELETE_KEY 123121
+//-1 is a relectant decision, otherwise my compiler gives a overflow warning, 
+//I guess in google sparsehash implementation, uint64_t is implicitly converted
+//to a signed type
+#define SPARSEHASH_DELETE_KEY (std::pow(2,(sizeof(uint64_t)*8)-1)-1) 
 #define TEST_NUM_LINE 1000
 #define SIZE_MULTIPLIER 1.15
 
@@ -48,15 +56,14 @@ class Kmer_handler {
     friend class Contig_handler;
     friend class Contig_graph_handler;
 public:
-    Kmer_handler(){};
-    Kmer_handler(uint8_t kmer_length, char * shc_logname);
-    Kmer_handler(uint8_t length, Contig_handler * c_handler);
-    Kmer_handler(uint8_t length, char * shc_logname_p, kmer_count_t min_count_p, 
+    Kmer_handler();        
+    Kmer_handler(uint8_t length, kmer_count_t min_count_p, 
                 Contig_handler::size_type min_len_p, double R_threshold_p, 
                 uint8_t rmer_len, bool is_use_set);
     
     int add_kmer(uint64_t kmer, kmer_count_t count);
-    void dump_kmers_to_file(std::string * filename);
+    void dump_kmers_to_file(std::string & filename);
+    void load_kmers_with_info_from_file(std::string & filename);
     int read_kmer_dict(char * filename);
     int read_sequence_from_file (std::string filename);
     
@@ -95,31 +102,30 @@ public:
     void delete_kmer_for_contig(uint8_t * contig_start, Contig_handler::size_type contig_len);
     void delete_contig_list(contig_num_t * list, contig_num_t num);
     
-    void get_contig_handler(Contig_handler * c_handler);
-    void get_logname(char * logname);        
+    void get_contig_handler(Contig_handler * c_handler);     
     
     std::ifstream::pos_type filesize(const std::string & filename);
     size_t estimate_num_kmer(const std::string & filename);
+    
+    uint8_t get_kmer_length();
 private:
     kmer_len_t kmer_length;
     Kmer_counter_map kmer_counter;
     Contig_handler * ch;
     std::vector<Kmer_Occurence_Pair> kmer_descend_list;     
             
-    //for Rmer contig list implementation
+    //for Rmer contig list implementation, all deallcoated
     bool is_use_set;
     Rmer_contig_map rmer_contig_map;
     Contig_count_map contig_count_map; 
     uint8_t rmer_len;
-    //for Rmer set implementation
+    //for Rmer set implementation, all deallcoated
     Rmer_count_map rmer_count_map;
     
     
     kmer_count_t min_count;
     Contig_handler::size_type min_len;
-    double r_thresh;
-    
-    char * shc_logname;
+    double r_thresh;        
 };
 
 #endif	/* KMER_HANDLER_H */

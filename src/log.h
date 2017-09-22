@@ -20,6 +20,7 @@
 #include <iterator>
 #include "shc_type.h"
 #include <time.h>
+#include <iostream>
 
 //#define LOG_KMER_DETAIL
 
@@ -28,12 +29,12 @@
 
 //#define LOG_KMER
 //#define LOG_CONTIG
-//#define LOG_CONTIG_GRAPH
-//#define LOG_METIS
+#define LOG_CONTIG_GRAPH
+#define LOG_METIS
 
 #define SHOW_PROGRESS
 #define KMER_PROGRESS_STEP 100000
-#define CONTIG_PROGRESS_STEP 100
+#define CONTIG_PROGRESS_STEP 5000
 
 #define MINUTE_PER_SEC 60
 #define HOUR_PER_MINUTE 60
@@ -41,9 +42,15 @@
 #ifdef SHC_CONTIG_LOGGING_ENABLED
     void shc_contig_log_info(const char* format, ...);
 #endif
+    
+struct Block_timer {
+    struct timespec nano_start;
+    struct timespec nano_stamp;
+    unsigned long nTime;
+};    
 
-//#define LOG_KMER
-
+extern char shc_logname[100];
+    
 template<class T> void print_bit(T a);
 void print_byte_list(uint8_t* byte_list, uint16_t out_length);
 void print_four_base(char* four_base, int length);
@@ -52,6 +59,9 @@ void info_log_num_without_new_line(char *filename, size_t num);
 void info_log_str_without_new_line(char *filename, const char * c);
 void info_print_bit(char *filename, uint8_t bit_to_print);
 void info_log_info(char * filename, const char* format, ...);
+
+void start_timer(struct Block_timer * bt);
+void stop_timer(struct Block_timer * bt);
 
 template<class T>
 void print_bit(T a)

@@ -1,41 +1,24 @@
-#include <bits/stringfwd.h>
-#include <string>
-
 #include "Kmer_handler.h"
-#include "log.h"
 
 size_t kmer_curr_proc = 0;
 size_t kmer_prev_proc = 0;
 
-struct timespec kh_nano_start, kh_nano_stamp;
-unsigned long kh_nTime;
+Block_timer kh_timer;
 
 /**
  * Constructor 
  * @param length : kmer length 
  */
-Kmer_handler::Kmer_handler(uint8_t length, Contig_handler * c_handler)
-{
-    kmer_length = length;   
-    ch = c_handler;
-    //some requirement by google sparsehash to use erase
-    kmer_counter.set_deleted_key(SPARSEHASH_DELETE_KEY);     
+Kmer_handler::Kmer_handler()
+{    
+    kmer_counter.set_deleted_key(SPARSEHASH_DELETE_KEY);    
 }
 
-Kmer_handler::Kmer_handler(uint8_t length, char * shc_logname)
-{
-    kmer_length = length;
-    this->shc_logname = shc_logname;   
-    is_use_set = true;
-    kmer_counter.set_deleted_key(SPARSEHASH_DELETE_KEY);       
-}
-
-Kmer_handler::Kmer_handler(uint8_t length, char * shc_logname, kmer_count_t min_count, 
+Kmer_handler::Kmer_handler(uint8_t length, kmer_count_t min_count, 
                 Contig_handler::size_type min_len, double R_threshold, 
                 uint8_t rmer_len, bool is_use_set)
 {
-    kmer_length = length;
-    this->shc_logname = shc_logname;
+    kmer_length = length;    
     this->min_count = min_count;
     this->min_len = min_len;
     this->r_thresh = R_threshold;
@@ -61,27 +44,70 @@ int Kmer_handler::add_kmer(uint64_t kmer, kmer_count_t count)
  * write all kmer and count into file, separated by space
  * @param filename
  */
-void Kmer_handler::dump_kmers_to_file(std::string * filename) {
-    
-    std::ofstream outfile (filename->c_str());
+void Kmer_handler::dump_kmers_to_file(std::string & filename) 
+{
+    shc_log_info(shc_logname, "Shannon C dumps kmer\n");    
+    std::ofstream outfile (filename.c_str());
        
     Kmer_counter_map_iterator it;
     
     char kmer_base[KMER_HOLDER_LEN]; 
             
-    for (it = kmer_counter.begin(); it != kmer_counter.end(); it++) {
-        
-        uint64_t kmer_val = it->first;
-        kmer_count_t count = it->second.count;
-                
-        decode_byte_list((uint8_t*) &kmer_val, kmer_base, kmer_length); 
+    for (it = kmer_counter.begin(); it != kmer_counter.end(); it++) {                
+                      
+        decode_kmer(kmer_base, &(it->first), kmer_length); 
         kmer_base[kmer_length] = '\0';
-        outfile << kmer_base << " " << count << std::endl;
+        outfile << kmer_base << "\t" << it->second.contig 
+                             << "\t" << it->second.count
+                             << "\t" << (uint16_t)(it->second.info)  << std::endl;           
+    }    
+    outfile.close();    
+    shc_log_info(shc_logname, "Shannon C Finsih dumps kmer\n");    
+}
+
+void Kmer_handler::load_kmers_with_info_from_file(std::string & filename)
+{
+    shc_log_info(shc_logname, "Shannon C loads kmer\n");    
+    std::ifstream fileReader(filename.c_str());
+    std::string kmer_base, contig_s, count_s, info_s;
+    kmer_count_t count;    
+    uint8_t info;     
+    contig_num_t contig;
+    uint64_t byte;
+    bool flag = true;
+    
+    start_timer(&kh_timer);
+    while(  std::getline(fileReader, kmer_base, '\t') && 
+            std::getline(fileReader, contig_s, '\t') &&
+            std::getline(fileReader, count_s, '\t') &&
+            std::getline(fileReader, info_s))
+    {                                            
+        count = std::stoi(count_s);
+        contig = std::stoi(contig_s);
+        info = std::stoi(info_s);
+                     
+        if(flag)
+        {
+            kmer_length = kmer_base.size();
+            flag = false;
+        }
+                    
+        encode_kmer(kmer_base.c_str(), &byte, kmer_base.size());
         
+        kmer_counter[byte] = Kmer_info(count, info, true, contig);
+        //std::cout << kmer_base<< " " << contig <<" "<<count <<" "<< info << std::endl;        
+        //std::cout << kmer_base<< " " << kmer_counter[byte].contig <<" "
+        //          <<kmer_counter[byte].count <<" "<< kmer_counter[byte].info << std::endl;
     }
+#ifdef SHOW_PROGRESS
+    std::cout << "Finish kmer with info loading, ";
+    stop_timer(&kh_timer);
+#endif
     
-    outfile.close();
-    
+    std::cout << "inside load " << kmer_length << std::endl;
+    fileReader.close();
+    shc_log_info(shc_logname, "kmer_length %u\n", kmer_length);    
+    shc_log_info(shc_logname, "Shannon C finish load kmer\n");    
 }
 
 /**
@@ -98,13 +124,10 @@ int Kmer_handler::read_sequence_from_file (std::string filename)
     int count;
     uint64_t kmer;     
             
-    clock_gettime(CLOCK_MONOTONIC,&kh_nano_start);
-    while (!fileReader.eof() ) 
-    { 
-        std::getline(fileReader, line_s, '\t') &&         
-        std::getline(fileReader, count_s);
-        if(line_s.empty())
-            break;        
+    start_timer(&kh_timer);    
+    while (std::getline(fileReader, line_s, '\t') &&         
+           std::getline(fileReader, count_s) ) 
+    {                 
         count = std::stoi(count_s);
         if (count > MAX_COUNT)
         {
@@ -116,12 +139,8 @@ int Kmer_handler::read_sequence_from_file (std::string filename)
         kmer_counter[kmer] = Kmer_info((kmer_count_t)count);                        
     }  
 #ifdef SHOW_PROGRESS
-    clock_gettime(CLOCK_MONOTONIC,&kh_nano_stamp);
-    kh_nTime = (kh_nano_stamp.tv_sec - kh_nano_start.tv_sec);
-    std::cout << "building kmer dict with count, using " 
-              << kh_nTime/MINUTE_PER_SEC/HOUR_PER_MINUTE << " hours " 
-              << "<=> " << kh_nTime/HOUR_PER_MINUTE << " minutes "
-              << "<=> " << kh_nTime << " sec " << std::endl << std::endl;                  
+    std::cout << "Finish reading jellyfish kmer, ";
+    stop_timer(&kh_timer);    
 #endif
     
     shc_log_info(shc_logname, "Finish reading kmers from the file\n");
@@ -181,7 +200,7 @@ void Kmer_handler::sort_kmer_descending_count()
             "Sorting %ld %u mer based on counts\n", num_kmers, kmer_length);
     
     unsigned long count = 0;
-    clock_gettime(CLOCK_MONOTONIC,&kh_nano_start);    
+    start_timer(&kh_timer);
     for (it = kmer_counter.begin(); it != kmer_counter.end(); it++) {
 
         if (it->second.count > 0) {
@@ -194,13 +213,9 @@ void Kmer_handler::sort_kmer_descending_count()
     
     Kmer_sorter sorter;   
     std::sort(kmer_descend_list.begin(), kmer_descend_list.end(), sorter);   
-#ifdef SHOW_PROGRESS
-    clock_gettime(CLOCK_MONOTONIC,&kh_nano_stamp);
-    kh_nTime = (kh_nano_stamp.tv_sec - kh_nano_start.tv_sec);
-    std::cout << "sorting kmer dict based on count, using " 
-              << kh_nTime/MINUTE_PER_SEC/HOUR_PER_MINUTE << " hours " 
-              << "<=> " << kh_nTime/HOUR_PER_MINUTE << " minutes "
-              << "<=> " << kh_nTime << " sec " << std::endl << std::endl;                  
+#ifdef SHOW_PROGRESS    
+    std::cout << "Finish kmer sorting, "; 
+    stop_timer(&kh_timer);
 #endif
     
     shc_log_info(shc_logname, "Finish Sorting\n");    
@@ -233,10 +248,10 @@ uint8_t Kmer_handler::find_suffix_kmer(const uint64_t *kmer_n, uint64_t *new_kme
         Kmer_counter_map_iterator it = kmer_counter.find(new_byte);                         
         //write_kmer_info(best_base, false, kmer_n);
         if (it != kmer_counter.end())
-        {            
+        {    
+            write_kmer_info(i, false, kmer_n);   //record this kmer its possible prefix string
             if (!it->second.used)
-            {
-                write_kmer_info(i, false, kmer_n);   //record this kmer its possible prefix string
+            {                
                 count = it->second.count;
                 //printf("count is %d\n", count);
                 if (count > max_count)
@@ -294,10 +309,10 @@ uint8_t Kmer_handler::find_prefix_kmer(const uint64_t *kmer_n, uint64_t *new_kme
         
          //write_kmer_info(best_base, false, kmer_n);
         if (it != kmer_counter.end())
-        {            
+        {       
+            write_kmer_info(i, true, kmer_n);   //record this kmer its possible prefix string
             if(!it->second.used)
             {
-                write_kmer_info(i, true, kmer_n);   //record this kmer its possible prefix string
                 count = it->second.count;
                 if (count > max_count)
                 {
@@ -414,7 +429,7 @@ contig_num_t Kmer_handler::find_contig()
         
     ch->contig_list.reserve(kmer_counter.size());    
     
-    clock_gettime(CLOCK_MONOTONIC,&kh_nano_start);        
+    start_timer(&kh_timer);
     for(int i=0; i<kmer_descend_list.size(); i++)
     {          
 #ifdef SHOW_PROGRESS         
@@ -516,13 +531,10 @@ contig_num_t Kmer_handler::find_contig()
             //shc_log_info(shc_logname, "total_kmer_in_contig is %d\n", total_kmer_in_contig);   
         }        
     }
-    clock_gettime(CLOCK_MONOTONIC,&kh_nano_stamp);
-    kh_nTime = (kh_nano_stamp.tv_sec - kh_nano_start.tv_sec);
+    
 #ifdef SHOW_PROGRESS  
-    std::cout << "[100%] all kmer processed in contig formation, ";
-    std::cout << "using " << kh_nTime/MINUTE_PER_SEC/HOUR_PER_MINUTE << " hours " 
-              << "<=> " << kh_nTime/HOUR_PER_MINUTE << " minutes "
-              << "<=> " << kh_nTime << " sec " << std::endl << std::endl;
+    std::cout << "Finish finding contig, ";
+    stop_timer(&kh_timer);
 #endif    
     deallocate_kmer_descend_list();
     if(is_use_set)
@@ -642,9 +654,9 @@ void Kmer_handler::get_contig_handler(Contig_handler * c_handler)
     ch = c_handler;
 }
 
-void Kmer_handler::get_logname(char * logname)
+uint8_t Kmer_handler::get_kmer_length()
 {
-    shc_logname = logname;
+    return kmer_length;
 }
 
 /**

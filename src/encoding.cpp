@@ -76,7 +76,7 @@ void decode(uint8_t num, int length, char *base)
     }           
 }
 
-uint16_t encode_base_string(const char * base_string, uint8_t * byte_list, int16_t base_length)
+size_t encode_base_string(const char * base_string, uint8_t * byte_list, size_t base_length)
 {    
     uint16_t byte_length = (uint16_t)ceil((base_length*1.0)/FOUR_BASE);
     
@@ -133,7 +133,7 @@ size_t encode_in_place(char * base_string, uint8_t * byte_list, size_t base_leng
     return byte_length;
 }
 
-void decode_byte_list(uint8_t * byte_list, char * base_string, uint16_t base_length)
+void decode_byte_list(uint8_t * byte_list, char * base_string, size_t base_length)
 {   
     uint8_t byte_length = (uint16_t)ceil(base_length*1.0/FOUR_BASE);
     

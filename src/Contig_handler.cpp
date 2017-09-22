@@ -2,20 +2,20 @@
 
 bool contig_handler_sort (contig_num_t i,contig_num_t j) { return (i<j); }
 
-Contig_handler::Contig_handler(char * logname)
+struct Block_timer ch_timer;
+
+Contig_handler::Contig_handler()
 {
-    num_contig = 0;
-    shc_logname = logname;
+    num_contig = 0;    
     
     stage_count = 0;
     staged_num = 0x00;    
     delimitor.push_back(0);
 }
 
-Contig_handler::Contig_handler(char * logname, uint8_t rmer_length)
+Contig_handler::Contig_handler(uint8_t rmer_length)
 {
-    num_contig = 0;
-    shc_logname = logname;    
+    num_contig = 0;    
     stage_count = 0;
     staged_num = 0x00;
     delimitor.push_back(0);
@@ -23,15 +23,16 @@ Contig_handler::Contig_handler(char * logname, uint8_t rmer_length)
 
 void Contig_handler::dump_all_contig(std::string & filename)
 {    
-    shc_log_info(shc_logname, "Start Dumping all contigs into file\n");
+    shc_log_info(shc_logname, "Start Dumping all contigs into file %s\n",
+                                           filename.c_str());
     int reminder_bases_num = 0;
     std::ofstream outfile (filename.c_str());
-    printf("numerb of contig is %u\n", num_contig);
+    printf("number of contig is %u\n", num_contig);
     char four_base[4];
+    outfile << contig_list.size() << std::endl;
     for(int i=0; i<num_contig; i++)
     {       
-        outfile << "Contig #" << i << " with mean count " << (int)mean_count[i] 
-                << " : \n";
+        outfile << ">\t"<< (int)mean_count[i] << std::endl;
         // -1 since exclusive at the end
         //shc_log_info(shc_logname, "delimitor.at(i) : %d\n",delimitor.at(i));
         //shc_log_info(shc_logname, "delimitor.at(i+1) : %d\n",delimitor.at(i+1));
@@ -54,6 +55,60 @@ void Contig_handler::dump_all_contig(std::string & filename)
         outfile << std::endl;
     }
     shc_log_info(shc_logname, "Finish Dumping all contigs into file\n");
+}
+
+void Contig_handler::load_contig_file(std::string & filename)
+{
+    shc_log_info(shc_logname, "Reading contigs from the file\n");
+    std::ifstream fileReader (filename.c_str());   
+    std::string line, temp, mc_s;      
+    int byte_list_size = 0;         
+    size_t contig_compress_len;    
+    kmer_count_t mc;
+         
+    //read byte size
+    std::getline(fileReader, line);
+    byte_list_size = std::stoi(line);
+    if(byte_list_size !=0 )
+    {
+        contig_list.reserve(byte_list_size);
+        contig_list.resize(byte_list_size);
+    }
+    else
+    {
+        shc_log_error("contig file contains 0 contig\n");
+    }        
+    
+    
+    start_timer(&ch_timer);
+    while (std::getline(fileReader, temp, '\t') && 
+            std::getline(fileReader, mc_s)) 
+    {                    
+        mc = std::stoi(mc_s);
+        
+        std::getline(fileReader, line);                                 
+        //std::cout << " lc "<<line <<std::endl;
+        //after this, line must contain the real seq                                                                                      
+        contig_compress_len = encode_base_string(line.c_str(), 
+                           &(contig_list.at(delimitor.back())), line.size());  
+        
+        
+        delimitor.push_back(delimitor.back()+contig_compress_len);
+        num_contig++;
+        mean_count.push_back(mc);
+        contig_len_list.push_back(line.size());
+    }
+    //print_delimitor();
+    //print_contig_length();
+    //print_contig(0);
+    
+#ifdef SHOW_PROGRESS
+    std::cout << "Finish contig loading, ";
+    stop_timer(&ch_timer);
+#endif
+    fileReader.close();
+    shc_log_info(shc_logname, "Finish reading contig %u from the file\n", 
+                                                num_contig);    
 }
 
 void Contig_handler::print_delimitor()
@@ -349,27 +404,16 @@ contig_num_t Contig_handler::get_next_to_delete(
 void Contig_handler::print_contig_length()
 {
     for(size_type i=0; i< num_contig; i++)
-        std::cout << delimitor[i+1] - delimitor[i] << " ";
+        std::cout << contig_len_list.at(i) << " ";
     std::cout << std::endl;    
 }
 
-void Contig_handler::print_delimitor(std::vector<size_type> & d)
-{
-    for(std::vector<size_type>::iterator i = d.begin(); i!=d.end(); i++)
-    {
-        std::cout << *i << ' ';
-    }
-    std::cout << std::endl;
-}
+void Contig_handler::print_contig(contig_num_t i)
+{    
+    for(size_type j=delimitor.at(i); j<delimitor.at(i+1); j++)    
+        std::cout << (uint16_t)contig_list[j] << " ";
+    std::cout << std::endl;    
 
-void Contig_handler::print_contig(size_type contig_start, size_type base_len)
-{
-    shc_log_info(shc_logname, "contig length %d\n", base_len);    
-    uint8_t re = contig_list[contig_start+base_len];
-    contig_list[contig_start+base_len] = '\0';
-    uint8_t * print_start = &(contig_list.at(contig_start));
-    shc_log_info(shc_logname, "contig!!: %s\n", (char*)print_start);    
-    contig_list[contig_start+base_len] = re;
 }
 
 void Contig_handler::update_delimitor_and_mean_count(contig_num_t * remove_list, contig_num_t remove_num)
@@ -425,11 +469,6 @@ void Contig_handler::update_delimitor_and_mean_count(contig_num_t * remove_list,
     std::vector<size_type>().swap(new_length_list);
     std::vector<size_type>().swap(length_list);
     std::vector<kmer_count_t>().swap(new_mean_count);
-}
-
-void Contig_handler::get_logname(char * logname)
-{
-    shc_logname = logname;
 }
 
 /*

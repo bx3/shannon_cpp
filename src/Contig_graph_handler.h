@@ -21,7 +21,6 @@
 
 #include <boost/property_map/property_map.hpp>
 #include <boost/graph/graph_utility.hpp>
-//#include <boost/graph/metis.hpp>
 #include "local_file_structure.h"
 #include <memory>
 
@@ -40,7 +39,7 @@
 
 #define ONLY_EDGE_WEIGHT "001"
 #define METIS_NODE_OFFSET 1
-#define EMPTY_KEY 97
+#define EMPTY_KEY (std::pow(2,sizeof(contig_num_t)*8)-1)
 #define METIS_IMBALANCE_PRECISION 1000.0
 
 struct bundled_contig_index {
@@ -56,7 +55,7 @@ struct bundled_weight {
 };
 
 struct Metis_setup {
-    Metis_setup(): partition_size(5), overload(1.5), penalty(5), inMem(0),
+    Metis_setup(): partition_size(500), overload(1.5), penalty(5), inMem(0),
                    ncon(1) 
     {
         memset(options, 0, METIS_NOPTIONS);    
@@ -112,9 +111,8 @@ class Contig_graph_handler
     
 public:              
     Contig_graph_handler(kmer_len_t length, Kmer_handler * khp, 
-         Contig_handler * chp, char * shc): 
-         k1mer_len(length), kh(khp), ch(chp), 
-         shc_logname(shc), component_array(chp->num_contig)
+         Contig_handler * chp): 
+         k1mer_len(length), kh(khp), ch(chp),component_array(chp->num_contig)
          {
              contig_vertex_map.set_empty_key(EMPTY_KEY);   
              explorable_contig_set.set_empty_key(ch->num_contig+2);
@@ -132,7 +130,7 @@ public:
     void assign_reads_to_components();
     void assign_reads_to_components(std::string& read_filename, int num_read );
     void assign_kmer_to_components();
-    void dump_component_array(std::string & filename);
+    void dump_component_array(std::string & filename);    
     
     void dump_graph_to_metis_file();
     void create_metis_format_from_graph();        
@@ -157,8 +155,7 @@ private:
     Contig_handler * ch;     
     
     std::string metis_filename;
-    std::string read_filename;
-    char * shc_logname;
+    std::string read_filename;    
     struct Metis_input metis_input;
     struct Metis_setup metis_setup;
 };

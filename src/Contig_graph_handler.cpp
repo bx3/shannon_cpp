@@ -3,8 +3,7 @@
 size_t contig_curr_proc = 0;
 size_t contig_prev_proc = 0;
 
-struct timespec cgh_nano_start, cgh_nano_stamp;
-unsigned long cgh_nTime;
+struct Block_timer chg_timer;
 
 void Contig_graph_handler::group_components()
 {          
@@ -19,11 +18,11 @@ void Contig_graph_handler::group_components()
     for(contig_num_t i=0; i<ch->num_contig; i++)
         explorable_contig_set.insert(i);   
     
-    clock_gettime(CLOCK_MONOTONIC,&cgh_nano_start);
+    start_timer(&chg_timer);
     while(!explorable_contig_set.empty())
     {
 #ifdef LOG_CONTIG_GRAPH
-        shc_log_info(shc_logname, "creating kmer out file for %u\n",curr_component_num);
+        shc_log_info(shc_logname, "\t\t\t\t\t#processing component %u\n",curr_component_num);
 #endif
 #ifdef SHOW_PROGRESS
         if((contig_curr_proc-contig_prev_proc) > CONTIG_PROGRESS_STEP)
@@ -54,7 +53,7 @@ void Contig_graph_handler::group_components()
         {
             contig_num_t i = contig_stack.top();
             contig_stack.pop();
-            contig_start = &(ch->contig_list.at(ch->delimitor.at(i)));
+            contig_start = &(ch->contig_list.at(ch->delimitor.at(i)));            
             //where j is kmer index
             for(Contig_handler::size_type j=0;
                 j<ch->contig_len_list.at(i)-kh->kmer_length+1;   j++)
@@ -63,10 +62,13 @@ void Contig_graph_handler::group_components()
                 get_xmer_at_index(contig_start, ch->contig_len_list.at(i), j, 
                                                 kh->kmer_length, kmer_array);                 
                 encode_kmer(kmer_array, &byte, kh->kmer_length);
+                //std::cout << "asdfs " << (int)kh->kmer_length << " , " << kmer_array << std::endl;                                
                 it = kh->kmer_counter.find(byte);                                
                 if(it == kh->kmer_counter.end())
+                {
+                    std::cout << "The impossible kmer is " << kmer_array << std::endl;
                     shc_log_error("contain impossible kmer\n");
-                
+                }
                 //dump to out
                 //kmer_outfile << kmer_array << "\t" << (*it).second.count<< std::endl;
                 //find new contig
@@ -74,22 +76,15 @@ void Contig_graph_handler::group_components()
             }
         }
         contig_curr_proc = ch->num_contig - explorable_contig_set.size();
-        
-#ifdef LOG_CONTIG_GRAPH
-        shc_log_info(shc_logname, "close kmer out file for %u\n",curr_component_num);
-#endif
         //up to here we have a component and its graph
         break_and_keep_component();
         graph.clear();
         contig_vertex_map.clear();
     }
-    clock_gettime(CLOCK_MONOTONIC,&cgh_nano_stamp);
-    cgh_nTime = (cgh_nano_stamp.tv_sec - cgh_nano_start.tv_sec);
+    
 #ifdef SHOW_PROGRESS
-    std::cout << "[100%] all contig processed in contig graph" << std::endl;
-    std::cout << "using " << cgh_nTime/MINUTE_PER_SEC/HOUR_PER_MINUTE << " hours " 
-              << "<=> " << cgh_nTime/HOUR_PER_MINUTE << " minutes "
-              << "<=> " << cgh_nTime << " sec " << std::endl << std::endl;
+    std::cout << "Finish finding component, ";
+    stop_timer(&chg_timer);
 #endif
     
     shc_log_info(shc_logname, "Finish constructing contig graph\n");
@@ -102,6 +97,10 @@ void Contig_graph_handler::break_and_keep_component()
     //shc_log_info(shc_logname, "num vertices %u, partition_size %u\n",num_vertices , metis_setup.partition_size);
     if( num_vertices <= metis_setup.partition_size)
     {
+#ifdef LOG_CONTIG_GRAPH
+        shc_log_info(shc_logname, "no metis\n");
+#endif
+        
         vip_t vip = vertices(graph);
         //update contig to component info
         for(vi_t it=vip.first; it!=vip.second; it++)
@@ -109,7 +108,7 @@ void Contig_graph_handler::break_and_keep_component()
             component_array[graph[*it].contig_index] = curr_component_num;  
             //shc_log_info(shc_logname, "component %u has contig %u\n", curr_component_num, graph[*it].contig_index);
         }
-        curr_component_num++;                
+        curr_component_num++;      
     }
     else        //call metis
     {
@@ -140,39 +139,30 @@ void Contig_graph_handler::break_and_keep_component()
         if(ret == METIS_ERROR)
             shc_log_error("METIS_OTHER_ERROR\n");
         
-        idx_t num_component_in_graph = 0;
-        for(idx_t i=0; i<num_vertices; i++)
-        {
-            // for vertex ith descriptor, part[i] contains local component num            
-            component_array[graph[static_cast<vd_t>(i)].contig_index] = 
-                                                 curr_component_num + part[i];            
-#ifdef LOG_METIS
-            shc_log_info(shc_logname, "metis component %d has contig %u\n", part[i], graph[i].contig_index);
-#endif
-            num_component_in_graph = std::max(num_component_in_graph, part[i]);                        
-        }                
-        num_component_in_graph = num_component_in_graph + 1;
-#ifdef LOG_METIS
-        shc_log_info(shc_logname, "metis breaks to %d partition\n", num_component_in_graph);
+#ifdef LOG_METIS    
+    shc_log_info(shc_logname, "metis breaks to %d partition\n", metis_setup.num_partition);
 #endif        
-        curr_component_num += num_component_in_graph;
+        curr_component_num += metis_setup.num_partition;
         std::vector<idx_t>().swap(part);
     }
+#ifdef LOG_CONTIG_GRAPH
+    shc_log_info(shc_logname, "end\n");
+#endif    
+    
 }
 
 void Contig_graph_handler::get_connected_contig_index(
                                                 Kmer_counter_map_iterator & it)
-{    
+{        
     contig_num_t contigA_index, contigB_index;
-    uint64_t next_byte = 0;
-    
-    contigA_index = it->second.contig;
+    uint64_t next_byte = 0;    
+    contigA_index = it->second.contig;    
     // for that kmer, check what extension available to it
     for(uint8_t i=1; i<= BIT_PER_BYTE; i++)
     {
         if(kh->is_info_ith_bit_set(it->second.info, i))
         {
-            //shc_log_info(shc_logname, "%lld : %u bit is set \n",it->first, i);
+            shc_log_info(shc_logname, "%lld : %u bit is set \n",it->first, i);
             if(i<=PREFIX_OFFSET)           
                 next_byte = prepend_byte(&(it->first), i-1, kh->kmer_length);
             else            
@@ -183,14 +173,17 @@ void Contig_graph_handler::get_connected_contig_index(
             {
                 contigB_index = kh->kmer_counter[next_byte].contig;
                 if (contigA_index != contigB_index)
-                {                                                       
+                {    
+                    shc_log_info(shc_logname, "Find new contig %u, before increment edge with me %u\n", contigB_index, contigA_index);
                     increment_edge_weight(contigA_index, contigB_index);                    
+                    shc_log_info(shc_logname, "AFter increment");
                     if (explorable_contig_set.find(contigB_index) != 
                         explorable_contig_set.end())
                     {
                         //if contigB_index is found
                         contig_stack.push(contigB_index);
                         explorable_contig_set.erase(contigB_index);
+                        shc_log_info(shc_logname, "%u is pushed to search stack\n", contigB_index);
                     }
                 }
             }
@@ -207,9 +200,12 @@ void Contig_graph_handler::get_connected_contig_index(
 void Contig_graph_handler::increment_edge_weight(contig_num_t i, contig_num_t j)
 {    
     //add nodes if needed
+    shc_log_info(shc_logname, "enter\n");
     vd_t vd;
-    if(contig_vertex_map.find(i) == contig_vertex_map.end())
+    bool is_wihtout = contig_vertex_map.find(i) == contig_vertex_map.end();    
+    if(is_wihtout)
     {
+        shc_log_info(shc_logname, "without %u\n", i);
         vd = boost::add_vertex(graph);
         contig_vertex_map[i] = vd;   
         graph[vd] = bundled_contig_index(i);
@@ -217,9 +213,11 @@ void Contig_graph_handler::increment_edge_weight(contig_num_t i, contig_num_t j)
         shc_log_info(shc_logname, "Added contig %u with vd %u\n", i, vd);
 #endif
     }
+    is_wihtout = contig_vertex_map.find(j) == contig_vertex_map.end();
     
-    if(contig_vertex_map.find(j) == contig_vertex_map.end())
+    if(is_wihtout)
     {
+        shc_log_info(shc_logname, "without %u\n", j);
         vd = boost::add_vertex(graph);
         contig_vertex_map[j] = vd;        
         graph[vd] = bundled_contig_index(j);
@@ -234,6 +232,7 @@ void Contig_graph_handler::increment_edge_weight(contig_num_t i, contig_num_t j)
     if(aer.second)
     {                
         graph[aer.first].weight++;
+        
 #ifdef LOG_CONTIG_GRAPH
         shc_log_info(shc_logname, "edge between %u %u : weight increased to %u\n",
                 i, j ,graph[aer.first].weight);        
@@ -243,10 +242,10 @@ void Contig_graph_handler::increment_edge_weight(contig_num_t i, contig_num_t j)
     {
         aer = boost::add_edge(contig_vertex_map[i], contig_vertex_map[j], graph);
         assert(aer.second);
+        graph[aer.first] = bundled_weight(1);                
 #ifdef LOG_CONTIG_GRAPH
         shc_log_info(shc_logname, "Edge between %u %u\n", i, j);
 #endif
-        graph[aer.first] = bundled_weight(1);                
     }            
 }
 
@@ -270,12 +269,14 @@ void Contig_graph_handler::create_metis_array_input()
             vd = *vi;
             aer = boost::edge(vd_source, vd, graph);
             // since for AAAT, AATG we double counts
-            edge_weight = graph[aer.first].weight; 
+            edge_weight = graph[aer.first].weight/2; 
             metis_input.adjncy.push_back(vd);
             metis_input.adjwgt.push_back(edge_weight);            
         }  
         metis_input.xadj.push_back(metis_input.adjncy.size());                
     }    
+    //log_metis_input_data();
+    shc_log_info(shc_logname, "Finish creating metis array input for component\n");
 }
 
 void Contig_graph_handler::create_metis_format_from_graph()
@@ -303,7 +304,7 @@ void Contig_graph_handler::create_metis_format_from_graph()
             vd = *vi;
             aer = boost::edge(vd_source, vd, graph);
             // since for AAAT, AATG we double counts
-            edge_weight = graph[aer.first].weight; 
+            edge_weight = graph[aer.first].weight/2; 
             metis_input.adjncy.push_back(vd);
             metis_input.adjwgt.push_back(edge_weight);
             //outfile << vd+METIS_NODE_OFFSET << " " << edge_weight << " ";
@@ -314,7 +315,7 @@ void Contig_graph_handler::create_metis_format_from_graph()
         outfile << std::endl;
     }
     
-    log_metis_input_data();
+    //log_metis_input_data();
     outfile.close();
     shc_log_info(shc_logname, "Finish making METIS format file\n");
 } 
@@ -335,7 +336,7 @@ void Contig_graph_handler::log_metis_input_data()
     info_log_str_without_new_line(shc_logname,"\n adjwgt: ");
     for(auto iter=metis_input.adjwgt.begin(); iter!=metis_input.adjwgt.end(); ++iter)    
         info_log_num_without_new_line(shc_logname, *iter);     
-    info_log_str_without_new_line(shc_logname,"\n");
+    info_log_str_without_new_line(shc_logname,"\n\n");
 }
 
 void Contig_graph_handler::dump_component_array(std::string & filename)

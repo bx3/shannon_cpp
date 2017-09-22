@@ -9,11 +9,6 @@
 #define	SHC_TYPE_H
 
 #include <stdint.h>
-#include <boost/graph/graph_traits.hpp>
-#include <boost/graph/adjacency_list.hpp>
-#include <boost/graph/dijkstra_shortest_paths.hpp>
-#include <boost/property_map/property_map.hpp>
-#include <boost/graph/graph_utility.hpp>
 
 typedef uint32_t contig_num_t;
 typedef contig_num_t vertex_num_t;
@@ -43,6 +38,8 @@ struct Kmer_info {
     Kmer_info(): count(0), info(0), used(false), contig(IMPOSSIBLE_CONTIG_NUM){}
     Kmer_info(kmer_count_t cp): count(cp), info(0), used(false), 
                 contig(IMPOSSIBLE_CONTIG_NUM){}
+    Kmer_info(kmer_count_t count_p, uint8_t info_p, bool up, contig_num_t contig_p 
+           ): count(count_p), info(info_p), used(false), contig(contig_p){}
 };
 
 

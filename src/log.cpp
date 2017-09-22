@@ -1,5 +1,24 @@
 #include "log.h"
 
+char shc_logname[100] = {0};
+
+void start_timer(struct Block_timer * bt)
+{
+    clock_gettime(CLOCK_MONOTONIC, &bt->nano_start);
+}
+
+void stop_timer(struct Block_timer * bt)
+{
+    clock_gettime(CLOCK_MONOTONIC,&bt->nano_stamp);
+    bt->nTime = (bt->nano_stamp.tv_sec - bt->nano_start.tv_sec);
+    std::cout << "\033[0;33m";
+    std::cout << "using " 
+              << bt->nTime/MINUTE_PER_SEC/HOUR_PER_MINUTE << " hours " 
+              << "<=> " << bt->nTime/HOUR_PER_MINUTE << " minutes "
+              << "<=> " << bt->nTime << " sec " << std::endl << std::endl;                      
+    std::cout << "\033[0m";
+}
+
 // for debugging
 void get_vector_string(std::vector<contig_num_t> & contig_list, std::stringstream & vec_str)
 {        

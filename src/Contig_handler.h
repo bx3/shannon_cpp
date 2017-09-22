@@ -28,11 +28,11 @@ class Contig_handler {
 public:
     typedef std::vector<uint8_t>::size_type size_type;
     
-    Contig_handler(char * logname);
-    Contig_handler(char * logname, uint8_t rmer_length);
+    Contig_handler();
+    Contig_handler(uint8_t rmer_length);
     
     void dump_all_contig(std::string & filename);
-    
+    void load_contig_file(std::string & filename);
     
     // following codes change contig list 
     void push_back(uint8_t base);
@@ -47,16 +47,13 @@ public:
     void declare_new_contig(kmer_count_t mean_c, size_type contig_len);
     void reject_new_contig();
     
-    void print_delimitor();
-    void print_delimitor(std::vector<size_type> & d);
+    void print_delimitor();    
     void print_contig_length();
-    void print_contig(size_type cs, size_type len);    
+    void print_contig(contig_num_t i);    
     void update_delimitor_and_mean_count(contig_num_t * remove_list, contig_num_t remove_num);    
     
     void filter_contig(kmer_count_t min_count, size_type min_len, double R_threshold);
-    void remove_redundance(double threshold);
-    
-    void get_logname(char * logname);
+    void remove_redundance(double threshold);        
                 
     // important contig info
     contig_num_t num_contig; 
@@ -71,8 +68,7 @@ public:
     
     
     //for debugging
-    std::stringstream vec_str;
-    char * shc_logname;            
+    std::stringstream vec_str;        
 };
 
 

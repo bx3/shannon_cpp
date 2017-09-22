@@ -55,10 +55,10 @@ uint8_t encode(const char * base, int length);
 uint8_t encode_in_place_helper(char * base, int length);
 void decode(uint8_t num, int length, char *base);
 
-uint16_t encode_base_string(const char * base_string, uint8_t * byte_list, int16_t base_length);
+size_t encode_base_string(const char * base_string, uint8_t * byte_list, size_t base_length);
 size_t encode_in_place(char * base_string, uint8_t * byte_list, size_t base_length);
 
-void decode_byte_list(uint8_t * byte_list, char * base_string, uint16_t base_length);
+void decode_byte_list(uint8_t * byte_list, char * base_string, size_t base_length);
 
 void read_input(char* input, char* file_name);
 
