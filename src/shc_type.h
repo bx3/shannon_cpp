@@ -9,16 +9,17 @@
 #define	SHC_TYPE_H
 
 #include <stdint.h>
+#include <cmath>
 
 typedef uint32_t contig_num_t;
 typedef contig_num_t vertex_num_t;
 typedef contig_num_t comp_num_t;
-typedef uint16_t  kmer_count_t;
+typedef uint32_t  kmer_count_t;
 typedef uint16_t  rmer_count_t;
 typedef uint8_t  kmer_len_t;
 typedef uint16_t contig_edge_weight_t;
 
-#define IMPOSSIBLE_CONTIG_NUM (sizeof(contig_num_t)-1)
+#define IMPOSSIBLE_CONTIG_NUM (std::pow(2,sizeof(contig_num_t)*8-1)-1)
 /*
  * Info represents bit-field flag, six bits are used.
  * 1. The first bit describes if there is another kmer of suffix (k-1) common 

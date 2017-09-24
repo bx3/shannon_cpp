@@ -39,7 +39,7 @@
 
 #define ONLY_EDGE_WEIGHT "001"
 #define METIS_NODE_OFFSET 1
-#define EMPTY_KEY (std::pow(2,sizeof(contig_num_t)*8)-1)
+#define EMPTY_KEY (std::pow(2,sizeof(contig_num_t)*8-1)-1)
 #define METIS_IMBALANCE_PRECISION 1000.0
 
 struct bundled_contig_index {

@@ -14,15 +14,16 @@
 using namespace std;
 
 void test_encoding_decoding();
-void test_Kmer_without_filter(Local_files * lf);
-void test_Kmer(Local_files * lf);
-void test_Contig_graph(Local_files * lf);
+void test_Kmer_without_filter(Local_files * lf, bool is_list);
+void test_Kmer(Local_files * lf, bool is_list);
+void test_Contig_graph(Local_files * lf, bool is_list);
 void test_load_contig_graph(Local_files * lf);
 void test_load_dump(Local_files * lf);
 
 
 int main(int argc, char** argv) {                
-    char letter;             
+    char letter;      
+    bool is_list = true;
     
     int desiredTest = 0;
     while(desiredTest<1 || desiredTest>6)
@@ -30,12 +31,21 @@ int main(int argc, char** argv) {
         std::cout << "Select desired application: \n";
         std::cout << "   1) test_encoding_decoding\n";
         std::cout << "   2) test_Kmer_without_filter\n";
-        std::cout << "   3) test_Kmer\n";
+        std::cout << "   3) test_Kmer with list\n";
         std::cout << "   4) test_Contig_graph\n";
         std::cout << "   5) test_load_contig_graph\n";  
         std::cout << "   6) test_load_dump\n"; 
         
         std::cin >> desiredTest;
+    }
+    std::cout << "If use list for redundancy removal (Y/N)" << std::endl;
+    if(std::cin >> letter)
+    {
+        if(letter=='N' || letter=='n')
+        {
+            is_list = false;
+            std:: cout << "using a set to remove redundancy" << std::endl;
+        }
     }
     
     boost::filesystem::path base_path = boost::filesystem::current_path();
@@ -62,7 +72,7 @@ int main(int argc, char** argv) {
     std::cout << "kmer output save to      : " << local_files.kmer_output_path << std::endl;
     std::cout << "contig output saved to   : " << local_files.contig_output_path << std::endl;
     std::cout << "component output saved to: " << local_files.comp_output_path << std::endl << std::endl;
-    std::cout << "\033[0m";
+    std::cout << "\033[0m" << std::endl;
          
     
     shc_log_info(shc_logname, "Shannon C is starting\n");
@@ -71,13 +81,13 @@ int main(int argc, char** argv) {
             test_encoding_decoding();
             break;
 	case 2:
-            test_Kmer_without_filter(&local_files);
+            test_Kmer_without_filter(&local_files, is_list);
             break;
         case 3:
-            test_Kmer(&local_files);
+            test_Kmer(&local_files, is_list);
             break;            
         case 4:
-            test_Contig_graph(&local_files);
+            test_Contig_graph(&local_files, is_list);
             break;       
         case 5:
             test_load_contig_graph(&local_files);
@@ -131,7 +141,7 @@ void test_load_contig_graph(Local_files * lf)
     
 }
 
-void test_Contig_graph(Local_files * lf)
+void test_Contig_graph(Local_files * lf, bool is_list)
 {  
     // parameter setting
     uint16_t contig_num;
@@ -140,8 +150,8 @@ void test_Contig_graph(Local_files * lf)
     double threshold = 0.5;
     kmer_count_t min_count = 1; //5
     Contig_handler::size_type min_len = 75; //20
-    bool is_use_set = false;
-    
+    bool is_use_set = !is_list;
+    std::cout << "using set? " << (is_use_set? "Yes":"no") << std::endl;
     Kmer_handler kmer_handler(kmer_length,   
             min_count, min_len, threshold, rmer_length, is_use_set);     
     
@@ -165,7 +175,7 @@ void test_Contig_graph(Local_files * lf)
     graph_handler.assign_kmer_to_components();    
 }
 
-void test_Kmer(Local_files * lf)
+void test_Kmer(Local_files * lf, bool is_list)
 {    
     uint64_t contig_num;   
     uint8_t kmer_length = 25;
@@ -173,7 +183,7 @@ void test_Kmer(Local_files * lf)
     double threshold = 0.5; //0.5
     kmer_count_t min_count = 1; //5
     Contig_handler::size_type min_len = 75; //20
-    bool is_use_set = false;        
+    bool is_use_set = !is_list;        
     
     Kmer_handler kmer_handler(kmer_length,  
             min_count, min_len, threshold, rmer_length, is_use_set);     
@@ -194,7 +204,7 @@ void test_Kmer(Local_files * lf)
 
 
 
-void test_Kmer_without_filter(Local_files * lf)
+void test_Kmer_without_filter(Local_files * lf, bool is_list)
 {    
     uint64_t contig_num;
     
@@ -203,7 +213,7 @@ void test_Kmer_without_filter(Local_files * lf)
     double threshold = 1;
     kmer_count_t min_count = 0; //5
     Contig_handler::size_type min_len = 0; //20
-    bool is_use_set = false;
+    bool is_use_set = !is_list;
     
 
     Kmer_handler kmer_handler(kmer_length, 

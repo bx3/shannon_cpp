@@ -32,7 +32,7 @@
 #define KMER_HOLDER_LEN 33
 #define MAX_KMER_DICTLINE_LENGTH 50
 #define DEFAULT_NUM 255
-#define MAX_COUNT (std::pow(2,sizeof(kmer_count_t)*8)-1)
+#define MAX_COUNT (std::pow(2,sizeof(kmer_count_t)*8-1)-1)
 #define NO_MATCH -1
 #define HAS_MATCH 0
 #define PREFIX_OFFSET 4

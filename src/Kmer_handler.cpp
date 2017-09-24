@@ -75,6 +75,7 @@ void Kmer_handler::load_kmers_with_info_from_file(std::string & filename)
     contig_num_t contig;
     uint64_t byte;
     bool flag = true;
+    Kmer_info kmer_info(0,0,true, IMPOSSIBLE_CONTIG_NUM);
     
     start_timer(&kh_timer);
     while(  std::getline(fileReader, kmer_base, '\t') && 
@@ -93,8 +94,10 @@ void Kmer_handler::load_kmers_with_info_from_file(std::string & filename)
         }
                     
         encode_kmer(kmer_base.c_str(), &byte, kmer_base.size());
-        
-        kmer_counter[byte] = Kmer_info(count, info, true, contig);
+        kmer_info.contig = contig;
+        kmer_info.info = info;
+        kmer_info.count = count;
+        kmer_counter[byte] = kmer_info;
         //std::cout << kmer_base<< " " << contig <<" "<<count <<" "<< info << std::endl;        
         //std::cout << kmer_base<< " " << kmer_counter[byte].contig <<" "
         //          <<kmer_counter[byte].count <<" "<< kmer_counter[byte].info << std::endl;
@@ -125,18 +128,21 @@ int Kmer_handler::read_sequence_from_file (std::string filename)
     uint64_t kmer;     
             
     start_timer(&kh_timer);    
+    Kmer_info kmer_info;                        
     while (std::getline(fileReader, line_s, '\t') &&         
            std::getline(fileReader, count_s) ) 
     {                 
         count = std::stoi(count_s);
         if (count > MAX_COUNT)
         {
+            std::cout << MAX_COUNT << std::endl;
             shc_log_error("MAX_COUNT is  %d\n", MAX_COUNT);        
             shc_log_error("kmer_count_t unable to hold count %d\n", count);        
             return 1;            
         }                  
         encode_kmer(line_s.c_str(), &kmer, kmer_length);                        
-        kmer_counter[kmer] = Kmer_info((kmer_count_t)count);                        
+        kmer_info.count = count;
+        kmer_counter[kmer] = kmer_info;
     }  
 #ifdef SHOW_PROGRESS
     std::cout << "Finish reading jellyfish kmer, ";
@@ -684,6 +690,7 @@ bool Kmer_handler::decide_contig_and_build_rmer(kmer_count_t mean_count, Contig_
 #ifdef LOG_KMER    
     shc_log_info(shc_logname, "Finish length count filter, Passing\n");
 #endif    
+	/*
     if(is_use_set)
     {
         return use_set_to_filter(mean_count, len);
@@ -691,7 +698,8 @@ bool Kmer_handler::decide_contig_and_build_rmer(kmer_count_t mean_count, Contig_
     else
     {
         return use_list_to_filter(mean_count, len);
-    }
+    }*/
+return true;
 }
 
 bool Kmer_handler::use_set_to_filter(kmer_count_t mean_count, Contig_handler::size_type len)
