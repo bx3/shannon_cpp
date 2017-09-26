@@ -10,9 +10,9 @@ void Contig_graph_handler::group_components()
     shc_log_info(shc_logname, "Start constructing contig graph\n");  
     uint8_t * contig_start = NULL;
     Kmer_counter_map_iterator it;
-    char kmer_array[KMER_HOLDER_LEN];
-    uint64_t byte = 0;
-    kmer_array[kh->kmer_length] = '\0';  
+    char kmer_array[33];
+    kmer_array[kh->kmer_length] = '\0';
+    uint64_t byte = 0;    
             
     //put every contig into the set
     for(contig_num_t i=0; i<ch->num_contig; i++)
@@ -53,27 +53,26 @@ void Contig_graph_handler::group_components()
         {
             contig_num_t i = contig_stack.top();
             contig_stack.pop();
-            contig_start = &(ch->contig_list.at(ch->delimitor.at(i)));            
-            //where j is kmer index
+            
+            Contig_handler::Contig_base_info contig_info = 
+                    ch->get_contig(i);
+            
             for(Contig_handler::size_type j=0;
                 j<ch->contig_len_list.at(i)-kh->kmer_length+1;   j++)
-            {
-                //get each kmer and the corresponding info
-                get_xmer_at_index(contig_start, ch->contig_len_list.at(i), j, 
-                                                kh->kmer_length, kmer_array);                 
-                encode_kmer(kmer_array, &byte, kh->kmer_length);
-                //std::cout << "asdfs " << (int)kh->kmer_length << " , " << kmer_array << std::endl;                                
+            {                
+                memcpy(kmer_array, contig_info.base_start+j, kh->kmer_length);
+                encode_kmer(contig_info.base_start+j, &byte, kh->kmer_length);
+                
+                //shc_log_info(shc_logname, "%s\n", kmer_array);
+                
                 it = kh->kmer_counter.find(byte);                                
                 if(it == kh->kmer_counter.end())
-                {
-                    std::cout << "The impossible kmer is " << kmer_array << std::endl;
-                    shc_log_error("contain impossible kmer\n");
-                }
-                //dump to out
-                //kmer_outfile << kmer_array << "\t" << (*it).second.count<< std::endl;
-                //find new contig
+                {                    
+                    shc_log_error("contain impossible kmer %s\n", kmer_array);
+                    exit(1);
+                }                
                 get_connected_contig_index(it);
-            }
+            }            
         }
         contig_curr_proc = ch->num_contig - explorable_contig_set.size();
         //up to here we have a component and its graph
@@ -124,7 +123,7 @@ void Contig_graph_handler::break_and_keep_component()
                                                    * (metis_setup.overload-1));
         std::vector<idx_t> part(num_vertices);
         
-        //metis_setup.options[METIS_OPTION_UFACTOR] = ufactor;            
+        metis_setup.options[METIS_OPTION_UFACTOR] = ufactor;            
         
         int ret = METIS_PartGraphRecursive(
               &metis_setup.num_vertices, &metis_setup.ncon, 
@@ -162,7 +161,7 @@ void Contig_graph_handler::get_connected_contig_index(
     {
         if(kh->is_info_ith_bit_set(it->second.info, i))
         {
-            shc_log_info(shc_logname, "%lld : %u bit is set \n",it->first, i);
+            //shc_log_info(shc_logname, "%lld : %u bit is set \n",it->first, i);
             if(i<=PREFIX_OFFSET)           
                 next_byte = prepend_byte(&(it->first), i-1, kh->kmer_length);
             else            
@@ -174,16 +173,16 @@ void Contig_graph_handler::get_connected_contig_index(
                 contigB_index = kh->kmer_counter[next_byte].contig;
                 if (contigA_index != contigB_index)
                 {    
-                    shc_log_info(shc_logname, "Find new contig %u, before increment edge with me %u\n", contigB_index, contigA_index);
+                    //shc_log_info(shc_logname, "Find new contig %u, before increment edge with me %u\n", contigB_index, contigA_index);
                     increment_edge_weight(contigA_index, contigB_index);                    
-                    shc_log_info(shc_logname, "AFter increment");
+                    //shc_log_info(shc_logname, "AFter increment");
                     if (explorable_contig_set.find(contigB_index) != 
                         explorable_contig_set.end())
                     {
                         //if contigB_index is found
                         contig_stack.push(contigB_index);
                         explorable_contig_set.erase(contigB_index);
-                        shc_log_info(shc_logname, "%u is pushed to search stack\n", contigB_index);
+                        //shc_log_info(shc_logname, "%u is pushed to search stack\n", contigB_index);
                     }
                 }
             }
@@ -199,13 +198,12 @@ void Contig_graph_handler::get_connected_contig_index(
  */
 void Contig_graph_handler::increment_edge_weight(contig_num_t i, contig_num_t j)
 {    
-    //add nodes if needed
-    shc_log_info(shc_logname, "enter\n");
+    //add nodes if needed    
     vd_t vd;
     bool is_wihtout = contig_vertex_map.find(i) == contig_vertex_map.end();    
     if(is_wihtout)
     {
-        shc_log_info(shc_logname, "without %u\n", i);
+        //shc_log_info(shc_logname, "without %u\n", i);
         vd = boost::add_vertex(graph);
         contig_vertex_map[i] = vd;   
         graph[vd] = bundled_contig_index(i);
@@ -217,7 +215,7 @@ void Contig_graph_handler::increment_edge_weight(contig_num_t i, contig_num_t j)
     
     if(is_wihtout)
     {
-        shc_log_info(shc_logname, "without %u\n", j);
+        //shc_log_info(shc_logname, "without %u\n", j);
         vd = boost::add_vertex(graph);
         contig_vertex_map[j] = vd;        
         graph[vd] = bundled_contig_index(j);

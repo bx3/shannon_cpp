@@ -27,23 +27,19 @@ class Contig_handler {
     friend class Kmer_handler;
 public:
     typedef std::vector<uint8_t>::size_type size_type;
+    struct Contig_base_info {
+        char * base_start;
+        size_type len;
+        Contig_base_info(char * s_p, size_type len_p):
+                base_start(s_p), len(len_p) {}
+    };
     
     Contig_handler();
-    Contig_handler(uint8_t rmer_length);
+    Contig_handler(bool is_compress);
     
     void dump_all_contig(std::string & filename);
     void load_contig_file(std::string & filename);
-    
-    // following codes change contig list 
-    void push_back(uint8_t base);
-    void flash();
-    void delete_contig(contig_num_t i);
-    void delete_contig_list(contig_num_t * remove_list, contig_num_t num);
-    contig_num_t get_next_to_keep(contig_num_t * remove_list, contig_num_t remove_num, 
-                                                contig_num_t remove_list_index);
-    contig_num_t get_next_to_delete(contig_num_t * remove_list, contig_num_t remove_num,
-                             contig_num_t keep_index, contig_num_t curr_remove_index);
-    
+        
     void declare_new_contig(kmer_count_t mean_c, size_type contig_len);
     void reject_new_contig();
     
@@ -54,18 +50,22 @@ public:
     
     void filter_contig(kmer_count_t min_count, size_type min_len, double R_threshold);
     void remove_redundance(double threshold);        
+    Contig_base_info get_contig(contig_num_t i);
                 
     // important contig info
     contig_num_t num_contig; 
     std::vector<uint8_t> contig_list;  
     std::vector<kmer_count_t> mean_count;        
     std::vector<size_type> delimitor; // the range is [ )   
-    std::vector<size_type> contig_len_list;         
+    std::vector<size_type> contig_len_list;        
+    
+    std::vector<char> curr_contig;
     
     //for compressing bases to byte
     uint8_t staged_num;
     uint8_t stage_count;
     
+    bool is_use_compress;
     
     //for debugging
     std::stringstream vec_str;        

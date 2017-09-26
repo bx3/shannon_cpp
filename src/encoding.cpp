@@ -135,18 +135,18 @@ size_t encode_in_place(char * base_string, uint8_t * byte_list, size_t base_leng
 
 void decode_byte_list(uint8_t * byte_list, char * base_string, size_t base_length)
 {   
-    uint8_t byte_length = (uint16_t)ceil(base_length*1.0/FOUR_BASE);
+    size_t byte_length = (size_t)ceil(base_length*1.0/FOUR_BASE);
     
-    int reminder_base_num = base_length % FOUR_BASE ; 
+    uint8_t reminder_base_num = base_length % FOUR_BASE ; 
     //printf("byte_length is %u, %u \n", byte_length, reminder_base_num);
-    int full_byte_num = 0;
+    size_t full_byte_num = 0;
     if (reminder_base_num > 0)
         full_byte_num = byte_length-1;
     else
         full_byte_num = byte_length;
     
-    int j = 0;
-    for(int i = 0; i<full_byte_num; i++)
+    size_t j = 0;
+    for(size_t i = 0; i<full_byte_num; i++)
     {
         decode(byte_list[i], FOUR_BASE, base_string+j);
         j+=4;                

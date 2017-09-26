@@ -9,14 +9,22 @@ Block_timer kh_timer;
  * Constructor 
  * @param length : kmer length 
  */
-Kmer_handler::Kmer_handler()
+Kmer_handler::Kmer_handler(Local_files * lf)
 {    
     kmer_counter.set_deleted_key(SPARSEHASH_DELETE_KEY);    
+    kmer_counter.set_empty_key(SPARSEHASH_EMPTY_KEY);  
+    //get kmer length
+    kmer_length = get_kmer_length_from_file(lf->kmer_output_path);
+    size_t num_line = estimate_num_kmer(lf->input_kmer_path);
+    std::cout << "num of size to reserve is " << num_line << std::endl;
+    kmer_counter.resize(num_line);
+    
+    num_kmer_deleted = 0;
 }
 
 Kmer_handler::Kmer_handler(uint8_t length, kmer_count_t min_count, 
                 Contig_handler::size_type min_len, double R_threshold, 
-                uint8_t rmer_len, bool is_use_set)
+                uint8_t rmer_len, bool is_use_set, Local_files * lf)
 {
     kmer_length = length;    
     this->min_count = min_count;
@@ -25,6 +33,21 @@ Kmer_handler::Kmer_handler(uint8_t length, kmer_count_t min_count,
     this->rmer_len = rmer_len;
     this->is_use_set = is_use_set;
     kmer_counter.set_deleted_key(SPARSEHASH_DELETE_KEY);   
+    kmer_counter.set_empty_key(SPARSEHASH_EMPTY_KEY);
+    size_t num_kmer = 120000000;//estimate_num_kmer(lf->input_kmer_path);
+    //std::cout << "num of size to reserve is " << num_kmer << std::endl;
+    kmer_counter.resize(num_kmer);
+    
+    if(is_use_set)
+    {
+        rmer_count_map.resize(num_kmer);
+    }
+    else
+    {
+        rmer_contig_map.resize(num_kmer);
+    }
+    
+    num_kmer_deleted = 0;
 }
 
 /**
@@ -73,8 +96,7 @@ void Kmer_handler::load_kmers_with_info_from_file(std::string & filename)
     kmer_count_t count;    
     uint8_t info;     
     contig_num_t contig;
-    uint64_t byte;
-    bool flag = true;
+    uint64_t byte;    
     Kmer_info kmer_info(0,0,true, IMPOSSIBLE_CONTIG_NUM);
     
     start_timer(&kh_timer);
@@ -86,14 +108,8 @@ void Kmer_handler::load_kmers_with_info_from_file(std::string & filename)
         count = std::stoi(count_s);
         contig = std::stoi(contig_s);
         info = std::stoi(info_s);
-                     
-        if(flag)
-        {
-            kmer_length = kmer_base.size();
-            flag = false;
-        }
-                    
-        encode_kmer(kmer_base.c_str(), &byte, kmer_base.size());
+                                               
+        encode_kmer(kmer_base.c_str(), &byte, kmer_length);
         kmer_info.contig = contig;
         kmer_info.info = info;
         kmer_info.count = count;
@@ -106,8 +122,7 @@ void Kmer_handler::load_kmers_with_info_from_file(std::string & filename)
     std::cout << "Finish kmer with info loading, ";
     stop_timer(&kh_timer);
 #endif
-    
-    std::cout << "inside load " << kmer_length << std::endl;
+        
     fileReader.close();
     shc_log_info(shc_logname, "kmer_length %u\n", kmer_length);    
     shc_log_info(shc_logname, "Shannon C finish load kmer\n");    
@@ -139,7 +154,8 @@ int Kmer_handler::read_sequence_from_file (std::string filename)
             shc_log_error("MAX_COUNT is  %d\n", MAX_COUNT);        
             shc_log_error("kmer_count_t unable to hold count %d\n", count);        
             return 1;            
-        }                  
+        }      
+        //shc_log_info(shc_logname, "%s\n", line_s.c_str());
         encode_kmer(line_s.c_str(), &kmer, kmer_length);                        
         kmer_info.count = count;
         kmer_counter[kmer] = kmer_info;
@@ -515,13 +531,7 @@ contig_num_t Kmer_handler::find_contig()
             contig_mean_count = (kmer_count_t)(total_count/total_kmer_in_contig);    
                                  
             if(decide_contig_and_build_rmer(contig_mean_count, contig_len))
-            {
-                //accept and upadte contig list info
-                if(ch->delimitor[ch->num_contig]!=ch->delimitor.back())
-                {
-                    printf("No\n");                
-                }
-                
+            {                 
                 ch->declare_new_contig(contig_mean_count, contig_len);                
             }
             else
@@ -648,13 +658,9 @@ void Kmer_handler::delete_kmer_for_contig(uint8_t * contig_start,
         kmer_counter.erase(byte);        
     }                    
     //shc_log_info(shc_logname, "Finish delete kmer\n");
+    num_kmer_deleted += contig_len-kmer_length+1;
 }
-
-void Kmer_handler::delete_contig_list(contig_num_t * list, contig_num_t num)
-{
-    ch->delete_contig_list(list, num);    
-}
-    
+   
 void Kmer_handler::get_contig_handler(Contig_handler * c_handler)
 {
     ch = c_handler;
@@ -680,7 +686,11 @@ bool Kmer_handler::decide_contig_and_build_rmer(kmer_count_t mean_count, Contig_
     shc_log_info(shc_logname, "Start contig decision \t\t\t CANDIDATE CONTIG %d\n", ch->num_contig+1);        
     shc_log_info(shc_logname, "Start length count filter\n");
 #endif
-    if(len<min_len || mean_count<min_count)
+    //if(len<min_len || mean_count<min_count)
+        
+    min_len = 2*(kmer_length-1);
+    bool flag = len*std::pow(mean_count,1/4) < 2*min_len*std::pow(min_count,1/4);
+    if(len<min_len || mean_count<min_count || flag)
     {
 #ifdef LOG_KMER
         shc_log_info(shc_logname, "Finish length count filter, fail to pass, due to length count\n");
@@ -690,16 +700,16 @@ bool Kmer_handler::decide_contig_and_build_rmer(kmer_count_t mean_count, Contig_
 #ifdef LOG_KMER    
     shc_log_info(shc_logname, "Finish length count filter, Passing\n");
 #endif    
-	/*
+	
     if(is_use_set)
     {
         return use_set_to_filter(mean_count, len);
     }
     else
-    {
+    {        
         return use_list_to_filter(mean_count, len);
-    }*/
-return true;
+    }
+    return true;
 }
 
 bool Kmer_handler::use_set_to_filter(kmer_count_t mean_count, Contig_handler::size_type len)
@@ -848,16 +858,38 @@ std::ifstream::pos_type Kmer_handler::filesize(const std::string & filename)
     return file_reader.tellg();
 }
 
+/**
+* This function should only be used if kmer_length is set.
+*/
+uint8_t Kmer_handler::get_kmer_length_from_file(const std::string& filename)
+{
+    //std::assert(kmer_length != 0);
+    std::string kmer_base, temp;
+    std::ifstream file_reader(filename.c_str());
+    if(std::getline(file_reader, kmer_base, '\t') && 
+       std::getline(file_reader, temp, '\t') &&
+       std::getline(file_reader, temp, '\t') &&
+       std::getline(file_reader, temp))
+    {
+        std::cout << "file base has length " << std::dec << kmer_base.size() << std::endl;
+        return kmer_base.size();
+    }
+    else
+    {
+        shc_log_error("file is empty, or format wrong\n");
+        exit(1);
+    }               
+}
+
 size_t Kmer_handler::estimate_num_kmer(const std::string & filename)
 {
-    std::string test_filename("test");
-      
+    std::string test_filename("test");    
     std::ofstream test_file(test_filename.c_str());    
     for (int i=0; i<TEST_NUM_LINE ; i++)
     {
         for(int j=0; j<kmer_length; j++)
             test_file << "A";
-        test_file << "\t" << TEST_NUM_LINE  << std::endl;        
+        test_file << "\t" << 50  << std::endl;        
     }
     test_file.close();
     size_t byte_per_line = filesize(test_filename) / TEST_NUM_LINE;
@@ -865,9 +897,7 @@ size_t Kmer_handler::estimate_num_kmer(const std::string & filename)
                         (static_cast<double>(filesize(filename)) / 
                          static_cast<double>(byte_per_line)*SIZE_MULTIPLIER);
     boost::filesystem::path test_file_path(test_filename);
-    remove_file(test_file_path);
-    std::cout << filename <<" is estimated to contain " 
-              <<  estimated_lines << " lines " << std::endl;
+    remove_file(test_file_path);         
     return estimated_lines;     
 }
 

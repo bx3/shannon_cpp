@@ -126,8 +126,7 @@ public:
     void get_connected_contig_index(Kmer_counter_map_iterator & it);    
     void increment_edge_weight(contig_num_t i, contig_num_t j);
     
-    void create_metis_array_input();
-    void assign_reads_to_components();
+    void create_metis_array_input();    
     void assign_reads_to_components(std::string& read_filename, int num_read );
     void assign_kmer_to_components();
     void dump_component_array(std::string & filename);    
@@ -145,6 +144,7 @@ private:
     graph_t graph;        
     kmer_len_t k1mer_len;
     Contig_vertex_map contig_vertex_map;
+    std::vector<char> curr_contig;
     
     std::stack<contig_num_t> contig_stack;
     Contig_set explorable_contig_set;
