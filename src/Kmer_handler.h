@@ -41,7 +41,7 @@
 //to a signed type
 #define SPARSEHASH_DELETE_KEY (std::pow(2,(sizeof(uint64_t)*8)-1)-2) 
 #define SPARSEHASH_EMPTY_KEY (std::pow(2,(sizeof(uint64_t)*8)-2)-1) 
-#define TEST_NUM_LINE 10000
+#define TEST_NUM_LINE 5000
 #define SIZE_MULTIPLIER 1.15
 
 typedef std::pair<uint64_t, kmer_count_t> Kmer_Occurence_Pair;
@@ -57,16 +57,15 @@ class Kmer_handler {
     friend class Contig_handler;
     friend class Contig_graph_handler;
 public:
-    Kmer_handler(Local_files * lf);        
+    Kmer_handler(Local_files * lfp);        
     Kmer_handler(uint8_t length, kmer_count_t min_count_p, 
                 Contig_handler::size_type min_len_p, double R_threshold_p, 
-                uint8_t rmer_len, bool is_use_set, Local_files * lf);
+                uint8_t rmer_len, bool is_use_set, Local_files * lfp);
     
     int add_kmer(uint64_t kmer, kmer_count_t count);
     void dump_kmers_to_file(std::string & filename);
-    void load_kmers_with_info_from_file(std::string & filename);
-    int read_kmer_dict(char * filename);
-    int read_sequence_from_file (std::string filename);
+    void load_kmers_with_info_from_file(std::string & filename);    
+    int build_dict_from_kmer_file();
     
     // info concerning helper function
     bool is_kmer_info_has_ps(uint8_t info);
@@ -128,7 +127,9 @@ private:
     double r_thresh;        
     
     //for info
-    size_t num_kmer_deleted;
+    size_t num_kmer_deleted;    
+    
+    Local_files *lf;
 };
 
 #endif	/* KMER_HANDLER_H */

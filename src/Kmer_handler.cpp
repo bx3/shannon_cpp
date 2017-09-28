@@ -9,23 +9,22 @@ Block_timer kh_timer;
  * Constructor 
  * @param length : kmer length 
  */
-Kmer_handler::Kmer_handler(Local_files * lf)
+Kmer_handler::Kmer_handler(Local_files * lfp)
 {    
     kmer_counter.set_deleted_key(SPARSEHASH_DELETE_KEY);    
     kmer_counter.set_empty_key(SPARSEHASH_EMPTY_KEY);  
     //get kmer length
-    kmer_length = get_kmer_length_from_file(lf->kmer_output_path);
-    size_t num_line = estimate_num_kmer(lf->input_kmer_path);
-    std::cout << "num of size to reserve is " << num_line << std::endl;
-    kmer_counter.resize(num_line);
+    lf = lfp;
+    kmer_length = get_kmer_length_from_file(lf->output_kmer_path);    
     
     num_kmer_deleted = 0;
 }
 
 Kmer_handler::Kmer_handler(uint8_t length, kmer_count_t min_count, 
                 Contig_handler::size_type min_len, double R_threshold, 
-                uint8_t rmer_len, bool is_use_set, Local_files * lf)
+                uint8_t rmer_len, bool is_use_set, Local_files * lfp)
 {
+    lf = lfp;
     kmer_length = length;    
     this->min_count = min_count;
     this->min_len = min_len;
@@ -34,8 +33,17 @@ Kmer_handler::Kmer_handler(uint8_t length, kmer_count_t min_count,
     this->is_use_set = is_use_set;
     kmer_counter.set_deleted_key(SPARSEHASH_DELETE_KEY);   
     kmer_counter.set_empty_key(SPARSEHASH_EMPTY_KEY);
-    size_t num_kmer = 120000000;//estimate_num_kmer(lf->input_kmer_path);
-    //std::cout << "num of size to reserve is " << num_kmer << std::endl;
+    size_t num_kmer = estimate_num_kmer(lf->input_kmer_path);    
+   
+    if(lf->has_pair)
+    {
+        num_kmer += estimate_num_kmer(lf->input_kmer_path);    
+    }
+
+    num_kmer *= 2;
+    
+    std::cout << "num of size to reserve is " << num_kmer << std::endl;
+    
     kmer_counter.resize(num_kmer);
     
     if(is_use_set)
@@ -75,7 +83,8 @@ void Kmer_handler::dump_kmers_to_file(std::string & filename)
     Kmer_counter_map_iterator it;
     
     char kmer_base[KMER_HOLDER_LEN]; 
-            
+    outfile << kmer_counter.size() << std::endl;     
+    
     for (it = kmer_counter.begin(); it != kmer_counter.end(); it++) {                
                       
         decode_kmer(kmer_base, &(it->first), kmer_length); 
@@ -92,12 +101,16 @@ void Kmer_handler::load_kmers_with_info_from_file(std::string & filename)
 {
     shc_log_info(shc_logname, "Shannon C loads kmer\n");    
     std::ifstream fileReader(filename.c_str());
-    std::string kmer_base, contig_s, count_s, info_s;
+    std::string kmer_base, contig_s, count_s, info_s, kmer_counter_size_s;
     kmer_count_t count;    
     uint8_t info;     
     contig_num_t contig;
     uint64_t byte;    
     Kmer_info kmer_info(0,0,true, IMPOSSIBLE_CONTIG_NUM);
+    
+    std::getline(fileReader, kmer_counter_size_s);
+    int kmer_counter_size = std::stoi(kmer_counter_size_s);
+    kmer_counter.resize(kmer_counter_size);
     
     start_timer(&kh_timer);
     while(  std::getline(fileReader, kmer_base, '\t') && 
@@ -134,15 +147,17 @@ void Kmer_handler::load_kmers_with_info_from_file(std::string & filename)
  * @param filename
  * @return 
  */
-int Kmer_handler::read_sequence_from_file (std::string filename) 
+int Kmer_handler::build_dict_from_kmer_file () 
 {
+    start_timer(&kh_timer); 
     shc_log_info(shc_logname, "Reading kmers from the file\n");
-    std::ifstream fileReader (filename.c_str());   
+        
+    std::ifstream fileReader (lf->input_kmer_path.c_str());   
     std::string line_s, count_s;      
     int count;
-    uint64_t kmer;     
-            
-    start_timer(&kh_timer);    
+    uint64_t kmer;  
+    Kmer_counter_map_iterator it;
+                  
     Kmer_info kmer_info;                        
     while (std::getline(fileReader, line_s, '\t') &&         
            std::getline(fileReader, count_s) ) 
@@ -160,6 +175,39 @@ int Kmer_handler::read_sequence_from_file (std::string filename)
         kmer_info.count = count;
         kmer_counter[kmer] = kmer_info;
     }  
+    fileReader.close();
+    
+    if (lf->has_pair)
+    {
+        std::cout << "processing the second kmer file" << std::endl;
+        fileReader.open(lf->input_kmer_path_2.c_str());   
+        while (std::getline(fileReader, line_s, '\t') &&         
+           std::getline(fileReader, count_s) ) 
+        {                 
+            count = std::stoi(count_s);
+            if (count > MAX_COUNT)
+            {
+                std::cout << MAX_COUNT << std::endl;
+                shc_log_error("MAX_COUNT is  %d\n", MAX_COUNT);        
+                shc_log_error("kmer_count_t unable to hold count %d\n", count);        
+                return 1;            
+            }      
+            //shc_log_info(shc_logname, "%s\n", line_s.c_str());
+            encode_kmer(line_s.c_str(), &kmer, kmer_length);                        
+            kmer_info.count = count;
+            it = kmer_counter.find(kmer);
+            if(it == kmer_counter.end())            
+                kmer_counter[kmer] = kmer_info;
+            else
+            {
+                //shc_log_info(shc_logname, "find kmer collision %u %u for %lld\n", it->second.count, count, kmer);        
+                it->second.count = it->second.count + count;               
+            }
+        }
+        fileReader.close();
+    }
+    
+    
 #ifdef SHOW_PROGRESS
     std::cout << "Finish reading jellyfish kmer, ";
     stop_timer(&kh_timer);    
@@ -547,7 +595,7 @@ contig_num_t Kmer_handler::find_contig()
             //shc_log_info(shc_logname, "total_kmer_in_contig is %d\n", total_kmer_in_contig);   
         }        
     }
-    
+    shc_log_info(shc_logname, "%d kmer_get deleted\n", num_kmer_deleted);   
 #ifdef SHOW_PROGRESS  
     std::cout << "Finish finding contig, ";
     stop_timer(&kh_timer);
@@ -658,7 +706,15 @@ void Kmer_handler::delete_kmer_for_contig(uint8_t * contig_start,
         kmer_counter.erase(byte);        
     }                    
     //shc_log_info(shc_logname, "Finish delete kmer\n");
+#ifdef LOG_DELETED_KMER
+    for(Contig_handler::size_type i=0; i<contig_len; i++)
+    {
+        info_log_info(lf->deleted_contig_path.c_str(), "%c", (char)contig_start[i]);
+    }
+    info_log_info(lf->deleted_contig_path.c_str(), "\n");
+#endif
     num_kmer_deleted += contig_len-kmer_length+1;
+
 }
    
 void Kmer_handler::get_contig_handler(Contig_handler * c_handler)
@@ -866,12 +922,14 @@ uint8_t Kmer_handler::get_kmer_length_from_file(const std::string& filename)
     //std::assert(kmer_length != 0);
     std::string kmer_base, temp;
     std::ifstream file_reader(filename.c_str());
+    std::getline(file_reader, temp); //the first line contain size info
     if(std::getline(file_reader, kmer_base, '\t') && 
        std::getline(file_reader, temp, '\t') &&
        std::getline(file_reader, temp, '\t') &&
        std::getline(file_reader, temp))
     {
         std::cout << "file base has length " << std::dec << kmer_base.size() << std::endl;
+        file_reader.close();
         return kmer_base.size();
     }
     else

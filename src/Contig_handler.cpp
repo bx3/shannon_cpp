@@ -84,9 +84,15 @@ void Contig_handler::load_contig_file(std::string & filename)
     //read byte size
     std::getline(fileReader, is_comp,'\t') && std::getline(fileReader, list_size);
     if(is_comp=="c")
+    {
         is_use_compress = true;
+        std::cout << "using compressed contig list" << std::endl;
+    }
     else if(is_comp=="n")
+    {
         is_use_compress = false;
+        std::cout << "using uncompressed contig list" << std::endl;
+    }
     else
     {
         shc_log_error("contig file has invalid type c-compress, n-noncimpress\n");

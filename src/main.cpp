@@ -18,6 +18,9 @@ void test_Kmer(Local_files * lf);
 void test_Contig_graph(Local_files * lf);
 void test_load_contig_graph(Local_files * lf);
 void test_load_dump(Local_files * lf);
+void test_pair_read_contig_graph(Local_files * lf);
+void test_load_pair_contig_graph(Local_files * lf);
+
 
 int parseLine(char* line){
     // This assumes that a digit will be found and the line ends in " Kb".
@@ -44,29 +47,53 @@ int get_proc_mem_value(){ //Note: this value is in KB!
     return result;
 }
 
+struct Run_setting {
+    Run_setting () 
+    {
+        kmer_length = 25;
+        rmer_length = 15;
+        threshold = 0.5;
+        min_count = 3;
+        min_len = 75;
+        is_use_set = false;
+    }    
+    uint16_t contig_num;
+    uint8_t kmer_length;
+    uint8_t rmer_length;
+    double threshold;
+    kmer_count_t min_count; //5
+    Contig_handler::size_type min_len; //20
+    bool is_use_set;
+};
+
 Block_timer timer;
+
+
 
 int main(int argc, char** argv) {                
     //char letter;          
     
     int desiredTest = 0;
-    while(desiredTest<1 || desiredTest>6)
+    while(desiredTest<1 || desiredTest>8)
     {
         std::cout << "Select desired application: \n";
         std::cout << "   1) test_encoding_decoding\n";
         std::cout << "   2) test_Kmer_without_filter\n";
         std::cout << "   3) test_Kmer with list\n";
         std::cout << "   4) test_Contig_graph\n";
-        std::cout << "   5) test_load_contig_graph\n";  
+        std::cout << "   5) test load and process contig_graph\n";  
         std::cout << "   6) test_load_dump\n"; 
+        std::cout << "   7) test pair read contig graph\n";
+        std::cout << "   8) test load and process pair read contig graph\n";
         
         std::cin >> desiredTest;
     }
         
     boost::filesystem::path base_path = boost::filesystem::current_path();
-    std::string base_path_str(base_path.c_str());        
+    std::string base_path_str(base_path.c_str());            
     
     // file system setting
+    std::string output_dir_name("/output");
     std::string input_kmer_name("/medium.dict");     
     std::string input_read_name("/medium.fasta");
     std::string out_log_name("/default_shannonC_log");
@@ -74,22 +101,11 @@ int main(int argc, char** argv) {
     std::string out_comp_name("/component_array");
     std::string out_kmer_name("/kmer");
         
-    Local_files local_files(base_path_str, input_kmer_name, input_read_name, 
+    Local_files local_files(base_path_str, output_dir_name, input_kmer_name, input_read_name, 
             out_log_name, out_contig_name, out_comp_name, out_kmer_name);                                        
     memcpy(shc_logname, local_files.log_filename_path.c_str(), 
-                                        local_files.log_filename_path.size());
-    std::cout << std::endl;
-    std::cout << "\033[1;32m";  //34 blue, 31 red, 35 purple 
-    std::cout << "current work dir is      : " << local_files.base_path_str << std::endl;
-    std::cout << "kmer input from          : " << local_files.input_kmer_path << std::endl;
-    std::cout << "read input from          : " << local_files.input_read_path << std::endl;
-    std::cout << "log file save to         : " << local_files.log_filename_path << std::endl;
-    std::cout << "kmer output save to      : " << local_files.kmer_output_path << std::endl;
-    std::cout << "contig output saved to   : " << local_files.contig_output_path << std::endl;
-    std::cout << "component output saved to: " << local_files.comp_output_path << std::endl << std::endl;
-    std::cout << "\033[0m" << std::endl;
-         
-    
+                                        local_files.log_filename_path.size());    
+                     
     shc_log_info(shc_logname, "Shannon C is starting\n");
     switch(desiredTest){
         case 1:
@@ -109,6 +125,11 @@ int main(int argc, char** argv) {
             break;
         case 6:            
             test_load_dump(&local_files);
+        case 7:            
+            test_pair_read_contig_graph(&local_files);
+        case 8:
+            test_load_pair_contig_graph(&local_files);
+            
         default:
             break;
     }                      
@@ -118,38 +139,148 @@ int main(int argc, char** argv) {
     return 0;
 }
 
-void test_load_dump(Local_files * lf)
+void test_load_pair_contig_graph(Local_files * lf)
 {
-    std::string kmer_back_file((lf->kmer_output_path) + "_re");
-    std::string contig_back_file((lf->contig_output_path) + "_re");
-    Kmer_handler kmer_handler(lf);    
-    kmer_handler.load_kmers_with_info_from_file(lf->kmer_output_path);
-    kmer_handler.dump_kmers_to_file(kmer_back_file);
+    bool use_multiple_partition = false;
+    idx_t partition_size = 500;
+    idx_t penalty = 5;
+    real_t overload = 1.5;       
+    Metis_setup metis_setup(use_multiple_partition, partition_size, penalty, overload);
     
-    Contig_handler contig_handler; 
-    contig_handler.load_contig_file(lf->contig_output_path);
-    contig_handler.dump_all_contig(contig_back_file);
+    std::string kmer1 = "/medium_p1.dict", kmer2 = "/medium_p2.dict";
+    std::string read1 = "/medium_p1.fasta", read2 = "/medium_p2.fasta";    
+    std::string out_dir("/output_pair");
+    lf->set_input_pair_path(kmer1, kmer2, read1, read2);
+    lf->set_output_dir(out_dir);
+    print_local_file_system(lf);
     
-}
-
-void test_load_contig_graph(Local_files * lf)
-{
     shc_log_info(shc_logname, "Shannon C loads previous files\n");
     Kmer_handler kmer_handler(lf);
     Contig_handler contig_handler; 
     kmer_handler.get_contig_handler(&contig_handler);
     
-    kmer_handler.load_kmers_with_info_from_file(lf->kmer_output_path);        
+    kmer_handler.load_kmers_with_info_from_file(lf->output_kmer_path);        
     
-    contig_handler.load_contig_file(lf->contig_output_path);
+    contig_handler.load_contig_file(lf->output_contig_path);
     
     Contig_graph_handler graph_handler(kmer_handler.get_kmer_length()-1, 
                                        &kmer_handler, 
-                                       &contig_handler);
+                                       &contig_handler, lf, metis_setup);
     
     graph_handler.group_components();   
-    graph_handler.dump_component_array(lf->comp_output_path);
-    graph_handler.assign_reads_to_components(lf->input_read_path, 3);
+    graph_handler.dump_component_array(lf->output_comp_path);
+    graph_handler.assign_paired_read_to_components(3);
+    graph_handler.assign_kmer_to_components();
+}
+
+void test_pair_read_contig_graph(Local_files * lf)
+{  
+    char letter;
+    bool is_list = true;
+    std::cout << "If use list for redundancy removal (Y/N)" << std::endl;
+    if(std::cin >> letter)
+    {
+        if(letter=='N' || letter=='n')
+        {
+            is_list = false;
+            std:: cout << "using a set to remove redundancy" << std::endl;
+        }
+    }    
+    // parameter setting
+    start_timer(&timer);                    
+    std::string kmer1 = "/medium_p1.dict", kmer2 = "/medium_p2.dict";
+    std::string read1 = "/medium_p1.fasta", read2 = "/medium_p2.fasta";    
+    std::string out_dir("/output_pair");
+    lf->set_input_pair_path(kmer1, kmer2, read1, read2);
+    lf->set_output_dir(out_dir);
+    print_local_file_system(lf);
+         
+    bool is_compress = false;
+    uint8_t kmer_length = 25;
+    uint8_t rmer_length = 15;
+    double threshold = 0.5;
+    kmer_count_t min_count = 3; //5
+    Contig_handler::size_type min_len = 75; //20
+    bool is_use_set = !is_list;
+    
+    bool use_multiple_partition = false;
+    idx_t partition_size = 500;
+    idx_t penalty = 5;
+    real_t overload = 1.5;       
+    Metis_setup metis_setup(use_multiple_partition, partition_size, penalty, overload);
+         
+    Kmer_handler kmer_handler(kmer_length,   
+            min_count, min_len, threshold, rmer_length, is_use_set, lf);        
+    printf("here-1\n");
+    Contig_handler contig_handler(is_compress);   
+    Contig_graph_handler graph_handler(kmer_length-1, 
+                        &kmer_handler, &contig_handler, lf, metis_setup); 
+          
+    //start processing
+    kmer_handler.get_contig_handler(&contig_handler);     
+    std::cout << "Start reading kmer file"  << std::endl;
+    if(kmer_handler.build_dict_from_kmer_file() != 0)
+    {
+        shc_log_error("Error reading kmers\n");        
+    }
+    std::cout << "Finish build kmer, with mem " << std::endl;    
+    kmer_handler.sort_kmer_descending_count(); 
+    std::cout << "after sorting, mem " << std::endl; //get_proc_mem_value()-before_mem << 
+    kmer_handler.find_contig();
+    std::cout << "after find contig, mem " <<  std::endl;   
+    kmer_handler.dump_kmers_to_file(lf->output_kmer_path); 
+    contig_handler.dump_all_contig(lf->output_contig_path);    
+     
+    graph_handler.group_components();   
+    
+    std::cout << "after group contig " <<  std::endl;
+        
+    graph_handler.assign_reads_to_components(3);
+    graph_handler.assign_kmer_to_components(); 
+    
+    graph_handler.dump_component_array(lf->output_comp_path);
+    
+}
+
+void test_load_dump(Local_files * lf)
+{
+    print_local_file_system(lf);
+    std::string kmer_back_file((lf->output_kmer_path) + "_re");
+    std::string contig_back_file((lf->output_contig_path) + "_re");
+    Kmer_handler kmer_handler(lf);    
+    kmer_handler.load_kmers_with_info_from_file(lf->output_kmer_path);
+    kmer_handler.dump_kmers_to_file(kmer_back_file);
+    
+    Contig_handler contig_handler; 
+    contig_handler.load_contig_file(lf->output_contig_path);
+    contig_handler.dump_all_contig(contig_back_file);    
+}
+
+void test_load_contig_graph(Local_files * lf)
+{
+    bool use_multiple_partition = false;
+    idx_t partition_size = 500;
+    idx_t penalty = 5;
+    real_t overload = 1.5;       
+    Metis_setup metis_setup(use_multiple_partition, partition_size, penalty, overload);
+    
+    print_local_file_system(lf);
+    shc_log_info(shc_logname, "Shannon C loads previous files\n");
+    Kmer_handler kmer_handler(lf);
+    Contig_handler contig_handler; 
+    kmer_handler.get_contig_handler(&contig_handler);
+    
+    kmer_handler.load_kmers_with_info_from_file(lf->output_kmer_path);        
+    
+    contig_handler.load_contig_file(lf->output_contig_path);
+    
+    Contig_graph_handler graph_handler(kmer_handler.get_kmer_length()-1, 
+                                       &kmer_handler, 
+                                       &contig_handler, lf, metis_setup);
+    
+    graph_handler.group_components();   
+    graph_handler.dump_component_array(lf->output_comp_path);
+    graph_handler.assign_reads_to_components(3);
     graph_handler.assign_kmer_to_components();
     
 }
@@ -158,6 +289,8 @@ void test_Contig_graph(Local_files * lf)
 {  
     char letter;
     bool is_list = true;
+    bool is_compress = false;
+    print_local_file_system(lf);
     std::cout << "If use list for redundancy removal (Y/N)" << std::endl;
     if(std::cin >> letter)
     {
@@ -173,14 +306,20 @@ void test_Contig_graph(Local_files * lf)
     
     uint16_t contig_num;
     uint8_t kmer_length = 25;
-    uint8_t rmer_length = 15;
+    uint8_t rmer_length = 15; 
     double threshold = 0.5;
     kmer_count_t min_count = 3; //5
     Contig_handler::size_type min_len = 75; //20
     bool is_use_set = !is_list;
-    std::cout << "using set? " << (is_use_set? "Yes":"no") << std::endl;
-    bool is_compress = true;
+    //metis_setup
+    bool use_multiple_partition = false;
+    idx_t partition_size = 500;
+    idx_t penalty = 5;
+    real_t overload = 1.5;       
+    Metis_setup metis_setup(use_multiple_partition, partition_size, penalty, overload);
     
+    
+    std::cout << "using set? " << (is_use_set? "Yes":"no") << std::endl;
     //int before_mem = get_proc_mem_value();
     
     Kmer_handler kmer_handler(kmer_length,   
@@ -190,7 +329,7 @@ void test_Contig_graph(Local_files * lf)
     kmer_handler.get_contig_handler(&contig_handler); 
     
     std::cout << "Start reading kmer file"  << std::endl;
-    if(kmer_handler.read_sequence_from_file(lf->input_kmer_path) != 0)
+    if(kmer_handler.build_dict_from_kmer_file() != 0)
     {
         shc_log_error("Error reading kmers\n");        
     }
@@ -200,16 +339,17 @@ void test_Contig_graph(Local_files * lf)
     contig_num = kmer_handler.find_contig();
     std::cout << "after find contig, mem " <<  std::endl;
     
-    kmer_handler.dump_kmers_to_file(lf->kmer_output_path);
-    contig_handler.dump_all_contig(lf->contig_output_path);
+    kmer_handler.dump_kmers_to_file(lf->output_kmer_path);
+    contig_handler.dump_all_contig(lf->output_contig_path);
     
-    Contig_graph_handler graph_handler(kmer_length-1, &kmer_handler, &contig_handler);
+    Contig_graph_handler graph_handler(kmer_length-1, 
+                        &kmer_handler, &contig_handler, lf, metis_setup);
     graph_handler.group_components();   
     
     std::cout << "after group contig " <<  std::endl;
     
-    graph_handler.dump_component_array(lf->comp_output_path);
-    graph_handler.assign_reads_to_components(lf->input_read_path, 3);
+    graph_handler.dump_component_array(lf->output_comp_path);
+    graph_handler.assign_reads_to_components(3);
     graph_handler.assign_kmer_to_components();    
     
     std::cout << "The whole process finish ";
@@ -229,7 +369,7 @@ void test_Kmer(Local_files * lf)
             std:: cout << "using a set to remove redundancy" << std::endl;
         }
     }
-
+    print_local_file_system(lf);
     uint64_t contig_num;   
     uint8_t kmer_length = 25;
     uint8_t rmer_length = 15;
@@ -244,7 +384,7 @@ void test_Kmer(Local_files * lf)
     Contig_handler contig_handler;       
     kmer_handler.get_contig_handler(&contig_handler);    
     
-    if(kmer_handler.read_sequence_from_file(lf->input_kmer_path) != 0)
+    if(kmer_handler.build_dict_from_kmer_file() != 0)
     {
         shc_log_error("Error reading kmers\n");        
     }
@@ -271,6 +411,7 @@ void test_Kmer_without_filter(Local_files * lf)
         }
     }
 
+    print_local_file_system(lf);
     uint64_t contig_num;
     
     uint8_t kmer_length = 25;
@@ -287,7 +428,7 @@ void test_Kmer_without_filter(Local_files * lf)
     Contig_handler contig_handler;       
     kmer_handler.get_contig_handler(&contig_handler);
      
-    if(kmer_handler.read_sequence_from_file(lf->input_kmer_path) != 0)
+    if(kmer_handler.build_dict_from_kmer_file() != 0)
     {
         shc_log_error("Error reading kmers\n");        
     }

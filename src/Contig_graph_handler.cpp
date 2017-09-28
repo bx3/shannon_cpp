@@ -3,12 +3,11 @@
 size_t contig_curr_proc = 0;
 size_t contig_prev_proc = 0;
 
-struct Block_timer chg_timer;
+struct Block_timer cgh_timer;
 
 void Contig_graph_handler::group_components()
 {          
-    shc_log_info(shc_logname, "Start constructing contig graph\n");  
-    uint8_t * contig_start = NULL;
+    shc_log_info(shc_logname, "Start constructing contig graph\n");      
     Kmer_counter_map_iterator it;
     char kmer_array[33];
     kmer_array[kh->kmer_length] = '\0';
@@ -18,7 +17,7 @@ void Contig_graph_handler::group_components()
     for(contig_num_t i=0; i<ch->num_contig; i++)
         explorable_contig_set.insert(i);   
     
-    start_timer(&chg_timer);
+    start_timer(&cgh_timer);
     while(!explorable_contig_set.empty())
     {
 #ifdef LOG_CONTIG_GRAPH
@@ -83,14 +82,14 @@ void Contig_graph_handler::group_components()
     
 #ifdef SHOW_PROGRESS
     std::cout << "Finish finding component, ";
-    stop_timer(&chg_timer);
+    stop_timer(&cgh_timer);
 #endif
     
     shc_log_info(shc_logname, "Finish constructing contig graph\n");
 }
 
 void Contig_graph_handler::break_and_keep_component()
-{
+{   
     typedef std::pair<vi_t, vi_t> vip_t;
     idx_t num_vertices = boost::num_vertices(graph);
     //shc_log_info(shc_logname, "num vertices %u, partition_size %u\n",num_vertices , metis_setup.partition_size);
@@ -99,15 +98,20 @@ void Contig_graph_handler::break_and_keep_component()
 #ifdef LOG_CONTIG_GRAPH
         shc_log_info(shc_logname, "no metis\n");
 #endif
+        if(!is_set_collect_comp_num)
+        {
+            collect_comp_num = curr_component_num;
+            curr_component_num++;    
+            is_set_collect_comp_num = true;
+        }
         
         vip_t vip = vertices(graph);
         //update contig to component info
         for(vi_t it=vip.first; it!=vip.second; it++)
         {
-            component_array[graph[*it].contig_index] = curr_component_num;  
+            component_array[graph[*it].contig_index] = collect_comp_num;  
             //shc_log_info(shc_logname, "component %u has contig %u\n", curr_component_num, graph[*it].contig_index);
-        }
-        curr_component_num++;      
+        }          
     }
     else        //call metis
     {
@@ -120,34 +124,45 @@ void Contig_graph_handler::break_and_keep_component()
                 num_vertices/metis_setup.partition_size + 1);
         //shc_log_info(shc_logname, "metis to asked to break %d partition\n", metis_setup.num_partition);
         idx_t ufactor = static_cast<idx_t>(METIS_IMBALANCE_PRECISION 
-                                                   * (metis_setup.overload-1));
-        std::vector<idx_t> part(num_vertices);
-        
-        metis_setup.options[METIS_OPTION_UFACTOR] = ufactor;            
-        
-        int ret = METIS_PartGraphRecursive(
-              &metis_setup.num_vertices, &metis_setup.ncon, 
-              &metis_input.xadj.at(0), &metis_input.adjncy.at(0),
-              NULL, NULL, &metis_input.adjwgt.at(0), &metis_setup.num_partition, 
-              NULL, NULL, NULL, &metis_setup.objval, &part.at(0));
-        
-        if(ret == METIS_ERROR_INPUT)
-            shc_log_error("METIS_ERROR_INPUT\n");
-        if(ret == METIS_ERROR_MEMORY)
-            shc_log_error("METIS_ERROR_MEMORY\n");
-        if(ret == METIS_ERROR)
-            shc_log_error("METIS_OTHER_ERROR\n");
-        
-#ifdef LOG_METIS    
-    shc_log_info(shc_logname, "metis breaks to %d partition\n", metis_setup.num_partition);
-#endif        
-        curr_component_num += metis_setup.num_partition;
-        std::vector<idx_t>().swap(part);
+                                                   * (metis_setup.overload-1));  
+        metis_setup.options[METIS_OPTION_UFACTOR] = ufactor;  
+        run_metis();                   
     }
 #ifdef LOG_CONTIG_GRAPH
     shc_log_info(shc_logname, "end\n");
 #endif    
     
+}
+
+void Contig_graph_handler::run_metis()
+{
+    std::vector<idx_t> part(metis_setup.num_vertices);                     
+    
+    int ret = METIS_PartGraphRecursive(
+          &metis_setup.num_vertices, &metis_setup.ncon, 
+          &metis_input.xadj.at(0), &metis_input.adjncy.at(0),
+          NULL, NULL, &metis_input.adjwgt.at(0), &metis_setup.num_partition, 
+          NULL, NULL, NULL, &metis_setup.objval, &part.at(0));
+    
+    if(ret == METIS_ERROR_INPUT)
+        shc_log_error("METIS_ERROR_INPUT\n");
+    if(ret == METIS_ERROR_MEMORY)
+        shc_log_error("METIS_ERROR_MEMORY\n");
+    if(ret == METIS_ERROR)
+        shc_log_error("METIS_OTHER_ERROR\n");
+        
+#ifdef LOG_METIS    
+    shc_log_info(shc_logname, "metis breaks to %d partition\n", metis_setup.num_partition);
+#endif        
+        
+    for(idx_t i=0; i<metis_setup.num_vertices; i++)
+    {
+        component_array[graph[static_cast<vd_t>(i)].contig_index] = 
+                                             curr_component_num + part.at(i);
+    }
+    
+    curr_component_num += metis_setup.num_partition;
+    std::vector<idx_t>().swap(part);
 }
 
 void Contig_graph_handler::get_connected_contig_index(
@@ -277,12 +292,12 @@ void Contig_graph_handler::create_metis_array_input()
     shc_log_info(shc_logname, "Finish creating metis array input for component\n");
 }
 
-void Contig_graph_handler::create_metis_format_from_graph()
+void Contig_graph_handler::create_metis_file_format_from_graph(std::string & filename)
 {
     shc_log_info(shc_logname, "Start making METIS format file\n");    
     typename boost::graph_traits < graph_t >::adjacency_iterator vi, vi_end;    
     vd_t vd;
-    std::ofstream outfile (metis_filename);
+    std::ofstream outfile (filename);
     std::pair<ed_t, bool> aer;
     contig_edge_weight_t edge_weight;
     //first line in metis file
@@ -343,33 +358,146 @@ void Contig_graph_handler::dump_component_array(std::string & filename)
     std::ofstream outfile(filename);    
     outfile << curr_component_num << " components" << std::endl;
     outfile << "contig"  << "\t"  << "components" << std::endl;
-    int i=0;
+    //int i=0;
     for(std::vector<contig_num_t>::iterator it=component_array.begin();
             it != component_array.end(); it++)
     {
-        outfile << (i++) << "\t" <<(*it) << std::endl;
+        outfile << (*it) << std::endl;
         //shc_log_info(shc_logname, "%d   %u\n", i++, *it);
     }
     outfile.close();
     shc_log_info(shc_logname, "Finish log_component_array\n");
 }
 
+void Contig_graph_handler::assign_paired_read_to_components(int num_test)
+{  
+    
+    shc_log_info(shc_logname, "Start assigning read to component\n");
+    //creating dir
+    typedef boost::filesystem::path path_t;        
+    std::string dir_path = lf->output_path_str + "/components_reads";  
+    path_t comp_read_path(dir_path);
+    if(boost::filesystem::exists(comp_read_path))
+        replace_directory(comp_read_path);
+    else
+        add_directory(comp_read_path);
 
-void Contig_graph_handler::assign_reads_to_components(
-                                std::string& read_filename, int num_test )
+    //create and open files
+    std::vector<std::shared_ptr<std::ofstream> > files;        
+    for(comp_num_t i=0; i<curr_component_num; i++)
+    {
+        std::string file_path = dir_path + 
+                        (std::string("/comp") + std::to_string(i));
+        std::shared_ptr<std::ofstream> file(new std::ofstream);
+        file->open(file_path.c_str());        
+        files.push_back(file);
+    }
+    shc_log_info(shc_logname, "Created contig files\n"); 
+
+    std::ifstream file1_reader(lf->input_read_path.c_str());  
+    std::ifstream file2_reader(lf->input_read_path_2.c_str());  
+    shc_log_info(shc_logname, "successfully open read files\n");
+    std::string line1, header1, sequence1; 
+    std::string line2, header2, sequence2;     
+    int interval1 = 1, interval2 = 1;
+    uint64_t byte1 = 0, byte2 = 0;    
+    
+    std::map<comp_num_t, int> comp_count;
+        
+    while (file1_reader.good() && file2_reader.good() ) 
+    {
+        std::getline(file1_reader, line1);
+        std::getline(file2_reader, line2);
+        //std::cout << "content " << line1 << " " << line2 << std::endl;
+        if(line1[0] == '>' && line2[0] == '>')
+        {                      
+            if(!sequence1.empty() && !sequence2.empty())
+            {
+                //process                
+                interval1 = (sequence1.size()-kh->kmer_length+1)/num_test;
+                interval2 = (sequence2.size()-kh->kmer_length+1)/num_test;
+                for(int i=0; i<num_test; i++)
+                {
+                    //shc_log_info(shc_logname, "Before encoding readsize %u at %d\n",sequence.size(), i*interval);                                        
+                    encode_kmer(&sequence1.at(0)+i*interval1, &byte1, kh->kmer_length);
+                    encode_kmer(&sequence2.at(0)+i*interval2, &byte2, kh->kmer_length);
+                    Kmer_counter_map_iterator it1 = kh->kmer_counter.find(byte1);
+                    Kmer_counter_map_iterator it2 = kh->kmer_counter.find(byte2);
+                    
+                    if(it1!= kh->kmer_counter.end())
+                    {    
+                        comp_num_t comp_num1 = 
+                             component_array[(kh->kmer_counter[byte1]).contig];                              
+                        comp_count[comp_num1]++;            
+                    }                    
+                    if(it2!= kh->kmer_counter.end())
+                    {
+                        comp_num_t comp_num2 = 
+                              component_array[(kh->kmer_counter[byte2]).contig];                   
+                        comp_count[comp_num2]++;            
+                    }
+                }     
+                // check if this sequence
+                if(!comp_count.empty())                
+                {
+                    auto max_iter = std::max_element(comp_count.begin(), comp_count.end(), 
+                            [](const std::pair<comp_num_t, int> & p1, 
+                               const std::pair<comp_num_t, int> & p2 )
+                            {
+                                return p1.second < p2.second;
+                            }
+                    );
+
+                    comp_num_t best_comp =  max_iter->first; 
+                    //shc_log_info(shc_logname, "Before add to file %s \n",sequence.c_str());
+                    *(files.at(best_comp)) << header1 << std::endl;
+                    *(files.at(best_comp)) << sequence1 << std::endl;
+                    *(files.at(best_comp)) << header2 << std::endl;
+                    *(files.at(best_comp)) << sequence2 << std::endl;
+                    //shc_log_info(shc_logname, "after add to file\n");                                
+                    comp_count.clear();                                
+                    sequence1.clear();
+                    sequence2.clear();
+                }
+            }
+            header1 = line1;
+            header2 = line2; 
+            //std::cout << header1 << " " << header2 << std::endl;
+        }
+        else //line is sequence
+        {     
+            sequence1 += line1;
+            sequence2 += line2;
+        }                          
+    }
+    
+    
+    for(comp_num_t i=0; i<curr_component_num; i++)
+    {
+        (*files.at(i)).close();                
+    }
+    
+    std::vector<std::shared_ptr<std::ofstream> >().swap(files);
+    shc_log_info(shc_logname, "Finish assigning read to component\n");
+    
+}
+
+
+void Contig_graph_handler::assign_reads_to_components(int num_test )
 {
     //Fasta_reader fasta_reader("SE_read.fasta");        
     shc_log_info(shc_logname, "Start assigning read to component\n");
     //creating dir
-    typedef boost::filesystem::path path_t;
-    typedef boost::filesystem::path dir_t;
-    typedef boost::filesystem::path filename_t;
-    path_t base_path = boost::filesystem::current_path();    
-    std::string base_path_str(base_path.c_str()); 
-    std::string dir_path = base_path_str + "/output/components_reads";  
-    path_t create_path(dir_path);
-    add_directory(create_path);
+    typedef boost::filesystem::path path_t;        
+    
+    std::string dir_path = lf->output_path_str + "/components_reads";  
+    path_t comp_read_path(dir_path);
+    if(boost::filesystem::exists(comp_read_path))
+        replace_directory(comp_read_path);
+    else
+        add_directory(comp_read_path);
     shc_log_info(shc_logname, "Created dir %s\n", dir_path.c_str());
+    std::cout << "created dir " << std::endl;
             
     //create files    
     std::vector<std::shared_ptr<std::ofstream> > files;
@@ -386,13 +514,13 @@ void Contig_graph_handler::assign_reads_to_components(
     shc_log_info(shc_logname, "Created contig files\n");
     
     //read and process files
-    std::ifstream file_reader(read_filename);  
-    shc_log_info(shc_logname, "successfully open read file\n");
+    std::ifstream file_reader(lf->input_read_path);  
+    shc_log_info(shc_logname, "successfully open read files\n");
     std::string line;
     std::string header;
     std::string sequence;    
     int interval = 1;
-    uint64_t byte = 0;
+    uint64_t byte = 0;    
     
     std::map<comp_num_t, int> comp_count;
         
@@ -400,38 +528,50 @@ void Contig_graph_handler::assign_reads_to_components(
     {
         std::getline(file_reader, line);
         if(line[0] == '>')
-        {
-            header = line;
+        {                     
             if(!sequence.empty())
             {
-                //process
-                
+                //process                
                 interval = (sequence.size()-kh->kmer_length+1)/num_test;
                 for(int i=0; i<num_test; i++)
                 {
-                    //shc_log_info(shc_logname, "Before encoding readsize %u at %d\n",sequence.size(), i*interval);
+                    //shc_log_info(shc_logname, "Before encoding readsize %u at %d\n",sequence.size(), i*interval);                                        
                     encode_kmer(&sequence.at(0)+i*interval, &byte, kh->kmer_length);
-                    //shc_log_info(shc_logname, "After encoding\n");
-                    comp_num_t comp_num = 
-                                component_array[kh->kmer_counter[byte].contig];
-                    comp_count[comp_num]++;            
-                }        
-                auto max_iter = std::max_element(comp_count.begin(), comp_count.end(), 
-                        [](const std::pair<comp_num_t, int> & p1, 
-                           const std::pair<comp_num_t, int> & p2 )
-                        {
-                            return p1.second < p2.second;
-                        }
-                );
-                
-                comp_num_t best_comp =  max_iter->first; 
-                //shc_log_info(shc_logname, "Before add to file %s \n",sequence.c_str());
-                *(files.at(best_comp)) << header << std::endl;
-                *(files.at(best_comp)) << sequence << std::endl;
-                //shc_log_info(shc_logname, "after add to file\n");                                
-                comp_count.clear();                                
-                sequence.clear();
+                    Kmer_counter_map_iterator it = kh->kmer_counter.find(byte);
+                    if(it!= kh->kmer_counter.end())
+                    {    
+                        comp_num_t comp_num = 
+                                component_array[(kh->kmer_counter[byte]).contig];                    
+                        comp_count[comp_num]++;            
+                    }                    
+                }     
+                // check if this sequence
+                if(!comp_count.empty())                
+                {
+                    auto max_iter = std::max_element(comp_count.begin(), comp_count.end(), 
+                            [](const std::pair<comp_num_t, int> & p1, 
+                               const std::pair<comp_num_t, int> & p2 )
+                            {
+                                return p1.second < p2.second;
+                            }
+                    );
+
+                    comp_num_t best_comp =  max_iter->first; 
+                    //shc_log_info(shc_logname, "Before add to file %s \n",sequence.c_str());
+                    *(files.at(best_comp)) << header << std::endl;
+                    *(files.at(best_comp)) << sequence << std::endl;
+                    //shc_log_info(shc_logname, "after add to file\n");                                
+                    comp_count.clear();                                
+                    sequence.clear();
+                }
+#ifdef LOG_CONTIG_GRAPH                
+                else
+                {
+                    shc_log_info(shc_logname, "%s does not belong to any comp\n", header.c_str());
+                }
+#endif
             }
+            header = line;   
         }
         else //line is sequence
         {     
@@ -457,13 +597,15 @@ void Contig_graph_handler::assign_kmer_to_components()
     typedef boost::filesystem::path filename_t;
     path_t base_path = boost::filesystem::current_path();    
     std::string base_path_str(base_path.c_str()); 
-    std::string dir_path = base_path_str + "/output/components_kmer"; 
-    path_t create_path(dir_path);
+    std::string dir_path = lf->output_path_str + "/components_kmer";     
     char bases[33];
     bases[kh->kmer_length] = '\0';
     
-    add_directory(create_path);
-    shc_log_info(shc_logname, "Created dir %s\n", dir_path.c_str());
+    path_t comp_kmer_path(dir_path);
+    if(boost::filesystem::exists(comp_kmer_path))
+        replace_directory(comp_kmer_path);
+    else
+        add_directory(comp_kmer_path);
             
     //create files    
     std::vector<std::shared_ptr<std::ofstream> > files;

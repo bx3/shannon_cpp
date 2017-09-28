@@ -30,7 +30,8 @@
 //#define LOG_KMER
 //#define LOG_CONTIG
 //#define LOG_CONTIG_GRAPH
-//#define LOG_METIS
+#define LOG_METIS
+//#define LOG_DELETED_KMER
 
 #define SHOW_PROGRESS
 #define KMER_PROGRESS_STEP 2000000
@@ -58,7 +59,7 @@ void get_vector_string(std::vector<contig_num_t> & contig_list, std::stringstrea
 void info_log_num_without_new_line(char *filename, size_t num);
 void info_log_str_without_new_line(char *filename, const char * c);
 void info_print_bit(char *filename, uint8_t bit_to_print);
-void info_log_info(char * filename, const char* format, ...);
+void info_log_info(const char * filename, const char* format, ...);
 
 void start_timer(struct Block_timer * bt);
 void stop_timer(struct Block_timer * bt);

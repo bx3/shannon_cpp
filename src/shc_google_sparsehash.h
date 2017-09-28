@@ -46,9 +46,9 @@ struct hash_contig {
 };
 
 
-typedef google::sparse_hash_map<uint64_t, Kmer_info, hash_u64, equ64> Kmer_counter_map;
-typedef google::sparse_hash_map<uint64_t, Kmer_info, hash_u64, equ64>::iterator Kmer_counter_map_iterator;
-typedef google::sparse_hash_map<uint64_t, Kmer_info, hash_u64, equ64>::const_iterator Kmer_counter_map_const_iterator;
+typedef google::dense_hash_map<uint64_t, Kmer_info, hash_u64, equ64> Kmer_counter_map;
+typedef google::dense_hash_map<uint64_t, Kmer_info, hash_u64, equ64>::iterator Kmer_counter_map_iterator;
+typedef google::dense_hash_map<uint64_t, Kmer_info, hash_u64, equ64>::const_iterator Kmer_counter_map_const_iterator;
 
 typedef google::sparse_hash_map<uint64_t, std::vector<contig_num_t>, hash_u64, equ64> K1mer_contig_map;
 typedef google::sparse_hash_map<uint64_t, std::vector<contig_num_t>, hash_u64, equ64>::iterator K1mer_contig_map_iterator;

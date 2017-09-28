@@ -44,7 +44,7 @@ void print_four_base(char* four_base, int length)
 
 //static bool info_logfile_cleared = false;
 
-void info_log_info(char * filename, const char* format, ...)
+void info_log_info(const char * filename, const char* format, ...)
 {
     //char filename[50];       
     //if(!info_logfile_cleared){

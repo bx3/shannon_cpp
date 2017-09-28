@@ -55,11 +55,26 @@ struct bundled_weight {
 };
 
 struct Metis_setup {
-    Metis_setup(): partition_size(500), overload(1.5), penalty(5), inMem(0),
-                   ncon(1) 
+    Metis_setup(bool imp, idx_t partition_size_, real_t overload_, idx_t penalty_): 
+            is_multiple_partition(imp), partition_size(partition_size_),  
+            overload(overload_), penalty(penalty_)
     {
-        memset(options, 0, METIS_NOPTIONS);    
+        inMem = 0;
+        ncon = 1;
+        memset(options, 0, METIS_NOPTIONS);         
     }
+    //copy constructor
+    Metis_setup(const Metis_setup & ms)
+    {
+        is_multiple_partition = ms.is_multiple_partition;
+        partition_size = ms.partition_size;
+        overload = ms.overload;
+        penalty = ms.penalty;
+        inMem = ms.inMem;
+        ncon = ms.ncon;                
+    }
+    
+    
     idx_t partition_size;
     real_t overload;
     idx_t penalty;
@@ -69,6 +84,8 @@ struct Metis_setup {
     idx_t objval;
     idx_t num_vertices;
     idx_t num_partition;
+    
+    bool is_multiple_partition;
 };
 
 class Contig_graph_handler
@@ -109,33 +126,37 @@ class Contig_graph_handler
         std::vector<idx_t> adjwgt;
     };
     
-public:              
+public:                  
     Contig_graph_handler(kmer_len_t length, Kmer_handler * khp, 
-         Contig_handler * chp): 
-         k1mer_len(length), kh(khp), ch(chp),component_array(chp->num_contig)
+         Contig_handler * chp, Local_files *lfp, Metis_setup & ms): 
+         k1mer_len(length), kh(khp), ch(chp), component_array(chp->num_contig), metis_setup(ms)
          {
              contig_vertex_map.set_empty_key(EMPTY_KEY);   
              explorable_contig_set.set_empty_key(ch->num_contig+2);
-             explorable_contig_set.set_deleted_key(ch->num_contig+3);
-             metis_filename = "output/metis_data.graph";    
+             explorable_contig_set.set_deleted_key(ch->num_contig+3);             
              curr_component_num = 0;
-         };
-                                
+             is_set_collect_comp_num = false;
+             lf = lfp;                          
+         };    
+    
     void group_components();
     void break_and_keep_component();
+    void run_metis();
     void get_connected_contig_index(Kmer_counter_map_iterator & it);    
     void increment_edge_weight(contig_num_t i, contig_num_t j);
     
-    void create_metis_array_input();    
-    void assign_reads_to_components(std::string& read_filename, int num_read );
-    void assign_kmer_to_components();
+    void create_metis_array_input();        
     void dump_component_array(std::string & filename);    
     
     void dump_graph_to_metis_file();
-    void create_metis_format_from_graph();        
-    void create_metis_input_data();
-    void run_metis_get_components();
+    void create_metis_file_format_from_graph(std::string & filename);             
     
+    void assign_reads_to_components(int num_test );
+    void assign_kmer_to_components();
+    
+    void assign_paired_read_to_components(int num_test);        
+    
+    //void merge_group();
     //debug
     void log_metis_input_data();
     
@@ -151,13 +172,16 @@ private:
     std::vector<comp_num_t> component_array;
     comp_num_t curr_component_num; // after processing the largest comp num is this number -1 
     
+    comp_num_t collect_comp_num;
+    bool is_set_collect_comp_num;    
+    
     Kmer_handler * kh;
     Contig_handler * ch;     
-    
-    std::string metis_filename;
-    std::string read_filename;    
+               
     struct Metis_input metis_input;
     struct Metis_setup metis_setup;
+    
+    Local_files * lf;
 };
 
 #endif	/* CONTIG_GRAPH_HANDLER_H */
