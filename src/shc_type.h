@@ -19,7 +19,8 @@ typedef uint16_t  rmer_count_t;
 typedef uint8_t  kmer_len_t;
 typedef uint16_t contig_edge_weight_t;
 
-#define IMPOSSIBLE_CONTIG_NUM (std::pow(2,sizeof(contig_num_t)*8-1)-1)
+#define IMPOSSIBLE_CONTIG_NUM (std::pow(2,sizeof(contig_num_t)*8-2)-1)
+#define IMPOSSIBLE_COMP_NUM (std::pow(2,sizeof(comp_num_t)*8-2)-2)
 /*
  * Info represents bit-field flag, six bits are used.
  * 1. The first bit describes if there is another kmer of suffix (k-1) common 

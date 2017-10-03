@@ -33,6 +33,7 @@
 #include "Kmer_handler.h"
 #include "shc_google_sparsehash.h"
 #include <metis.h>
+#include "json_parser.h"
 
 //#include "Fasta_entry.h"
 //#include "Fasta_reader.h"
@@ -52,40 +53,6 @@ struct bundled_weight {
     bundled_weight(const contig_num_t& p=IMPOSSIBLE_CONTIG_NUM):
                         weight(p) {}
     contig_edge_weight_t weight;
-};
-
-struct Metis_setup {
-    Metis_setup(bool imp, idx_t partition_size_, real_t overload_, idx_t penalty_): 
-            is_multiple_partition(imp), partition_size(partition_size_),  
-            overload(overload_), penalty(penalty_)
-    {
-        inMem = 0;
-        ncon = 1;
-        memset(options, 0, METIS_NOPTIONS);         
-    }
-    //copy constructor
-    Metis_setup(const Metis_setup & ms)
-    {
-        is_multiple_partition = ms.is_multiple_partition;
-        partition_size = ms.partition_size;
-        overload = ms.overload;
-        penalty = ms.penalty;
-        inMem = ms.inMem;
-        ncon = ms.ncon;                
-    }
-    
-    
-    idx_t partition_size;
-    real_t overload;
-    idx_t penalty;
-    idx_t inMem;
-    idx_t ncon;
-    idx_t options[METIS_NOPTIONS];
-    idx_t objval;
-    idx_t num_vertices;
-    idx_t num_partition;
-    
-    bool is_multiple_partition;
 };
 
 class Contig_graph_handler
@@ -129,19 +96,28 @@ class Contig_graph_handler
 public:                  
     Contig_graph_handler(kmer_len_t length, Kmer_handler * khp, 
          Contig_handler * chp, Local_files *lfp, Metis_setup & ms): 
-         k1mer_len(length), kh(khp), ch(chp), component_array(chp->num_contig), metis_setup(ms)
+         k1mer_len(length), kh(khp), ch(chp), 
+         component_array(chp->num_contig, IMPOSSIBLE_COMP_NUM), metis_setup(ms)
          {
              contig_vertex_map.set_empty_key(EMPTY_KEY);   
              explorable_contig_set.set_empty_key(ch->num_contig+2);
              explorable_contig_set.set_deleted_key(ch->num_contig+3);             
              curr_component_num = 0;
              is_set_collect_comp_num = false;
-             lf = lfp;                          
-         };    
+             lf = lfp;               
+             if(metis_setup.is_multiple_partition)
+             {
+                 component_array_aux.resize(chp->num_contig);
+                 memset(&component_array_aux.at(0), IMPOSSIBLE_COMP_NUM, chp->num_contig);
+             }
+         };   
     
     void group_components();
     void break_and_keep_component();
-    void run_metis();
+    void run_single_pass_metis(std::vector<comp_num_t> & array, std::vector<idx_t> * part);
+    void add_weight_to_cut_and_update_graph(std::vector<idx_t> * part);  
+    
+    
     void get_connected_contig_index(Kmer_counter_map_iterator & it);    
     void increment_edge_weight(contig_num_t i, contig_num_t j);
     
@@ -169,7 +145,10 @@ private:
     
     std::stack<contig_num_t> contig_stack;
     Contig_set explorable_contig_set;
+    
     std::vector<comp_num_t> component_array;
+    std::vector<comp_num_t> component_array_aux;
+    
     comp_num_t curr_component_num; // after processing the largest comp num is this number -1 
     
     comp_num_t collect_comp_num;

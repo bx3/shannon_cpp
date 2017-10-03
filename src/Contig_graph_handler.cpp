@@ -125,8 +125,18 @@ void Contig_graph_handler::break_and_keep_component()
         //shc_log_info(shc_logname, "metis to asked to break %d partition\n", metis_setup.num_partition);
         idx_t ufactor = static_cast<idx_t>(METIS_IMBALANCE_PRECISION 
                                                    * (metis_setup.overload-1));  
-        metis_setup.options[METIS_OPTION_UFACTOR] = ufactor;  
-        run_metis();                   
+        metis_setup.options[METIS_OPTION_UFACTOR] = ufactor; 
+        metis_setup.options[METIS_OPTION_NUMBERING] = 0;
+        
+        std::vector<idx_t> part(metis_setup.num_vertices);
+        
+        run_single_pass_metis(component_array, &part);
+        if(metis_setup.is_multiple_partition)
+        {
+            add_weight_to_cut_and_update_graph(&part);            
+            run_single_pass_metis(component_array_aux, &part);
+        }
+        std::vector<idx_t>().swap(part);    
     }
 #ifdef LOG_CONTIG_GRAPH
     shc_log_info(shc_logname, "end\n");
@@ -134,15 +144,13 @@ void Contig_graph_handler::break_and_keep_component()
     
 }
 
-void Contig_graph_handler::run_metis()
-{
-    std::vector<idx_t> part(metis_setup.num_vertices);                     
-    
+void Contig_graph_handler::run_single_pass_metis(std::vector<comp_num_t> & array, std::vector<idx_t> * part)
+{                             
     int ret = METIS_PartGraphRecursive(
           &metis_setup.num_vertices, &metis_setup.ncon, 
           &metis_input.xadj.at(0), &metis_input.adjncy.at(0),
           NULL, NULL, &metis_input.adjwgt.at(0), &metis_setup.num_partition, 
-          NULL, NULL, NULL, &metis_setup.objval, &part.at(0));
+          NULL, NULL, NULL, &metis_setup.objval, &part->at(0));
     
     if(ret == METIS_ERROR_INPUT)
         shc_log_error("METIS_ERROR_INPUT\n");
@@ -157,13 +165,44 @@ void Contig_graph_handler::run_metis()
         
     for(idx_t i=0; i<metis_setup.num_vertices; i++)
     {
-        component_array[graph[static_cast<vd_t>(i)].contig_index] = 
-                                             curr_component_num + part.at(i);
+        array[graph[static_cast<vd_t>(i)].contig_index] = 
+                                             curr_component_num + part->at(i);
     }
     
-    curr_component_num += metis_setup.num_partition;
-    std::vector<idx_t>().swap(part);
+    curr_component_num += metis_setup.num_partition;    
 }
+
+void Contig_graph_handler::add_weight_to_cut_and_update_graph(std::vector<idx_t> * part)
+{
+    typename boost::graph_traits < graph_t >::adjacency_iterator vi, vi_end; 
+    std::pair<ed_t, bool> aer;
+    std::pair<vi_t, vi_t> vip = vertices(graph);
+    //walk through adj list, and update if 
+    for(vi_t it=vip.first; it!=vip.second; it++)
+    {        
+        vd_t vd_source = *it; 
+        idx_t source_comp = part->at(static_cast<idx_t>(vd_source));
+        for (boost::tie(vi, vi_end)=boost::adjacent_vertices(vd_source, graph); 
+                vi != vi_end; ++vi)
+        {
+            idx_t adj_comp = part->at(static_cast<idx_t>(*vi));
+            if(adj_comp != source_comp)
+            {
+                aer = boost::edge(vd_source, *vi , graph);  
+                graph[aer.first].weight *= metis_setup.penalty;
+                //shc_log_info(shc_logname, "edge between %d and %d is increased to %d\n",vd_source, *vi, graph[aer.first].weight);
+            }
+        }                       
+    }
+    create_metis_array_input();
+}
+
+/*
+if(aer.second)
+    {                
+        graph[aer.first].weight++;
+    }
+*/
 
 void Contig_graph_handler::get_connected_contig_index(
                                                 Kmer_counter_map_iterator & it)
@@ -359,10 +398,16 @@ void Contig_graph_handler::dump_component_array(std::string & filename)
     outfile << curr_component_num << " components" << std::endl;
     outfile << "contig"  << "\t"  << "components" << std::endl;
     //int i=0;
-    for(std::vector<contig_num_t>::iterator it=component_array.begin();
-            it != component_array.end(); it++)
+    for(int i=0; i<component_array.size(); i++)
     {
-        outfile << (*it) << std::endl;
+        if(!metis_setup.is_multiple_partition)
+        {
+            outfile << component_array[i] << std::endl;
+        }
+        else
+        {
+            outfile << component_array[i] << "\t" << component_array_aux[i] << std::endl;
+        }
         //shc_log_info(shc_logname, "%d   %u\n", i++, *it);
     }
     outfile.close();
@@ -403,6 +448,7 @@ void Contig_graph_handler::assign_paired_read_to_components(int num_test)
     uint64_t byte1 = 0, byte2 = 0;    
     
     std::map<comp_num_t, int> comp_count;
+    std::map<comp_num_t, int> comp_count_aux;
         
     while (file1_reader.good() && file2_reader.good() ) 
     {
@@ -425,16 +471,27 @@ void Contig_graph_handler::assign_paired_read_to_components(int num_test)
                     Kmer_counter_map_iterator it2 = kh->kmer_counter.find(byte2);
                     
                     if(it1!= kh->kmer_counter.end())
-                    {    
-                        comp_num_t comp_num1 = 
-                             component_array[(kh->kmer_counter[byte1]).contig];                              
-                        comp_count[comp_num1]++;            
+                    {                            
+                        
+                        contig_num_t contig_num_for_kmer = (kh->kmer_counter[byte1]).contig;                        
+                        comp_count[component_array[contig_num_for_kmer]]++;            
+                        
+                        if(metis_setup.is_multiple_partition && 
+                           component_array_aux[contig_num_for_kmer] < curr_component_num
+                           )                            
+                            comp_count_aux[component_array_aux[contig_num_for_kmer]]++;
+                        
+                        
                     }                    
                     if(it2!= kh->kmer_counter.end())
-                    {
-                        comp_num_t comp_num2 = 
-                              component_array[(kh->kmer_counter[byte2]).contig];                   
-                        comp_count[comp_num2]++;            
+                    {                        
+                        contig_num_t contig_num_for_kmer = (kh->kmer_counter[byte1]).contig;                        
+                        comp_count[component_array[contig_num_for_kmer]]++;            
+                        
+                        if(metis_setup.is_multiple_partition && 
+                           component_array_aux[contig_num_for_kmer] < curr_component_num
+                           )                            
+                            comp_count_aux[component_array_aux[contig_num_for_kmer]]++;
                     }
                 }     
                 // check if this sequence
@@ -458,6 +515,27 @@ void Contig_graph_handler::assign_paired_read_to_components(int num_test)
                     comp_count.clear();                                
                     sequence1.clear();
                     sequence2.clear();
+                }
+                
+                if(metis_setup.is_multiple_partition && !comp_count_aux.empty())                
+                {
+                    auto max_iter = std::max_element(comp_count_aux.begin(), comp_count_aux.end(), 
+                            [](const std::pair<comp_num_t, int> & p1, 
+                               const std::pair<comp_num_t, int> & p2 )
+                            {
+                                return p1.second < p2.second;
+                            }
+                    );
+
+                    comp_num_t best_comp =  max_iter->first; 
+                    
+                    //shc_log_info(shc_logname, "Before add to file %s \n",sequence.c_str());
+                    *(files.at(best_comp)) << header1 << std::endl;
+                    *(files.at(best_comp)) << sequence1 << std::endl;
+                    *(files.at(best_comp)) << header2 << std::endl;
+                    *(files.at(best_comp)) << sequence2 << std::endl;
+                    //shc_log_info(shc_logname, "after add to file\n");                                
+                    comp_count_aux.clear();                                                    
                 }
             }
             header1 = line1;
@@ -523,6 +601,7 @@ void Contig_graph_handler::assign_reads_to_components(int num_test )
     uint64_t byte = 0;    
     
     std::map<comp_num_t, int> comp_count;
+    std::map<comp_num_t, int> comp_count_aux;
         
     while (file_reader.good() ) 
     {
@@ -539,10 +618,18 @@ void Contig_graph_handler::assign_reads_to_components(int num_test )
                     encode_kmer(&sequence.at(0)+i*interval, &byte, kh->kmer_length);
                     Kmer_counter_map_iterator it = kh->kmer_counter.find(byte);
                     if(it!= kh->kmer_counter.end())
-                    {    
-                        comp_num_t comp_num = 
-                                component_array[(kh->kmer_counter[byte]).contig];                    
-                        comp_count[comp_num]++;            
+                    {
+                        contig_num_t contig_num_for_kmer = (kh->kmer_counter[byte]).contig;
+                        //shc_log_info(shc_logname, "contig_num_for_kmer %u\n", contig_num_for_kmer );
+                        //shc_log_info(shc_logname, "component_array[contig_num_for_kmer] %u\n", component_array[contig_num_for_kmer] );
+                        //shc_log_info(shc_logname, "component_array_aux[contig_num_for_kmer] %u\n", component_array_aux[contig_num_for_kmer] );
+                        comp_count[component_array[contig_num_for_kmer]]++;            
+                        
+                        if(metis_setup.is_multiple_partition && 
+                           component_array_aux[contig_num_for_kmer] < curr_component_num
+                           )                            
+                            comp_count_aux[component_array_aux[contig_num_for_kmer]]++;
+                        
                     }                    
                 }     
                 // check if this sequence
@@ -557,19 +644,45 @@ void Contig_graph_handler::assign_reads_to_components(int num_test )
                     );
 
                     comp_num_t best_comp =  max_iter->first; 
+                    
                     //shc_log_info(shc_logname, "Before add to file %s \n",sequence.c_str());
                     *(files.at(best_comp)) << header << std::endl;
                     *(files.at(best_comp)) << sequence << std::endl;
                     //shc_log_info(shc_logname, "after add to file\n");                                
-                    comp_count.clear();                                
-                    sequence.clear();
-                }
+                    comp_count.clear();                                                    
+                }                             
 #ifdef LOG_CONTIG_GRAPH                
                 else
                 {
                     shc_log_info(shc_logname, "%s does not belong to any comp\n", header.c_str());
                 }
 #endif
+                //for auxilary array
+                if(metis_setup.is_multiple_partition && !comp_count_aux.empty())                
+                {
+                    auto max_iter = std::max_element(comp_count_aux.begin(), comp_count_aux.end(), 
+                            [](const std::pair<comp_num_t, int> & p1, 
+                               const std::pair<comp_num_t, int> & p2 )
+                            {
+                                return p1.second < p2.second;
+                            }
+                    );
+
+                    comp_num_t best_comp =  max_iter->first; 
+                    
+                    //shc_log_info(shc_logname, "Before add to file %s \n",sequence.c_str());
+                    *(files.at(best_comp)) << header << std::endl;
+                    *(files.at(best_comp)) << sequence << std::endl;
+                    //shc_log_info(shc_logname, "after add to file\n");                                
+                    comp_count_aux.clear();                                                    
+                }                             
+#ifdef LOG_CONTIG_GRAPH                
+                else
+                {
+                    shc_log_info(shc_logname, "%s does not belong to any comp\n", header.c_str());
+                }
+#endif
+                sequence.clear();
             }
             header = line;   
         }
@@ -627,7 +740,14 @@ void Contig_graph_handler::assign_kmer_to_components()
     {        
         decode_kmer(bases, &(it->first), kh->kmer_length);
         *files.at(component_array[it->second.contig]) << bases << "\t" 
-                << it->second.count << std::endl;        
+                << it->second.count << std::endl;   
+        
+        if(metis_setup.is_multiple_partition && 
+        component_array_aux[it->second.contig] < curr_component_num)
+        {
+            *files.at(component_array_aux[it->second.contig]) << bases << "\t" 
+                << it->second.count << std::endl;   
+        }
     }
     
     for(comp_num_t i=0; i<curr_component_num; i++)

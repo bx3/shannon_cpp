@@ -72,5 +72,5 @@ void print_local_file_system(Local_files *local_files)
     std::cout << "Others                    *********** " << std::endl;
     std::cout << "log file save to         : " << local_files->log_filename_path << std::endl;
     std::cout << "deleted kmer saved to    : " << local_files->deleted_contig_path << std::endl;
-    std::cout << "\033[0m" << std::endl << std::endl;   
+    std::cout << "\033[0m" << std::endl;   
 }

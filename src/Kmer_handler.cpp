@@ -22,15 +22,15 @@ Kmer_handler::Kmer_handler(Local_files * lfp)
 
 Kmer_handler::Kmer_handler(uint8_t length, kmer_count_t min_count, 
                 Contig_handler::size_type min_len, double R_threshold, 
-                uint8_t rmer_len, bool is_use_set, Local_files * lfp)
+                uint8_t rmer_length, bool is_use_set, Local_files * lfp)
 {
     lf = lfp;
     kmer_length = length;    
-    this->min_count = min_count;
-    this->min_len = min_len;
-    this->r_thresh = R_threshold;
-    this->rmer_len = rmer_len;
-    this->is_use_set = is_use_set;
+    dup_setting.min_count = min_count;
+    dup_setting.min_len = min_len;
+    dup_setting.threshold = R_threshold;
+    dup_setting.rmer_length = rmer_length;
+    dup_setting.is_use_set = is_use_set;
     kmer_counter.set_deleted_key(SPARSEHASH_DELETE_KEY);   
     kmer_counter.set_empty_key(SPARSEHASH_EMPTY_KEY);
     size_t num_kmer = estimate_num_kmer(lf->input_kmer_path);    
@@ -222,11 +222,11 @@ bool Kmer_handler::is_info_ith_bit_set(uint8_t info, uint8_t i)
 {
     if (i==1)
     {
-        return (info & (uint8_t)(B1))>0;
+        return (info & (uint8_t)(SHC_B1))>0;
     }
     else
     {
-        return (info & (((uint8_t)(B1))<<(i-1)))>0;
+        return (info & (((uint8_t)(SHC_B1))<<(i-1)))>0;
     }
 }
 
@@ -245,7 +245,7 @@ inline bool Kmer_handler::is_kmer_info_has_ps(uint8_t info)
  */
 inline bool Kmer_handler::is_kmer_info_has_prefix(uint8_t info)
 {
-    return ((uint8_t)B1234 & info) > 0;
+    return ((uint8_t)SHC_B1234 & info) > 0;
 }
 
 /**
@@ -254,7 +254,7 @@ inline bool Kmer_handler::is_kmer_info_has_prefix(uint8_t info)
  */
 inline bool Kmer_handler::is_kmer_info_has_suffix(uint8_t info)
 {
-    return ((uint8_t)B5678 & info) > 0;
+    return ((uint8_t)SHC_B5678 & info) > 0;
 }
 
 /**
@@ -458,13 +458,13 @@ void Kmer_handler::write_kmer_info(uint8_t num, bool is_prefix, const uint64_t *
     if (is_prefix)
     {
         if(num==0)
-            info |= (uint8_t)B1;
+            info |= (uint8_t)SHC_B1;
         else
-            info = info | (((uint8_t)B1)<<num);            
+            info = info | (((uint8_t)SHC_B1)<<num);            
     }
     else
     {        
-        info = info | ((uint8_t)B1<<(PREFIX_OFFSET+num));
+        info = info | ((uint8_t)SHC_B1<<(PREFIX_OFFSET+num));
     }
     if(kmer_num != NULL)
         kmer_counter[*kmer_num].info = info;
@@ -601,7 +601,7 @@ contig_num_t Kmer_handler::find_contig()
     stop_timer(&kh_timer);
 #endif    
     deallocate_kmer_descend_list();
-    if(is_use_set)
+    if(dup_setting.is_use_set)
     {
         deallocate_rmer_count_map();
     }
@@ -622,11 +622,11 @@ contig_num_t Kmer_handler::find_contig()
 
 uint8_t Kmer_handler::num_bit_info(uint8_t info)
 {
-    uint8_t num = (uint8_t)(B1) & info;
+    uint8_t num = (uint8_t)(SHC_B1) & info;
     
     for(uint8_t i=1; i<8; i++)
     {
-        num += (info >> i) & (uint8_t)(B1);
+        num += (info >> i) & (uint8_t)(SHC_B1);
     }
     return num;
 }
@@ -744,9 +744,9 @@ bool Kmer_handler::decide_contig_and_build_rmer(kmer_count_t mean_count, Contig_
 #endif
     //if(len<min_len || mean_count<min_count)
         
-    min_len = 2*(kmer_length-1);
-    bool flag = len*std::pow(mean_count,1/4) < 2*min_len*std::pow(min_count,1/4);
-    if(len<min_len || mean_count<min_count || flag)
+    dup_setting.min_len = 2*(kmer_length-1);
+    bool flag = len*std::pow(mean_count,1/4) < 2*dup_setting.min_len*std::pow(dup_setting.min_count,1/4);
+    if(len<dup_setting.min_len || mean_count<dup_setting.min_count || flag)
     {
 #ifdef LOG_KMER
         shc_log_info(shc_logname, "Finish length count filter, fail to pass, due to length count\n");
@@ -757,7 +757,7 @@ bool Kmer_handler::decide_contig_and_build_rmer(kmer_count_t mean_count, Contig_
     shc_log_info(shc_logname, "Finish length count filter, Passing\n");
 #endif    
 	
-    if(is_use_set)
+    if(dup_setting.is_use_set)
     {
         return use_set_to_filter(mean_count, len);
     }
@@ -773,13 +773,13 @@ bool Kmer_handler::use_set_to_filter(kmer_count_t mean_count, Contig_handler::si
     shc_log_info(shc_logname, "Start set filter\n");
     uint8_t * contig_start = &(ch->contig_list.at(ch->delimitor[ch->num_contig]));        
     char temp[32];    
-    temp[rmer_len] = '\0';
+    temp[dup_setting.rmer_length] = '\0';
     uint64_t byte;    
     if(rmer_count_map.empty())
     {
-        for(Contig_handler::size_type i=0; i<len-rmer_len+1; i++)
+        for(Contig_handler::size_type i=0; i<len-dup_setting.rmer_length+1; i++)
         {                
-            encode_kmer((char*)(contig_start+i), &byte, rmer_len);
+            encode_kmer((char*)(contig_start+i), &byte, dup_setting.rmer_length);
             rmer_count_map[byte] = 1;
         }      
         shc_log_info(shc_logname, "Finish set filter, first contig\n");
@@ -788,12 +788,12 @@ bool Kmer_handler::use_set_to_filter(kmer_count_t mean_count, Contig_handler::si
     else
     {        
         uint64_t common_element = 0;
-        Contig_handler::size_type total_rmer_num = len-rmer_len+1;                                    
+        Contig_handler::size_type total_rmer_num = len-dup_setting.rmer_length+1;                                    
         
         //shc_log_info(shc_logname, "Calculating common element stat\n");
         for(Contig_handler::size_type i=0; i<total_rmer_num; i++)
         {                                                
-            encode_kmer((char*)(contig_start+i), &byte, rmer_len);           
+            encode_kmer((char*)(contig_start+i), &byte, dup_setting.rmer_length);           
             if(rmer_count_map.find(byte) != rmer_count_map.end())
                 common_element++;                
         }
@@ -805,11 +805,11 @@ bool Kmer_handler::use_set_to_filter(kmer_count_t mean_count, Contig_handler::si
 
         shc_log_info(shc_logname, "Start redundancy filter\n");
 #endif
-        if(static_cast<double>(common_element)/total_rmer_num < r_thresh)
+        if(static_cast<double>(common_element)/total_rmer_num < dup_setting.threshold)
         {
             for(Contig_handler::size_type i=0; i<total_rmer_num; i++)
             {                   
-                encode_kmer((char*)(contig_start+i), &byte, rmer_len);
+                encode_kmer((char*)(contig_start+i), &byte, dup_setting.rmer_length);
                 if(rmer_count_map.find(byte) != rmer_count_map.end())
                     rmer_count_map[byte]++ ;                
                 else
@@ -837,14 +837,14 @@ bool Kmer_handler::use_list_to_filter(kmer_count_t mean_count, Contig_handler::s
 #endif
     uint8_t * contig_start = &(ch->contig_list.at(ch->delimitor[ch->num_contig]));        
     char temp[32];    
-    temp[rmer_len] = '\0';
+    temp[dup_setting.rmer_length] = '\0';
     uint64_t byte;        
-    Contig_handler::size_type total_num_rmer = len-rmer_len+1;
+    Contig_handler::size_type total_num_rmer = len-dup_setting.rmer_length+1;
     if(rmer_contig_map.empty())
     {
         for(Contig_handler::size_type i=0; i<total_num_rmer; i++)
         {                
-            encode_kmer((char*)(contig_start+i), &byte, rmer_len);
+            encode_kmer((char*)(contig_start+i), &byte, dup_setting.rmer_length);
             rmer_contig_map[byte].push_back(0);
         }      
         shc_log_info(shc_logname, "Finish contig decision, first contig\n");
@@ -855,13 +855,13 @@ bool Kmer_handler::use_list_to_filter(kmer_count_t mean_count, Contig_handler::s
 #ifdef LOG_KMER
         shc_log_info(shc_logname, "Start length count filter\n");        
 #endif
-        Contig_handler::size_type total_rmer_num = len-rmer_len+1;                                    
+        Contig_handler::size_type total_rmer_num = len-dup_setting.rmer_length+1;                                    
                
         //shc_log_info(shc_logname, "Creating contig count filter\n");
         for(Contig_handler::size_type i=0; i<total_rmer_num; i++)
         {                      
             //get rmer            
-            encode_kmer((char*)(contig_start+i), &byte, rmer_len);
+            encode_kmer((char*)(contig_start+i), &byte, dup_setting.rmer_length);
             //check the count and record in a dict
             for(std::vector<contig_num_t>::iterator it=rmer_contig_map[byte].begin();
                                                it != rmer_contig_map[byte].end();
@@ -875,7 +875,7 @@ bool Kmer_handler::use_list_to_filter(kmer_count_t mean_count, Contig_handler::s
             {
                 double thresh = static_cast<double>((*it).second)/total_num_rmer;
                 
-                if (thresh >= r_thresh)
+                if (thresh >= dup_setting.threshold)
                 {
 #ifdef LOG_KMER
                     shc_log_info(shc_logname, "Finish list filter, not Passing due to high redundancy\n");
@@ -888,7 +888,7 @@ bool Kmer_handler::use_list_to_filter(kmer_count_t mean_count, Contig_handler::s
                     //update rmer_contig_map
                     for(Contig_handler::size_type i=0; i<total_num_rmer; i++)
                     {                
-                        encode_kmer((char*)(contig_start+i), &byte, rmer_len);
+                        encode_kmer((char*)(contig_start+i), &byte, dup_setting.rmer_length);
                         //since the current count has not been updated
                         //also notice that if the accepted contig contains
                         //the same kmer multiple times, the for the contig 

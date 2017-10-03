@@ -27,14 +27,14 @@
 #define BIT_PER_BASE 2
 #define BIT_PER_BYTE 8
 #define BASE_PER_BYTE 4
-#define B78 0xC0        //set 7th, 8th bit up 
-#define B12 0x03        //set 1st, 2nd bit up  
-#define B1 0x01         //set 1st bit up
-#define B2 0x02         //set 2nd bit up
-#define B34 0x0C        //set 3th, 4th bit up
-#define B56 0x30        //set 5th, 6th bit up
-#define B1234 0x0F
-#define B5678 0xF0
+#define SHC_B78 0xC0        //set 7th, 8th bit up 
+#define SHC_B12 0x03        //set 1st, 2nd bit up  
+#define SHC_B1 0x01         //set 1st bit up
+#define SHC_B2 0x02         //set 2nd bit up
+#define SHC_B34 0x0C        //set 3th, 4th bit up
+#define SHC_B56 0x30        //set 5th, 6th bit up
+#define SHC_B1234 0x0F
+#define SHC_B5678 0xF0
 
 void encode_kmer(const char * base, uint64_t *byte, uint8_t length);
 void decode_kmer(char * base, const uint64_t *byte, uint8_t length);

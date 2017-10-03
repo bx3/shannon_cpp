@@ -40,7 +40,7 @@ void decode_kmer(char *base, const uint64_t *byte, uint8_t length)
     uint64_t byte_copy = *byte;
     for (int i = length-1; i>=0; i--)
     {                
-        base[i] = num_to_char[(uint8_t)B12 & byte_copy];    
+        base[i] = num_to_char[(uint8_t)SHC_B12 & byte_copy];    
         (byte_copy) >>=2;
     }
 }
@@ -71,7 +71,7 @@ void decode(uint8_t num, int length, char *base)
 {             
     for (int i=length-1; i>=0; i--)
     {                
-        base[i] = num_to_char[(uint8_t)B12 & num];    
+        base[i] = num_to_char[(uint8_t)SHC_B12 & num];    
         num >>=2;
     }           
 }
@@ -173,19 +173,19 @@ void read_input(char* input, char* file_name)
 /**     Given a numeric kmer, get its first base in character*/
 char decode_prefix_base(const uint64_t *byte, uint8_t length)
 {
-    return num_to_char[((char)((*byte) >> ((length-1)* BIT_PER_BASE))) & ((char)B12)];    
+    return num_to_char[((char)((*byte) >> ((length-1)* BIT_PER_BASE))) & ((char)SHC_B12)];    
 }
 
 /**     Given a numeric kmer, get its first base in num*/
 uint8_t decode_prefix_num(const uint64_t *byte, uint8_t length)
 {
-    return ((uint8_t)((*byte) >> ((length-1)* BIT_PER_BASE))) & ((uint8_t)B12);    
+    return ((uint8_t)((*byte) >> ((length-1)* BIT_PER_BASE))) & ((uint8_t)SHC_B12);    
 }
 
 /**     Given a numeric kmer, get its last base in num*/
 uint8_t decode_suffix_num(const uint64_t *byte)
 {
-    return (*byte) & ((uint64_t)B12);
+    return (*byte) & ((uint64_t)SHC_B12);
 }
 
 uint64_t prepend_byte(const uint64_t * byte, uint64_t prefix, uint8_t length)
@@ -195,7 +195,7 @@ uint64_t prepend_byte(const uint64_t * byte, uint64_t prefix, uint8_t length)
 
 uint64_t append_byte(const uint64_t * byte, uint64_t prefix, uint8_t length)
 {        
-    return (((uint64_t)B1<<((length*2)))-(uint64_t)B1) &  ((*byte<<2)|prefix);
+    return (((uint64_t)SHC_B1<<((length*2)))-(uint64_t)SHC_B1) &  ((*byte<<2)|prefix);
 }
 
 //asssume xmer > 4
@@ -224,7 +224,7 @@ void get_xmer_at_index(uint8_t * contig_start, size_t contig_base_len ,size_t in
 /**     Given a numeric kmer, get its last base in character*/
 char decode_suffix_base(const uint64_t *byte)
 {
-    return num_to_char[(*byte) & ((uint64_t)B12)];
+    return num_to_char[(*byte) & ((uint64_t)SHC_B12)];
 }
 
 /**     
@@ -246,12 +246,12 @@ uint64_t combine_byte(const uint8_t * byte, uint8_t length)
 
 void reverse_bit(uint8_t * byte, int len)
 {
-    uint8_t new_byte = (*byte)&(uint8_t)B12;    
+    uint8_t new_byte = (*byte)&(uint8_t)SHC_B12;    
     new_byte <<= 2;
     for(int i=0; i<len-2; i++)
     {        
         *byte >>= 2;
-        new_byte |= ((uint8_t)B12&(*byte));
+        new_byte |= ((uint8_t)SHC_B12&(*byte));
     }
     *byte = new_byte;
 }

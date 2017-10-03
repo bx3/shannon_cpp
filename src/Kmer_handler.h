@@ -21,11 +21,10 @@
 #include <inttypes.h>
 #include "Contig_handler.h"
 #include "shc_google_sparsehash.h"
-#include "local_file_structure.h"
 #include <bits/stringfwd.h>
 #include <string>
-#include "log.h"
 #include <cmath>
+#include "json_parser.h"
 
 
 #define MAX_KMER_LENGTH 32
@@ -51,7 +50,6 @@ struct Kmer_sorter {
 	return( kmer1.second > kmer2.second);
     }
 };
-
 
 class Kmer_handler {
     friend class Contig_handler;
@@ -113,18 +111,13 @@ private:
     Kmer_counter_map kmer_counter;
     Contig_handler * ch;
     std::vector<Kmer_Occurence_Pair> kmer_descend_list;     
-            
-    //for Rmer contig list implementation, all deallcoated
-    bool is_use_set;
-    Rmer_contig_map rmer_contig_map;
-    Contig_count_map contig_count_map; 
-    uint8_t rmer_len;
-    //for Rmer set implementation, all deallcoated
-    Rmer_count_map rmer_count_map;
         
-    kmer_count_t min_count;
-    Contig_handler::size_type min_len;
-    double r_thresh;        
+    struct Duplicate_setting dup_setting;
+    //for Rmer contig list implementation, all deallcoated    
+    Rmer_contig_map rmer_contig_map;
+    Contig_count_map contig_count_map;     
+    //for Rmer set implementation, all deallcoated
+    Rmer_count_map rmer_count_map;        
     
     //for info
     size_t num_kmer_deleted;    
