@@ -1,4 +1,4 @@
-/* 
+/*
  * File:   log.h
  * Author: bx
  *
@@ -30,8 +30,11 @@
 //#define LOG_KMER
 //#define LOG_CONTIG
 //#define LOG_CONTIG_GRAPH
-#define LOG_METIS
+//#define LOG_METIS
 //#define LOG_DELETED_KMER
+//#define LOG_SEQ_GRAPH
+
+//#define SHOW_SEQ_GRAPH_PROGRESS
 
 #define SHOW_PROGRESS
 #define KMER_PROGRESS_STEP 2000000
@@ -43,15 +46,15 @@
 #ifdef SHC_CONTIG_LOGGING_ENABLED
     void shc_contig_log_info(const char* format, ...);
 #endif
-    
+
 struct Block_timer {
     struct timespec nano_start;
     struct timespec nano_stamp;
     unsigned long nTime;
-};    
+};
 
-extern char shc_logname[100];
-    
+extern char shc_logname[200];
+
 template<class T> void print_bit(T a);
 void print_byte_list(uint8_t* byte_list, uint16_t out_length);
 void print_four_base(char* four_base, int length);
@@ -68,19 +71,19 @@ template<class T>
 void print_bit(T a)
 {
     T mask = 0x1;
-    T selectBit = 0x0; 
+    T selectBit = 0x0;
     T result = 0x0;
       //backward order
     for (int i = 0; i< sizeof(a)*8 ; i++)
     {
         selectBit = (((mask<<i) & a)>>i) & mask;
-        result = (result << 1) | selectBit;  
-    } 
+        result = (result << 1) | selectBit;
+    }
     //print out bit
     for (int i = 0; i< sizeof(a)*8;i++)
     {
-        printf("%d", (((mask<<i) & result)>>i) & mask);   //print out bit in backward order   
-    }   
+        printf("%d", (((mask<<i) & result)>>i) & mask);   //print out bit in backward order
+    }
 }
 
 /**
@@ -133,15 +136,15 @@ typedef enum {
     } while (0)
 #else
 #   define SHC_LOG_WRITE(LEVEL, LEVEL_STRING, ...) \
-    do { shc_log_write(LEVEL, __func__, LEVEL_STRING "] " __VA_ARGS__); } while (0)           
+    do { shc_log_write(LEVEL, __func__, LEVEL_STRING "] " __VA_ARGS__); } while (0)
 #   define SHC_LOG_FILE_WRITE(FILENAME,LEVEL, LEVEL_STRING, ...) \
     do { shc_log_file_write(FILENAME, LEVEL, __func__, LEVEL_STRING "] " __VA_ARGS__); } while (0)
 #endif
- 
+
 //declaration
 #ifdef SHC_LOGGING_ENABLED
 void shc_log_write(shc_log_level level, const char *caller, const char *format, ...);//writes to stdout
-void shc_log_file_write(const char* filename,shc_log_level level, const char *caller, 
+void shc_log_file_write(const char* filename,shc_log_level level, const char *caller,
         const char *format, ...); //writes to log files
 
 #else
@@ -154,19 +157,19 @@ template<class T>
 void get_info_log(char * filename, T a)
 {
     T mask = 0x1;
-    T selectBit = 0x0; 
+    T selectBit = 0x0;
     T result = 0x0;
       //backward order
     for (int i = 0; i< sizeof(a)*8 ; i++)
     {
         selectBit = (((mask<<i) & a)>>i) & mask;
-        result = (result << 1) | selectBit;  
-    } 
+        result = (result << 1) | selectBit;
+    }
     //print out bit
     for (int i = 0; i< sizeof(a)*8;i++)
     {
-        shc_log_info(filename, "%d", (((mask<<i) & result)>>i) & mask);   //print out bit in backward order   
-    }   
+        shc_log_info(filename, "%d", (((mask<<i) & result)>>i) & mask);   //print out bit in backward order
+    }
 }
 
 #endif

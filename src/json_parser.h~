@@ -1,0 +1,9 @@
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
+#include <iostream>
+#include <string.h>
+#include "shc_type.h"
+#include "local_file_structure"
+#include <metis.h>
+
+void parser_setting_file(std::string & file_path, Local);

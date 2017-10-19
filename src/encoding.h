@@ -39,6 +39,8 @@
 void encode_kmer(const char * base, uint64_t *byte, uint8_t length);
 void decode_kmer(char * base, const uint64_t *byte, uint8_t length);
 
+bool is_info_ith_bit_set(uint8_t info, uint8_t i);
+
 uint64_t prepend_byte(const uint64_t * byte, uint64_t prefix, uint8_t length);
 uint64_t append_byte(const uint64_t * byte, uint64_t prefix, uint8_t length);
 

@@ -50,6 +50,56 @@ void remove_file(const boost::filesystem::path & file_path)
     boost::filesystem::remove(file_path);
 }
 
+size_t get_filesize(const std::string & filename)
+{
+    std::ifstream file_reader(filename.c_str(), std::ifstream::ate | std::ifstream::binary);
+    return file_reader.tellg();
+}
+
+size_t estimate_num_read(const std::string & filename, size_t read_length)
+{
+    std::string test_filename(filename+"test_read");    
+    std::ofstream test_file(test_filename.c_str());    
+    for (int i=0; i<TEST_NUM_READ ; i++)
+    {
+        for(int j=0; j<10; j++)
+            test_file << "H";
+        test_file << std::endl;        
+        for(int j=0; j<read_length; j++)
+            test_file << "A";
+        test_file << std::endl;        
+    }
+    test_file.close();
+    size_t byte_per_line = get_filesize(test_filename) / TEST_NUM_READ;
+    size_t estimated_lines = static_cast<size_t>
+                        (static_cast<double>(get_filesize(filename)) / 
+                         static_cast<double>(byte_per_line));
+    boost::filesystem::path test_file_path(test_filename);
+    remove_file(test_file_path);         
+    return estimated_lines;     
+}
+
+size_t estimate_num_kmer(const std::string & filename, uint8_t kmer_length)
+{
+    std::string test_filename(filename+"test_kmer");    
+    std::ofstream test_file(test_filename.c_str());    
+    for (int i=0; i<TEST_NUM_LINE ; i++)
+    {
+        for(int j=0; j<kmer_length; j++)
+            test_file << "A";
+        test_file << "\t" << 50  << std::endl;        
+    }
+    test_file.close();
+    size_t byte_per_line = get_filesize(test_filename) / TEST_NUM_LINE;
+    size_t estimated_lines = static_cast<size_t>
+                        (static_cast<double>(get_filesize(filename)) / 
+                         static_cast<double>(byte_per_line)*SIZE_MULTIPLIER);
+    boost::filesystem::path test_file_path(test_filename);
+    remove_file(test_file_path);         
+    return estimated_lines;     
+}
+
+
 void print_local_file_system(Local_files *local_files)
 {
     std::cout << "\033[1;32m";  //34 blue, 31 red, 35 purple 

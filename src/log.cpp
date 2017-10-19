@@ -1,6 +1,6 @@
 #include "log.h"
 
-char shc_logname[100] = {0};
+char shc_logname[200] = {0};
 
 void start_timer(struct Block_timer * bt)
 {
@@ -104,7 +104,7 @@ void shc_log_write(shc_log_level level, const char *caller, const char *format, 
     if (level >= filter_level)
     {
         va_list args;
-        char s[1000];
+        char s[100000];
         
         /* Write the log message */
         va_start(args, format);
@@ -141,7 +141,7 @@ void shc_log_file_write(const char* filename,shc_log_level level, const char *ca
         if (level >= filter_level)
         {
             va_list args;
-            char s[1000];
+            char s[100000];
 
             /* Write the log message */
             va_start(args, format);

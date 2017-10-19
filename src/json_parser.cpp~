@@ -1,0 +1,106 @@
+#include "json_parser.h"
+
+void parser_setting_file(std::string & file_path);
+{
+    using boost::property_tree::ptree;    
+
+    std::ifstream json_file("input.txt");
+
+    ptree pt;
+
+    boost::property_tree::json_parser::read_json(json_file, pt);
+    // top level
+    uint8_t kmer_length = pt.get<uint8_t>("kmer_length");
+    //bool has_pair = pt.get<bool>("has_pair");
+    bool is_compress = pt.get<bool>("is_compress");
+    
+    // file system
+    ptree file_structure = pt.get_child("file_structure");
+    std::string input_kmer_name = file_structure.get<std::string>("input_kmer_name");
+    std::string input_kmer_name_2 = file_structure.get<std::string>("input_kmer_name_2");
+    std::string input_read_name = file_structure.get<std::string>("input_read_name");
+    std::string input_read_name_2 = file_structure.get<std::string>("input_read_name_2");
+    std::string output_dir_name = file_structure.get<std::string>("output_dir_name");
+    std::string out_log_name = file_structure.get<std::string>("out_log_name");
+    std::string out_contig_name = file_structure.get<std::string>("out_contig_name");
+    std::string out_comp_name = file_structure.get<std::string>("out_comp_name");
+    std::string out_kmer_name = file_structure.get<std::string>("out_kmer_name");
+    bool has_pair;
+    if(input_kmer_name_2.empty() && input_read_name_2.empty())
+        has_pair = false;
+    else
+        has_pair = true;
+        
+    std::cout << "has pair " << ((has_pair)?("Yes"):("No")) << std::endl; 
+    
+    // dup_correction
+    ptree dup_correction = pt.get_child("dup_correction");
+    uint8_t rmer_length = dup_correction.get<uint8_t>("rmer_length");
+    double threshold = dup_correction.get<double>("threshold");
+    kmer_count_t min_count = dup_correction.get<kmer_count_t>("min_count");
+    size_t min_length = dup_correction.get<size_t>("min_length");
+    bool is_use_set = dup_correction.get<bool>("is_use_set");
+    
+    //metis_setup
+    ptree metis_setup = pt.get_child("metis_setup");
+    bool use_multiple_partition = metis_setup.get<bool>
+                                                    ("use_multiple_partition");
+    idx_t partition_size = metis_setup.get<idx_t>("partition_size");
+    idx_t penalty = metis_setup.get<idx_t>("penalty");
+    real_t overload = metis_setup.get<real_t>("overload");
+    
+    std::cout << static_cast<uint16_t>(kmer_length)<< std::endl;
+    std::cout << has_pair << std::endl;
+    std::cout << is_compress << std::endl;
+    
+    std::cout << input_kmer_name << std::endl;
+    std::cout << input_kmer_name_2 << std::endl;
+    std::cout << input_read_name << std::endl;
+    std::cout << input_read_name_2 << std::endl;
+    std::cout << output_dir_name << std::endl;
+    std::cout << out_log_name << std::endl;
+    
+    /*
+    for(const ptree::value_type & file: pt.get_child("file_structure"))
+    {
+        //std::string input_kmer_name = file_structure.second.get<std::string>("input_kmer_name");
+        std::cout << file.first << "\t" << file.second.data() << std::endl;
+    }
+    */
+    //auto file_structure = pt.get<auto>("file_structure"); 
+    /*
+    std::string input_kmer_name = file_structure.get<std::string>("input_kmer_name");
+    std::string input_kmer_name_2 = file_structure.get<std::string>("input_kmer_name_2");
+    std::string input_read_name = file_structure.get<std::string>("input_read_name");
+    std::string input_read_name_2 = file_structure.get<std::string>("input_read_name_2");
+    std::string output_dir_name = file_structure.get<std::string>("output_dir_name");
+    std::string out_log_name = file_structure.get<std::string>("out_log_name");
+    std::string out_contig_name = file_structure.get<std::string>("out_contig_name");
+    std::string out_comp_name = file_structure.get<std::string>("out_comp_name");
+    std::string out_kmer_name = file_structure.get<std::string>("out_kmer_name");
+
+    std::cout << static_cast<uint16_t>(kmer_length)<< std::endl;
+    std::cout << has_pair << std::endl;
+    std::cout << is_compress << std::endl;
+    */
+    
+    /*
+    std::cout << input_kmer_name << std::endl;
+    std::cout << input_kmer_name_2 << std::endl;
+    std::cout << input_read_name << std::endl;
+    std::cout << input_read_name_2 << std::endl;
+    std::cout << output_dir_name << std::endl;
+    std::cout << out_log_name << std::endl;
+    */
+    
+    /*
+    for(auto & array_element: pt) 
+    {
+            for(auto & property: array_element.second)
+                    std::cout << property.first << "\t" << property.second.get_value<std::string> () << std::endl;
+    }	
+    */
+    return 0;
+
+
+}

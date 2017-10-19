@@ -1,0 +1,43 @@
+{
+	"kmer_length": "25",
+	"has_pair":    "false",
+	"is_compress": "false",
+    
+	"file_structure": {        
+		"input_kmer_name"  : "/medium.dict",
+		"input_kmer_name_2": "",
+		"input_read_name"  : "/medium.fasta",
+		"input_read_name_2": "",
+		"output_dir_name"  : "/output",
+		"out_log_name"     : "/default_shannonC_log",
+		"out_contig_name"  : "/contig",
+		"out_comp_name"    : "/component_array",
+		"out_kmer_name"    : "/kmer"
+	},
+
+	"dup_correction" : {
+		"rmer_length": "15",
+		"threshold":   "0.5",
+		"min_count":   "3",
+		"min_length":  "75",
+		"is_use_set":  "false"
+	},
+
+	"metis_setup" : {
+		"use_multiple_partition": "false",
+		"partition_size": 	  "500",
+		"penalty":		  "5",
+		"overload":		  "1.5"
+	},	
+
+	"output_setup" : {
+		"kmer_with_info":	  "true",
+		"contig":		  "true",
+		"component_array":	  "true",
+		"read_to_component":	  "true",
+		"kmer_to_component": 	  "true"
+	}
+}
+ 
+
+

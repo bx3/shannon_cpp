@@ -40,8 +40,6 @@
 //to a signed type
 #define SPARSEHASH_DELETE_KEY (std::pow(2,(sizeof(uint64_t)*8)-1)-2) 
 #define SPARSEHASH_EMPTY_KEY (std::pow(2,(sizeof(uint64_t)*8)-2)-1) 
-#define TEST_NUM_LINE 5000
-#define SIZE_MULTIPLIER 1.15
 
 typedef std::pair<uint64_t, kmer_count_t> Kmer_Occurence_Pair;
 
@@ -54,6 +52,8 @@ struct Kmer_sorter {
 class Kmer_handler {
     friend class Contig_handler;
     friend class Contig_graph_handler;
+    friend class Sequence_graph_handler;
+    friend class Multibridge_handler;
 public:
     Kmer_handler(Local_files * lfp);        
     Kmer_handler(uint8_t length, kmer_count_t min_count_p, 
@@ -99,10 +99,7 @@ public:
         
     void delete_kmer_for_contig(uint8_t * contig_start, Contig_handler::size_type contig_len);    
     
-    void get_contig_handler(Contig_handler * c_handler);     
-    
-    std::ifstream::pos_type filesize(const std::string & filename);
-    size_t estimate_num_kmer(const std::string & filename);
+    void get_contig_handler(Contig_handler * c_handler);                
     
     uint8_t get_kmer_length();
     uint8_t get_kmer_length_from_file(const std::string& filename);

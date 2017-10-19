@@ -45,6 +45,18 @@ void decode_kmer(char *base, const uint64_t *byte, uint8_t length)
     }
 }
 
+bool is_info_ith_bit_set(uint8_t info, uint8_t i)
+{
+    if (i==1)
+    {
+        return (info & (uint8_t)(SHC_B1))>0;
+    }
+    else
+    {
+        return (info & (((uint8_t)(SHC_B1))<<(i-1)))>0;
+    }
+}
+
 // for base less than or equal to 4, length exclude \0
 uint8_t encode(const char * base, int length)
 {

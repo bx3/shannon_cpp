@@ -33,11 +33,11 @@ Kmer_handler::Kmer_handler(uint8_t length, kmer_count_t min_count,
     dup_setting.is_use_set = is_use_set;
     kmer_counter.set_deleted_key(SPARSEHASH_DELETE_KEY);   
     kmer_counter.set_empty_key(SPARSEHASH_EMPTY_KEY);
-    size_t num_kmer = estimate_num_kmer(lf->input_kmer_path);    
+    size_t num_kmer = estimate_num_kmer(lf->input_kmer_path, kmer_length);    
    
     if(lf->has_pair)
     {
-        num_kmer += estimate_num_kmer(lf->input_kmer_path);    
+        num_kmer += estimate_num_kmer(lf->input_kmer_path_2, kmer_length);    
     }
 
     num_kmer *= 2;
@@ -908,12 +908,6 @@ bool Kmer_handler::use_list_to_filter(kmer_count_t mean_count, Contig_handler::s
     }    
 }
 
-std::ifstream::pos_type Kmer_handler::filesize(const std::string & filename)
-{
-    std::ifstream file_reader(filename.c_str(), std::ifstream::ate | std::ifstream::binary);
-    return file_reader.tellg();
-}
-
 /**
 * This function should only be used if kmer_length is set.
 */
@@ -938,27 +932,6 @@ uint8_t Kmer_handler::get_kmer_length_from_file(const std::string& filename)
         exit(1);
     }               
 }
-
-size_t Kmer_handler::estimate_num_kmer(const std::string & filename)
-{
-    std::string test_filename("test");    
-    std::ofstream test_file(test_filename.c_str());    
-    for (int i=0; i<TEST_NUM_LINE ; i++)
-    {
-        for(int j=0; j<kmer_length; j++)
-            test_file << "A";
-        test_file << "\t" << 50  << std::endl;        
-    }
-    test_file.close();
-    size_t byte_per_line = filesize(test_filename) / TEST_NUM_LINE;
-    size_t estimated_lines = static_cast<size_t>
-                        (static_cast<double>(filesize(filename)) / 
-                         static_cast<double>(byte_per_line)*SIZE_MULTIPLIER);
-    boost::filesystem::path test_file_path(test_filename);
-    remove_file(test_file_path);         
-    return estimated_lines;     
-}
-
 
 
 /**
