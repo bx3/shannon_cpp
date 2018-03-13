@@ -1,16 +1,218 @@
 #include "Contig_graph_handler.h"
 
+uint8_t get_num_bit[ 256 ] = {
+    0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
+    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+    3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+    3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+    3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+    3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+    4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8
+};
+
 size_t contig_curr_proc = 0;
 size_t contig_prev_proc = 0;
 
-struct Block_timer cgh_timer;
+uint64_t total_length = 0;
+uint64_t total_query=0 ;
+uint64_t total_update=0 ;
+uint64_t conn_size = 0;
+uint64_t total_bit_set_query = 0;
 
-void Contig_graph_handler::remove_read_duplicate(std::string out_dir_path)
+struct Block_timer cgh_timer;
+struct Block_timer local_timer;
+struct Block_timer metis_timer;
+
+struct Block_timer get_set_timer;
+
+
+void Contig_graph_handler::run_contig_graph_handler()
 {
-    int i;
-    std::string command("fastx_collapser -i ");
-    command = command + lf->input_read_path + " -o " + out_dir_path;
-    system(command.c_str());    
+    // partition contig
+    struct Block_timer cgh_main_timer;
+    start_timer(&cgh_main_timer);
+    std::cout << "start group contig " <<  std::endl;
+    group_components();
+    shc_log_info(shc_logname, "finish group contig\n");
+    log_stop_timer(&cgh_main_timer);
+#ifdef SHOW_PROGRESS
+    std::cout << "finish group contig, ";
+    stop_timer(&cgh_main_timer);
+#endif
+    dump_component_array(setting.local_files.output_comp_path);
+
+    add_or_overwrite_directory(lf.output_components_read_dir);
+
+    fasta_dumper.setup_dump_files(component_size);
+
+    // assigning reads
+    if(setting.has_single)
+    {
+        start_timer(&cgh_main_timer);
+        std::cout << "start assigning single read " << std::endl;
+        //assign_reads_to_components(setting.local_files.input_read_path);
+        assign_reads_to_components_mmap(setting.local_files.input_read_path);
+        shc_log_info(shc_logname, "finish assigning single read\n");
+        log_stop_timer(&cgh_main_timer);
+#ifdef SHOW_PROGRESS
+        std::cout << "assigning single read, ";
+        stop_timer(&cgh_main_timer);
+#endif
+    }
+    if(setting.has_pair)
+    {
+        start_timer(&cgh_timer);
+        std::cout << "start assigning paired read " << std::endl;
+        assign_paired_read_to_components_mmap(
+                            setting.local_files.input_read_path_1,
+                            setting.local_files.input_read_path_2);
+        //assign_paired_read_to_components(
+        //                    setting.local_files.input_read_path_1,
+        //                    setting.local_files.input_read_path_2);
+        shc_log_info(shc_logname, "finish assigning paired read\n");
+        log_stop_timer(&cgh_timer);
+#ifdef SHOW_PROGRESS
+        std::cout << "assigning paired read, ";
+        stop_timer(&cgh_timer);
+#endif
+    }
+    fasta_dumper.finalize_dump_files();
+    // dumping kmers
+    start_timer(&cgh_timer);
+    std::cout << "start assigning kmer" << std::endl;
+
+    kmer_dumper.setup_dump_files(component_size);
+    assign_kmer_to_components();
+    shc_log_info(shc_logname, "finish assigning kmer\n");
+    log_stop_timer(&cgh_timer);
+#ifdef SHOW_PROGRESS
+    std::cout << "finish assigning kmer, ";
+    stop_timer(&cgh_timer);
+#endif
+}
+
+//return true when graph is needed, false if it is ok
+bool Contig_graph_handler::
+assign_comp_without_graph()
+{
+    while(!contig_stack.empty())
+    {
+        contig_num_t i = contig_stack.back();
+        conn_contig_set.set_conn_contig(i);
+        contig_stack.pop_back();
+        char * base_start;
+        uint64_t len;
+        ch->get_contig(i, base_start, len);
+        //shc_log_info(shc_logname, "new contig\n");
+        total_length += len;
+        //vd_t curr_vd;
+        //assert(contig_vertex_map.get_contig_vd(i, curr_vd));
+
+        for(Contig_handler::size_type j=0; j<len-kmer_length+1;   j++)
+        {
+            //if(j%setting.contig_graph_setup.down_sample == 0)
+            //{
+            uint64_t byte;
+            encode_kmer(base_start+j, &byte, kmer_length);
+            Kmer_counter_map_iterator it = kh->kmer_counter.find(byte);
+
+            if(j==0 || j==len-kmer_length)
+            {
+                if(get_num_bit[it->second.info] == 1)
+                    continue;
+            }
+            else
+            {
+                if(get_num_bit[it->second.info] == 2)
+                    continue;
+            }
+
+            char next_letter, before_letter;
+            if(j==0)
+            {
+                before_letter = ANY_LETTER;
+            }
+            else
+            {
+                before_letter = *(base_start+j -1);
+            }
+
+            if(j!=len-kmer_length)
+            {
+                next_letter = *(base_start+j+kmer_length);
+            }
+            else
+            {
+                next_letter = ANY_LETTER;
+            }
+            get_connected_contig_index_without_graph(it, contig_stack,
+                            before_letter, next_letter);
+        }
+        if(conn_contig_set.num_contig > metis_setup.partition_size)
+        {
+            for(contig_num_t i=0; i<conn_contig_set.num_contig; i++ )
+            {
+
+                //shc_log_warning("partition_size %u\n",(metis_setup.partition_size));
+                //shc_log_warning("num contig %u\n",(conn_contig_set.num_contig));
+                //shc_log_warning("%u\n",(conn_contig_set.connected_contig)[i]);
+                explorable_contig_set.erase_explored(
+                            (conn_contig_set.connected_contig)[i]);
+            }
+            conn_contig_set.reset();
+
+            return true; // graph is needed
+        }
+    }
+    conn_size += conn_contig_set.num_contig;
+    //std::cout << "conn_contig_set size " << conn_contig_set.size() << std::endl;
+#ifdef LOG_CONTIG_GRAPH
+    shc_log_info(shc_logname, "no metis\n");
+#endif
+    if(!is_set_collect_comp_num)
+    {
+        collect_comp_num = curr_component_num;
+        std::string simple_comp(SIMPLE_COMPONENT);
+        component_type.push_back(simple_comp);
+        accum_collect_contig_num = 1;
+        curr_component_num++;
+        is_set_collect_comp_num = true;
+#ifdef LOG_CONTIG_GRAPH
+        shc_log_info(shc_logname, "start comp %d\n", curr_component_num);
+#endif
+    }
+
+    //update contig to component info
+    for(contig_num_t i=0; i<conn_contig_set.num_contig; i++ )
+    {
+        //shc_log_warning("%u\n",(conn_contig_set.connected_contig)[i]);
+        component_array[(conn_contig_set.connected_contig)[i]] = collect_comp_num;
+        accum_collect_contig_num++;
+    }
+
+    // start with a new component number
+    if (accum_collect_contig_num >= give_up_num)
+    {
+#ifdef LOG_CONTIG_GRAPH
+        shc_log_info(shc_logname, "component %u has %d no-metis contig\n",
+                        collect_comp_num, accum_collect_contig_num);
+#endif
+        is_set_collect_comp_num = false;
+#ifdef LOG_CONTIG_GRAPH
+    shc_log_info(shc_logname, "start a new collect component\n");
+#endif
+    }
+    conn_contig_set.reset();
+    return false;
 }
 
 
@@ -18,20 +220,24 @@ void Contig_graph_handler::group_components()
 
 {
     shc_log_info(shc_logname, "Start constructing contig graph\n");
-    Kmer_counter_map_iterator it;
     char kmer_array[33];
-    kmer_array[kh->kmer_length] = '\0';
+    kmer_array[kmer_length] = '\0';
     uint64_t byte = 0;
+    Block_timer progress_timer;
+    start_timer(&progress_timer);
 
-    //put every contig into the set
-    for(contig_num_t i=0; i<ch->num_contig; i++)
-        explorable_contig_set.insert(i);
+
+    Block_timer test_timer;
+    uint64_t num_graph = 0;
+    uint64_t num_non_graph = 0;
+    uint64_t num_conn = 0;
 
     start_timer(&cgh_timer);
-    while(!explorable_contig_set.empty())
+    while(!explorable_contig_set.is_explore_all())
     {
 #ifdef LOG_CONTIG_GRAPH
-        shc_log_info(shc_logname, "\t\t\t\t\t#processing component %u\n",curr_component_num);
+        shc_log_info(shc_logname, "\t\t\t\t\t#processing component %u\n",
+                                                            curr_component_num);
 #endif
 #ifdef SHOW_PROGRESS
         if((contig_curr_proc-contig_prev_proc) > CONTIG_PROGRESS_STEP)
@@ -39,66 +245,166 @@ void Contig_graph_handler::group_components()
             int percentage = (100 * contig_curr_proc)/(ch->num_contig);
             std::cout << "[" << percentage << "%] " <<  contig_curr_proc
                  << " contig out of " <<   ch->num_contig
-                 << " is processed" << std::endl;
+                 << " is processed, contig len processed " << total_length
+                 << ", total_query " << total_query
+                 << ", num graph " << num_graph
+                 << ", num non graph " << num_non_graph
+                 << ", conn_size "  << conn_size
+                 << ", total_bit_set_query " << total_bit_set_query
+                 << ", total_update " << total_update
+                 << std::endl;
+
+            shc_log_info(shc_logname, "[ %d %], %d  contig out of %d "
+                        "is processed, contig len processed %d, total_query %d, "
+                        "num graph %u, num non graph %u, num conn_size %u, "
+                        "total_bit_set_query %u, total_update %u \n",
+                        percentage, contig_curr_proc, ch->num_contig, total_length,
+                        total_query, num_graph, num_non_graph, conn_size,
+                        total_bit_set_query, total_update);
+            conn_size = 0;
+            num_graph = 0;
+            num_non_graph = 0;
+            total_bit_set_query = 0;
             contig_prev_proc = contig_curr_proc;
+            total_update = 0;
+            stop_timer(&progress_timer);
+            log_stop_timer(&progress_timer);
+            start_timer(&progress_timer);
+            total_query=0;
+            total_length = 0;
+            get_set_timer.time_us = 0;
         }
 #endif
+        //accurate_start_timer(&get_set_timer);
+        contig_num_t root_contig = explorable_contig_set.get_set_next_explorable_contig();
+        //accurate_accumulate_timer(&get_set_timer);
+        contig_stack.clear();
+        contig_stack.push_back(root_contig);
 
-        contig_num_t root_contig = *explorable_contig_set.begin();
-        contig_stack.push(root_contig);
-        explorable_contig_set.erase(explorable_contig_set.begin());
-
-        // add that node, so each graph has at least one node
-        if(contig_vertex_map.find(root_contig) == contig_vertex_map.end())
+        if(assign_comp_without_graph()) //
         {
-            vd_t vd = boost::add_vertex(graph);
-            contig_vertex_map[root_contig] = vd;
-            graph[vd] = bundled_contig_index(root_contig);
-            //shc_log_info(shc_logname, "Root contig %u with vd %u\n", root_contig, vd);
+            num_graph++;
+            contig_stack.clear();
+            contig_stack.push_back(root_contig);
+            assign_comp_with_graph();
+            std::cout << "assigne comp with graph" << std::endl;
         }
-
-        //explore that contig and find new contig
-        while(!contig_stack.empty())
+        else
         {
-            contig_num_t i = contig_stack.top();
-            contig_stack.pop();
-
-            Contig_handler::Contig_base_info contig_info =
-                    ch->get_contig(i);
-
-            for(Contig_handler::size_type j=0;
-                j<ch->contig_len_list.at(i)-kh->kmer_length+1;   j++)
-            {
-                memcpy(kmer_array, contig_info.base_start+j, kh->kmer_length);
-                encode_kmer(contig_info.base_start+j, &byte, kh->kmer_length);
-
-                //shc_log_info(shc_logname, "%s\n", kmer_array);
-
-                it = kh->kmer_counter.find(byte);
-                if(it == kh->kmer_counter.end())
-                {
-                    shc_log_error("contain impossible kmer %s\n", kmer_array);
-                    exit(1);
-                }
-                get_connected_contig_index(it);
-            }
+            num_non_graph++;
         }
-        contig_curr_proc = ch->num_contig - explorable_contig_set.size();
-        //up to here we have a component and its graph
-        break_and_keep_component();
-        graph.clear();
-        contig_vertex_map.clear();
+        num_conn ++;
+        contig_curr_proc = explorable_contig_set.num_explored_contig;
     }
 
+    count_component_size();
+
 #ifdef SHOW_PROGRESS
-    std::cout << "Finish finding component, ";
+    std::cout << "Finish finding " << curr_component_num << " component, ";
     stop_timer(&cgh_timer);
 #endif
-
     shc_log_info(shc_logname, "Finish constructing contig graph\n");
 }
 
-void Contig_graph_handler::break_and_keep_component()
+void Contig_graph_handler::assign_comp_with_graph()
+{
+    // add that node, so each graph has at least one node
+    Contig_vertex_map contig_vertex_map(ch->num_contig);
+    graph_t graph;
+    vd_t vd = boost::add_vertex(graph);
+    contig_vertex_map.set_contig_vd(contig_stack.back(), vd);
+    graph[vd] = bundled_contig_index(contig_stack.back());
+    //accurate_start_timer(&test_timer);
+    //explore that contig and find new contig
+    while(!contig_stack.empty())
+    {
+        contig_num_t i = contig_stack.back();
+        contig_stack.pop_back();
+
+        char * base_start;
+        uint64_t len;
+        ch->get_contig(i, base_start, len);
+
+        //shc_log_info(shc_logname, "new contig\n");
+        total_length += len;
+
+        vd_t curr_vd;
+        assert(contig_vertex_map.get_contig_vd(i, curr_vd));
+
+        for(Contig_handler::size_type j=0;
+            j<len-kmer_length+1;   j++)
+        {
+            //if(j%setting.contig_graph_setup.down_sample == 0)
+            //{
+            uint64_t byte;
+            encode_kmer(base_start+j, &byte, kmer_length);
+            Kmer_counter_map_iterator it = kh->kmer_counter.find(byte);
+
+            if(j==0 || j==len-kmer_length)
+            {
+                if(get_num_bit[it->second.info] == 1)
+                    continue;
+            }
+            else
+            {
+                if(get_num_bit[it->second.info] == 2)
+                    continue;
+            }
+
+            char next_letter, before_letter;
+            if(j==0)
+                before_letter = ANY_LETTER;
+            else
+                before_letter = *(base_start+j -1);
+            if(j!=ch->contig_len_list.at(i)-kmer_length)
+                next_letter = *(base_start+j+kmer_length);
+            else
+                next_letter = ANY_LETTER;
+            get_connected_contig_index(it, graph, contig_vertex_map, contig_stack,
+                            curr_vd, before_letter, next_letter);
+        }
+    }
+    break_and_keep_component(graph);
+    graph.clear();
+}
+
+void Contig_graph_handler::count_component_size()
+{
+    component_size.resize(curr_component_num, 0);
+
+    for(int i=0; i<component_array.size(); i++)
+    {
+        Contig_handler::size_type contig_len = ch->contig_len_list.at(i);
+        comp_num_t comp_i = component_array[i];
+        comp_num_t comp_i_aux = component_array_aux[i];
+        if(comp_i < curr_component_num) //is valid components
+        {
+            component_size[comp_i] += contig_len;
+        }
+        if(comp_i_aux < curr_component_num) //is valid components
+        {
+            component_size[comp_i_aux] += contig_len;
+        }
+    }
+    //for(std::vector<uint64_t>::iterator it=component_size.begin();
+    //                it!=component_size.end(); it++)
+    //{
+    //    shc_log_info(shc_logname, "%u\n", *it);
+    //}
+
+    if(setting.has_single)
+    {
+        num_read_files += curr_component_num;
+        num_kmer_files += curr_component_num;
+    }
+    if(setting.has_pair)
+    {
+        num_read_files += curr_component_num*2;
+        num_kmer_files += curr_component_num;
+    }
+}
+
+void Contig_graph_handler::break_and_keep_component(graph_t & graph)
 {
     typedef std::pair<vi_t, vi_t> vip_t;
     idx_t num_vertices = boost::num_vertices(graph);
@@ -108,45 +414,97 @@ void Contig_graph_handler::break_and_keep_component()
 #ifdef LOG_CONTIG_GRAPH
         shc_log_info(shc_logname, "no metis\n");
 #endif
+        shc_log_error("should not enter here\n");
+        exit(1);
+
         if(!is_set_collect_comp_num)
         {
             collect_comp_num = curr_component_num;
+            std::string simple_comp(SIMPLE_COMPONENT);
+            component_type.push_back(simple_comp);
+            accum_collect_contig_num = 1;
             curr_component_num++;
             is_set_collect_comp_num = true;
+#ifdef LOG_CONTIG_GRAPH
+            shc_log_info(shc_logname, "start comp %d\n", curr_component_num);
+#endif
         }
 
-        vip_t vip = vertices(graph);
+        std::pair<vi_t, vi_t> vip = boost::vertices(graph);
         //update contig to component info
         for(vi_t it=vip.first; it!=vip.second; it++)
         {
             component_array[graph[*it].contig_index] = collect_comp_num;
-            //shc_log_info(shc_logname, "component %u has contig %u\n", curr_component_num, graph[*it].contig_index);
+            accum_collect_contig_num++;
+        }
+        // start with a new component number
+        if (accum_collect_contig_num >= non_partition_size)
+        {
+            shc_log_info(shc_logname, "component %u has %d no-metis contig\n",
+                            collect_comp_num, accum_collect_contig_num);
+
+            shc_log_info(shc_logname, "num_edges %d, num nodes %d\n",
+                     boost::num_edges(graph), boost::num_vertices(graph));
+            is_set_collect_comp_num = false;
+#ifdef LOG_CONTIG_GRAPH
+        shc_log_info(shc_logname, "start a new collect component\n");
+#endif
         }
     }
     else        //call metis
     {
-#ifdef LOG_METIS
+//#ifdef LOG_METIS
         shc_log_info(shc_logname, "Starting metis \n");
-#endif
-        create_metis_array_input();
+//#endif
+        shc_log_info(shc_logname, "num_edges %d, num nodes %d\n",
+                     boost::num_edges(graph), boost::num_vertices(graph));
+
+        create_metis_array_input(graph);
         metis_setup.num_vertices = num_vertices;
-        metis_setup.num_partition = std::min(static_cast<idx_t>(100),
-                num_vertices/metis_setup.partition_size + 1);
+
+        idx_t partition = static_cast<idx_t>(
+                std::ceil(static_cast<float>(num_vertices)/
+                          static_cast<float>(metis_setup.partition_size)));    //note
+        //std::cout << "num vertices " << num_vertices << std::endl;
+        //std::cout << "partition size " << metis_setup.partition_size << std::endl;
+        //std::cout << "partition to " << partition << std::endl;
+
+        metis_setup.num_partition = std::min(static_cast<idx_t>(100), partition);
         //shc_log_info(shc_logname, "metis to asked to break %d partition\n", metis_setup.num_partition);
         idx_t ufactor = static_cast<idx_t>(METIS_IMBALANCE_PRECISION
                                                    * (metis_setup.overload-1));
+        METIS_SetDefaultOptions(metis_setup.options);
         metis_setup.options[METIS_OPTION_UFACTOR] = ufactor;
         metis_setup.options[METIS_OPTION_NUMBERING] = 0;
 
-        std::vector<idx_t> part(metis_setup.num_vertices);
+        std::vector<idx_t> part;
 
-        run_single_pass_metis(component_array, &part);
+        run_metis_and_assign_comp(graph, component_array, part);
+        for(int i=0; i<metis_setup.num_partition; i++)
+        {
+            std::string complex(COMPLEX_COMPONENT);
+            component_type.push_back(complex + std::to_string(num_complex_comp));
+        }
+
         if(metis_setup.is_multiple_partition)
         {
-            add_weight_to_cut_and_update_graph(&part);
-            run_single_pass_metis(component_array_aux, &part);
+            shc_log_info(shc_logname, "Starting repartition\n");
+            add_weight_to_cut_and_update_graph(graph, &part);
+            create_metis_array_input(graph);
+            run_metis_and_assign_comp(graph, component_array_aux, part);
+
+            for(int i=0; i<metis_setup.num_partition; i++)
+            {
+                std::string re_partition(RE_PARTITION);
+                std::string complex(COMPLEX_COMPONENT);
+                component_type.push_back(re_partition+complex+std::to_string(num_complex_comp));
+            }
+            shc_log_info(shc_logname, "Finish repartition\n");
         }
-        std::vector<idx_t>().swap(part);
+        num_complex_comp++;
+
+        //std::string contig_file = setting.local_files.output_path + "/contig_file";
+        //log_contigs(contig_file);
     }
 #ifdef LOG_CONTIG_GRAPH
     shc_log_info(shc_logname, "end\n");
@@ -154,13 +512,35 @@ void Contig_graph_handler::break_and_keep_component()
 
 }
 
-void Contig_graph_handler::run_single_pass_metis(std::vector<comp_num_t> & array, std::vector<idx_t> * part)
+void Contig_graph_handler::run_metis_and_assign_comp(graph_t & graph, std::vector<comp_num_t> & array,
+                                                std::vector<idx_t> & part)
 {
-    int ret = METIS_PartGraphRecursive(
+    idx_t num_vertices = boost::num_vertices(graph);
+    part.resize(num_vertices*2);
+    /*
+    shc_log_info(shc_logname, "hello0\n");
+    shc_log_info(shc_logname, "num of edges %d\n", boost::num_edges(graph));
+    shc_log_info(shc_logname, "metis_setup.num_vertices %d\n", metis_setup.num_vertices);
+    shc_log_info(shc_logname, "metis_setup.ncon %d\n", metis_setup.ncon);
+    shc_log_info(shc_logname, "metis_input.xadj size %d\n", metis_input.xadj.size());
+    shc_log_info(shc_logname, "metis_input.adjncy. size %d\n", metis_input.adjncy.size());
+    shc_log_info(shc_logname, "metis_input.adjwgt. size %d\n", metis_input.adjwgt.size());
+    shc_log_info(shc_logname, "metis_setup.num_partition  %d\n", metis_setup.num_partition);
+
+    for(int i=0; i<metis_input.xadj.size(); i++)
+        shc_log_info(shc_logname, "xadj %d\n", metis_input.xadj[i]);
+    for(int i=0; i<metis_input.adjncy.size(); i++)
+        shc_log_info(shc_logname, "adjncy %d, adjwgt %d\n", metis_input.adjncy[i],
+                                                    metis_input.adjwgt[i]);
+    shc_log_info(shc_logname, "part. size %d\n", part.size());
+    */
+    //shc_log_info(shc_logname, "before running metis\n");
+    int ret = METIS_PartGraphKway(
           &metis_setup.num_vertices, &metis_setup.ncon,
           &metis_input.xadj.at(0), &metis_input.adjncy.at(0),
           NULL, NULL, &metis_input.adjwgt.at(0), &metis_setup.num_partition,
-          NULL, NULL, NULL, &metis_setup.objval, &part->at(0));
+          NULL, NULL, metis_setup.options, &metis_setup.objval, &part.at(0));
+    //shc_log_info(shc_logname, "after running metis\n");
 
     if(ret == METIS_ERROR_INPUT)
         shc_log_error("METIS_ERROR_INPUT\n");
@@ -172,28 +552,34 @@ void Contig_graph_handler::run_single_pass_metis(std::vector<comp_num_t> & array
 #ifdef LOG_METIS
     shc_log_info(shc_logname, "metis breaks to %d partition\n", metis_setup.num_partition);
 #endif
-
     for(idx_t i=0; i<metis_setup.num_vertices; i++)
     {
+        //shc_log_info(shc_logname, "contig index %u has comp %u\n",
+        //        graph[static_cast<vd_t>(i)].contig_index,
+        //        curr_component_num + part.at(i));
         array[graph[static_cast<vd_t>(i)].contig_index] =
-                                             curr_component_num + part->at(i);
+        curr_component_num + part.at(i);
     }
+    //log_comp_content();
 
     curr_component_num += metis_setup.num_partition;
 }
 
-void Contig_graph_handler::add_weight_to_cut_and_update_graph(std::vector<idx_t> * part)
+void Contig_graph_handler::add_weight_to_cut_and_update_graph(graph_t & graph, std::vector<idx_t> * part)
 {
+#ifdef LOG_CONTIG_GRAPH
+    shc_log_info(shc_logname, "Start readjust graph\n");
+#endif
     typename boost::graph_traits < graph_t >::adjacency_iterator vi, vi_end;
     std::pair<ed_t, bool> aer;
-    std::pair<vi_t, vi_t> vip = vertices(graph);
+    std::pair<vi_t, vi_t> vip = boost::vertices(graph);
     //walk through adj list, and update if
     for(vi_t it=vip.first; it!=vip.second; it++)
     {
         vd_t vd_source = *it;
         idx_t source_comp = part->at(static_cast<idx_t>(vd_source));
         for (boost::tie(vi, vi_end)=boost::adjacent_vertices(vd_source, graph);
-                vi != vi_end; ++vi)
+                                                vi != vi_end; ++vi)
         {
             idx_t adj_comp = part->at(static_cast<idx_t>(*vi));
             if(adj_comp != source_comp)
@@ -204,49 +590,125 @@ void Contig_graph_handler::add_weight_to_cut_and_update_graph(std::vector<idx_t>
             }
         }
     }
-    create_metis_array_input();
+#ifdef LOG_CONTIG_GRAPH
+    shc_log_info(shc_logname, "Finish readjust graph\n");
+#endif
 }
 
-/*
-if(aer.second)
-    {
-        graph[aer.first].weight++;
-    }
-*/
-
-void Contig_graph_handler::get_connected_contig_index(
-                                                Kmer_counter_map_iterator & it)
+void Contig_graph_handler::
+get_connected_contig_index_without_graph( Kmer_counter_map_iterator & it,
+      std::vector<contig_num_t> & contig_stack,
+      char left_letter, char right_letter)
 {
     contig_num_t contigA_index, contigB_index;
     uint64_t next_byte = 0;
+    if (it == kh->kmer_counter.end())
+    {
+        shc_log_error("contig contains unknown kmer\n");
+        exit(1);
+    }
     contigA_index = it->second.contig;
     // for that kmer, check what extension available to it
-    for(uint8_t i=1; i<= BIT_PER_BYTE; i++)
+
+    for(uint8_t i=0; i< BIT_PER_BYTE; i++)
     {
-        if(is_info_ith_bit_set(it->second.info, i))
+        total_bit_set_query++;
+        if(IS_BIT_I_SET(it->second.info, i))
         {
-            //shc_log_info(shc_logname, "%lld : %u bit is set \n",it->first, i);
-            if(i<=PREFIX_OFFSET)
-                next_byte = prepend_byte(&(it->first), i-1, kh->kmer_length);
+
+            if(i<PREFIX_OFFSET)
+            {
+                if(left_letter == num_to_char[i]) // already in the contig
+                    continue;
+                next_byte = prepend_byte(&(it->first), i, kmer_length);
+            }
             else
-                next_byte = append_byte(&(it->first), i-1-PREFIX_OFFSET, kh->kmer_length);
+            {
+                if(right_letter == num_to_char[i-PREFIX_OFFSET])
+                    continue;
+                next_byte = append_byte(&(it->first), i-PREFIX_OFFSET, kmer_length);
+            }
+            total_query++;
+            Kmer_counter_map_iterator kmer_it = kh->kmer_counter.find(next_byte);
+            if (kmer_it != kh->kmer_counter.end())
+            {
+                total_update++;
+                contigB_index = kmer_it->second.contig;
+                if (contigA_index != contigB_index)
+                {
+
+                    conn_contig_set.set_conn_contig(contigB_index);
+
+                    if(explorable_contig_set.is_explorable(contigB_index))
+                    {
+                        //if contigB_index is found
+                        contig_stack.push_back(contigB_index);
+                        explorable_contig_set.set_explored(contigB_index);
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+void Contig_graph_handler::
+get_connected_contig_index( Kmer_counter_map_iterator & it, graph_t & graph,
+     Contig_vertex_map & contig_vertex_map, std::vector<contig_num_t> & contig_stack,
+     vd_t curr_vd, char left_letter, char right_letter)
+{
+    contig_num_t contigA_index, contigB_index;
+    uint64_t next_byte = 0;
+    if (it == kh->kmer_counter.end())
+    {
+        shc_log_error("contig contains unknown kmer\n");
+        exit(1);
+    }
+    contigA_index = it->second.contig;
+    // for that kmer, check what extension available to it
+
+    for(uint8_t i=0; i< BIT_PER_BYTE; i++)
+    {
+        total_bit_set_query++;
+        if(IS_BIT_I_SET(it->second.info, i))
+        {
+
+            if(i<PREFIX_OFFSET)
+            {
+                if(left_letter == num_to_char[i]) // already in the contig
+                    continue;
+                next_byte = prepend_byte(&(it->first), i, kmer_length);
+            }
+            else
+            {
+                if(right_letter == num_to_char[i-PREFIX_OFFSET])
+                    continue;
+                next_byte = append_byte(&(it->first), i-PREFIX_OFFSET, kmer_length);
+            }
+            //decode_kmer(base, &(it->first), kmer_length);
+            //decode_kmer(next_base, &next_byte, kmer_length);
+            //shc_log_info(shc_logname, "%s has %u bit set, and next kmer %s \n",
+            //                                            base, i, next_base);
+
             //in case the matched kmer is deleted since that does not belong
             //to any contig or that contig is deleted
-            if (kh->kmer_counter.find(next_byte) != kh->kmer_counter.end())
+            total_query++;
+            Kmer_counter_map_iterator kmer_it = kh->kmer_counter.find(next_byte);
+            if (kmer_it != kh->kmer_counter.end())
             {
-                contigB_index = kh->kmer_counter[next_byte].contig;
+                total_update++;
+                contigB_index = kmer_it->second.contig;
                 if (contigA_index != contigB_index)
                 {
                     //shc_log_info(shc_logname, "Find new contig %u, before increment edge with me %u\n", contigB_index, contigA_index);
-                    increment_edge_weight(contigA_index, contigB_index);
-                    //shc_log_info(shc_logname, "AFter increment");
-                    if (explorable_contig_set.find(contigB_index) !=
-                        explorable_contig_set.end())
+
+                    update_graph(contig_vertex_map, graph, curr_vd, contigB_index);
+
+                    if(explorable_contig_set.is_explorable(contigB_index))
                     {
                         //if contigB_index is found
-                        contig_stack.push(contigB_index);
-                        explorable_contig_set.erase(contigB_index);
-                        //shc_log_info(shc_logname, "%u is pushed to search stack\n", contigB_index);
+                        contig_stack.push_back(contigB_index);
+                        explorable_contig_set.set_explored(contigB_index);
                     }
                 }
             }
@@ -260,90 +722,93 @@ void Contig_graph_handler::get_connected_contig_index(
  * @param i
  * @param j
  */
-void Contig_graph_handler::increment_edge_weight(contig_num_t i, contig_num_t j)
+void Contig_graph_handler::
+update_graph(Contig_vertex_map & contig_vertex_map, graph_t & graph, vd_t vd_i, contig_num_t j)
 {
-    //add nodes if needed
-    vd_t vd;
-    bool is_wihtout = contig_vertex_map.find(i) == contig_vertex_map.end();
-    if(is_wihtout)
-    {
-        //shc_log_info(shc_logname, "without %u\n", i);
-        vd = boost::add_vertex(graph);
-        contig_vertex_map[i] = vd;
-        graph[vd] = bundled_contig_index(i);
-#ifdef LOG_CONTIG_GRAPH
-        shc_log_info(shc_logname, "Added contig %u with vd %u\n", i, vd);
-#endif
-    }
-    is_wihtout = contig_vertex_map.find(j) == contig_vertex_map.end();
-
-    if(is_wihtout)
+    vd_t vd_j, it_j;
+    ;
+    //check if we need to add j
+    if(!contig_vertex_map.get_contig_vd(j, vd_j))
     {
         //shc_log_info(shc_logname, "without %u\n", j);
-        vd = boost::add_vertex(graph);
-        contig_vertex_map[j] = vd;
-        graph[vd] = bundled_contig_index(j);
+        vd_j = boost::add_vertex(graph);
+        contig_vertex_map.set_contig_vd(j, vd_j) ;
+        graph[vd_j] = bundled_contig_index(j);
 #ifdef LOG_CONTIG_GRAPH
         shc_log_info(shc_logname, "Added contig %u with vd %u\n", j, vd);
 #endif
     }
 
-    std::pair<ed_t, bool> aer;
-
-    aer = boost::edge(contig_vertex_map[i], contig_vertex_map[j], graph);
+    // note: in boost graph if it is an undirectedS, and edge between vd_i and
+    // vd_j exists, then check on vd_j and vd_i shows true
+    std::pair<ed_t, bool> aer = boost::edge(vd_i, vd_j, graph);
     if(aer.second)
     {
-        graph[aer.first].weight++;
+        (graph[aer.first].weight)++;
 
 #ifdef LOG_CONTIG_GRAPH
-        shc_log_info(shc_logname, "edge between %u %u : weight increased to %u\n",
-                i, j ,graph[aer.first].weight);
+        //shc_log_info(shc_logname, "edge between %u %u : weight increased to %u\n",
+        //        i, j ,graph[aer.first].weight);
 #endif
     }
     else //add edge
     {
-        aer = boost::add_edge(contig_vertex_map[i], contig_vertex_map[j], graph);
-        assert(aer.second);
+        aer = boost::add_edge(vd_i, vd_j, graph);
         graph[aer.first] = bundled_weight(1);
 #ifdef LOG_CONTIG_GRAPH
-        shc_log_info(shc_logname, "Edge between %u %u\n", i, j);
+        //shc_log_info(shc_logname, "Edge between %u %u\n", i, j);
 #endif
     }
 }
 
-void Contig_graph_handler::create_metis_array_input()
+void Contig_graph_handler::create_metis_array_input(graph_t & graph)
 {
+#ifdef LOG_CONTIG_GRAPH
     shc_log_info(shc_logname, "Start creating metis array input for component\n",
                                                 curr_component_num);
-    typename boost::graph_traits < graph_t >::adjacency_iterator vi, vi_end;
-    vd_t vd;
-    std::pair<ed_t, bool> aer;
+#endif
+    //shc_log_info(shc_logname, "Start creating metis array input for component %d\n",
+    //                                            curr_component_num);
+    //shc_log_info(shc_logname, "num_edges %d, num nodes %d\n",
+    //                    boost::num_edges(graph), boost::num_vertices(graph));
+    metis_input.metis_reset_data(boost::num_edges(graph), boost::num_vertices(graph));
+
+    typedef boost::graph_traits< graph_t >::out_edge_iterator out_ei_t;
+    typedef std::pair<out_ei_t, out_ei_t> out_eip_t;
     contig_edge_weight_t edge_weight;
 
-    auto vip = vertices(graph);
-
+    std::pair<vi_t, vi_t> vip = boost::vertices(graph);
+    int i=0, j=1;
     for(vi_t it=vip.first; it!=vip.second; it++)
     {
         vd_t vd_source = *it;
-        for (boost::tie(vi, vi_end)=boost::adjacent_vertices(vd_source, graph);
-                vi != vi_end; ++vi)
+        out_eip_t out_eip = boost::out_edges(vd_source,graph);
+        for(out_ei_t out_ei=out_eip.first; out_ei!=out_eip.second; out_ei++)
         {
-            vd = *vi;
-            aer = boost::edge(vd_source, vd, graph);
-            // since for AAAT, AATG we double counts
-            edge_weight = graph[aer.first].weight/2;
-            metis_input.adjncy.push_back(vd);
-            metis_input.adjwgt.push_back(edge_weight);
+            vd_t vd_target = boost::target(*out_ei, graph);
+            edge_weight = (graph[*out_ei].weight)/2;
+            metis_input.adjncy[i] = vd_target;
+            metis_input.adjwgt[i] = edge_weight;
+            i++;
         }
-        metis_input.xadj.push_back(metis_input.adjncy.size());
+        metis_input.xadj[j++] = i;
     }
+    //shc_log_info(shc_logname, "i: %d, 2edge: %d\n", i, 2*boost::num_edges(graph));
+    //shc_log_info(shc_logname, "j: %d, node: %d\n", j, boost::num_vertices(graph));
+    assert(i==2*boost::num_edges(graph));
+    assert(j==boost::num_vertices(graph)+1);
+    shc_log_info(shc_logname, "Finish\n");
     //log_metis_input_data();
-    shc_log_info(shc_logname, "Finish creating metis array input for component\n");
+#ifdef LOG_CONTIG_GRAPH
+    shc_log_info(shc_logname, "Finish creating metis array input for component, %d %d %d\n",
+                        metis_input.xadj.size(), metis_input.adjncy.size(), metis_input.adjwgt.size());
+#endif
 }
-
+/*
 void Contig_graph_handler::create_metis_file_format_from_graph(std::string & filename)
 {
     shc_log_info(shc_logname, "Start making METIS format file\n");
+
     typename boost::graph_traits < graph_t >::adjacency_iterator vi, vi_end;
     vd_t vd;
     std::ofstream outfile (filename);
@@ -353,7 +818,7 @@ void Contig_graph_handler::create_metis_file_format_from_graph(std::string & fil
     outfile << boost::num_vertices(graph) << " " << boost::num_edges(graph)
             << " " << ONLY_EDGE_WEIGHT << std::endl;
 
-    auto vip = vertices(graph);
+    std::pair<vi_t, vi_t> vip = boost::vertices(graph);
 
     for(vi_t it=vip.first; it!=vip.second; it++)
     {
@@ -366,14 +831,9 @@ void Contig_graph_handler::create_metis_file_format_from_graph(std::string & fil
             vd = *vi;
             aer = boost::edge(vd_source, vd, graph);
             // since for AAAT, AATG we double counts
-            edge_weight = graph[aer.first].weight/2;
-            metis_input.adjncy.push_back(vd);
-            metis_input.adjwgt.push_back(edge_weight);
-            //outfile << vd+METIS_NODE_OFFSET << " " << edge_weight << " ";
+            edge_weight = graph[aer.first].weight;
             outfile << vd << " " << edge_weight << " ";    //without offset
         }
-        metis_input.xadj.push_back(metis_input.adjncy.size());
-
         outfile << std::endl;
     }
 
@@ -381,8 +841,8 @@ void Contig_graph_handler::create_metis_file_format_from_graph(std::string & fil
     outfile.close();
     shc_log_info(shc_logname, "Finish making METIS format file\n");
 }
-
-
+*/
+/*
 void Contig_graph_handler::log_metis_input_data()
 {
     shc_log_info(shc_logname, "Printing metis input data\n");
@@ -400,23 +860,38 @@ void Contig_graph_handler::log_metis_input_data()
         info_log_num_without_new_line(shc_logname, *iter);
     info_log_str_without_new_line(shc_logname,"\n\n");
 }
+*/
 
 void Contig_graph_handler::dump_component_array(std::string & filename)
 {
     shc_log_info(shc_logname, "Start dumping: %u component \n", curr_component_num);
     std::ofstream outfile(filename);
-    outfile << curr_component_num << " components" << std::endl;
-    outfile << "contig"  << "\t"  << "components" << std::endl;
+    outfile << curr_component_num
+      << " components, this number also denotes unmmapped contig to components"
+      << std::endl;
+
+    //int comp_type_i = 0;
+    //for(std::vector<std::string>::iterator it=component_type.begin();
+    //                                       it!=component_type.end(); it++)
+    //{
+    //    shc_log_info(shc_logname, "%d: comp type %s\n",(comp_type_i++) ,(*it).c_str());
+    //}
+
     //int i=0;
     for(int i=0; i<component_array.size(); i++)
     {
         if(!metis_setup.is_multiple_partition)
         {
-            outfile << component_array[i] << std::endl;
+            outfile << component_array[i] << "\t" << (component_type[component_array[i]]) << std::endl;
         }
         else
         {
-            outfile << component_array[i] << "\t" << component_array_aux[i] << std::endl;
+            if(component_array_aux[i] == IMPOSSIBLE_COMP_NUM)
+                component_array_aux[i] = curr_component_num;
+
+            outfile << (comp_num_t)component_array[i] << "\t"
+                    << (comp_num_t)component_array_aux[i] << "\t"
+                    << (component_type[component_array[i]]) << std::endl;
         }
         //shc_log_info(shc_logname, "%d   %u\n", i++, *it);
     }
@@ -424,133 +899,254 @@ void Contig_graph_handler::dump_component_array(std::string & filename)
     shc_log_info(shc_logname, "Finish log_component_array\n");
 }
 
-void Contig_graph_handler::assign_paired_read_to_components(int num_test)
-{
 
-    shc_log_info(shc_logname, "Start assigning read to component\n");
+void Contig_graph_handler::
+update_comp_count(std::vector<comp_num_t> & components,
+                  std::vector<comp_num_t> & counts, bool is_forward,
+                  std::vector<comp_num_t> & comp_array,  char * seq,  int len)
+{
+    int interval = (len-kmer_length+1)/num_test;
+    uint64_t byte;
+    for(int i=0; i<num_test; i++)
+    {
+        if(is_forward)
+            encode_kmer(seq+i*interval, &byte, kmer_length);
+        else
+            encode_reverse_kmer(seq+len-i*interval-1, &byte, kmer_length);
+
+        Kmer_counter_map_iterator it = kh->kmer_counter.find(byte);
+        if(it != kh->kmer_counter.end())
+        {
+            contig_num_t contig_num_for_kmer = it->second.contig;
+            comp_num_t comp_num_for_contig = comp_array[contig_num_for_kmer];
+            if(comp_num_for_contig < curr_component_num) // if equal, then it
+            {
+                std::vector<comp_num_t>::iterator it = std::find(
+                      components.begin(), components.end(), comp_num_for_contig);
+                if(it==components.end())
+                {
+                    components.push_back(comp_num_for_contig);
+                    counts.push_back(1);
+                }
+                else
+                {
+                    counts[it-components.begin()]++;
+                }
+            }
+        }
+    }
+}
+
+void Contig_graph_handler::
+update_comp_map(std::map<comp_num_t, int> & comp_map, bool is_forward,
+                std::vector<comp_num_t> & comp_array,  char * seq,  int len)
+{
+    int interval = (len-kmer_length+1)/num_test;
+    uint64_t byte;
+    for(int i=0; i<num_test; i++)
+    {
+        if(is_forward)
+            encode_kmer(seq+i*interval, &byte, kmer_length);
+        else
+            encode_reverse_kmer(seq+len-i*interval-1, &byte, kmer_length);
+
+        Kmer_counter_map_iterator it = kh->kmer_counter.find(byte);
+        if(it != kh->kmer_counter.end())
+        {
+            contig_num_t contig_num_for_kmer = it->second.contig;
+            comp_num_t comp_num_for_contig = comp_array[contig_num_for_kmer];
+            if(comp_num_for_contig < curr_component_num) // if equal, then it
+            {
+                comp_map[comp_num_for_contig]++;
+            }
+        }
+    }
+}
+
+void Contig_graph_handler::
+update_comp_set(std::set<comp_num_t> & comp_set, bool is_forward,
+        std::vector<comp_num_t> & comp_array, char * seq,  int len)
+{
+    int interval = (len-kmer_length+1)/num_test;
+    uint64_t byte;
+    for(int i=0; i<num_test; i++)
+    {
+        if(is_forward)
+            encode_kmer(seq+i*interval, &byte, kmer_length);
+        else
+            encode_reverse_kmer(seq+len-i*interval-1, &byte, kmer_length);
+
+        Kmer_counter_map_iterator it = kh->kmer_counter.find(byte);
+        if(it != kh->kmer_counter.end())
+        {
+            contig_num_t contig_num_for_kmer = it->second.contig;
+            comp_num_t comp_num_for_contig = comp_array[contig_num_for_kmer];
+            if(comp_num_for_contig < curr_component_num) // if equal, then it
+            {
+                comp_set.insert(comp_num_for_contig);
+            }
+
+        }
+    }
+}
+
+bool Contig_graph_handler::
+decide_best_comp(std::map<comp_num_t, int> & comp_count, comp_num_t & best_comp)
+{
+    if(!comp_count.empty())
+    {
+        auto max_iter = std::max_element(comp_count.begin(), comp_count.end(),
+                [](const std::pair<comp_num_t, int> & p1,
+                   const std::pair<comp_num_t, int> & p2 )
+                {return p1.second < p2.second;});
+
+        best_comp =  max_iter->first;
+        return true;
+    }
+    return false;
+}
+
+void Contig_graph_handler::assign_paired_read_to_components_mmap(
+                        std::string & read_1_path, std::string & read_2_path)
+{
+    shc_log_info(shc_logname, "Start assigning paired read to component\n");
     //creating dir
     typedef boost::filesystem::path path_t;
-    std::string dir_path = lf->output_components_read_dir;
+    std::string dir_path = lf.output_components_read_dir;
+
+    std::string file_prefix = dir_path + lf.comp_read_prefix;
+    std::string file_p1_suffix("_p1");
+    std::string file_p2_suffix("_p2");
+
+    struct Single_dumper & dumper_p1 = fasta_dumper.pair1_dumper;
+    struct Single_dumper & dumper_p2 = fasta_dumper.pair2_dumper;
+
+    Block_timer p_timer;
+    start_timer(&p_timer);
+    dumper_p1.setup_all_mmap_dst_files(file_prefix, file_p1_suffix ,
+                curr_component_num);
+    dumper_p2.setup_all_mmap_dst_files(file_prefix, file_p2_suffix ,
+                curr_component_num);
+
+    std::cout << "dst file setup time takes " << std::endl;
+    stop_timer(&p_timer);
+    shc_log_info(shc_logname, "dst file setup time takes \n");
+    log_stop_timer(&p_timer);
+
+    start_timer(&p_timer);
+    dumper_p1.setup_init_mmap_src_file(read_1_path); //mmap_src_file(read_1_path);
+    dumper_p2.setup_init_mmap_src_file(read_2_path); //mmap_src_file
+    std::cout << "src file setup time takes " << std::endl;
+    stop_timer(&p_timer);
+    shc_log_info(shc_logname, "src file setup time takes \n");
+    log_stop_timer(&p_timer);
+
+    uint64_t num_line = 0;
+    int64_t num_read =0 ;
+    int64_t last_num = 0;
+
+    char * header_ptr_p1;
+    char * header_ptr_p2;
+    char * seq_ptr_p1;
+    char * seq_ptr_p2;
+    int seq_len_p1, seq_len_p2;
+
+    Block_timer read_prog_timer;
+    Block_timer all_time;
+    start_timer(&read_prog_timer);
+    start_timer(&all_time);
+    while(dumper_p1.get_src_line(header_ptr_p1, seq_ptr_p1, seq_len_p1) &&
+          dumper_p2.get_src_line(header_ptr_p2, seq_ptr_p2, seq_len_p2))
+    {
+        assign_pair_read_to_file_mmap(dumper_p1, dumper_p2,
+                                      header_ptr_p1, header_ptr_p2,
+                                      seq_ptr_p1,    seq_ptr_p2,
+                                      seq_len_p1,    seq_len_p2);
+        num_read++;
+        if((num_read -last_num) > READ_PROGRESS_STEP)
+        {
+            int percentage = (100 * num_read)/num_pair_read_file;
+            std::cout << "[" << percentage << "%] " <<  num_read
+                 << " reads out of " <<  (num_pair_read_file)
+                 << " is processed, ";
+            stop_timer(&read_prog_timer);
+            shc_log_info(shc_logname, "[ %u%] %u read out of %u is processed\n",
+                    percentage, num_read, (num_pair_read_file));
+            log_stop_timer(&read_prog_timer);
+            start_timer(&read_prog_timer);
+            last_num = num_read;
+        }
+    }
+
+    shc_log_info(shc_logname, "finish dump pair read\n");
+    std::cout << "finish dump pair read" << std::endl;
+    stop_timer(&all_time);
+    log_stop_timer(&all_time);
+}
+
+void Contig_graph_handler::assign_paired_read_to_components(
+                    std::string & read_1_path, std::string & read_2_path)
+{
+    shc_log_info(shc_logname, "Start assigning paired read to component\n");
+    //creating dir
+    typedef boost::filesystem::path path_t;
+    std::string dir_path = lf.output_components_read_dir;
     path_t comp_read_path(dir_path);
     if(boost::filesystem::exists(comp_read_path))
-        replace_directory(comp_read_path);
+        empty_directory(comp_read_path);
     else
         add_directory(comp_read_path);
 
     //create and open files
-    std::vector<std::shared_ptr<std::ofstream> > files;
+    std::vector<std::shared_ptr<std::ofstream> > files1;
     for(comp_num_t i=0; i<curr_component_num; i++)
     {
         std::string file_path = dir_path +
-                        (lf->comp_read_prefix + std::to_string(i));
+                        (lf.comp_read_prefix + std::to_string(i)+ "_p1");
         std::shared_ptr<std::ofstream> file(new std::ofstream);
         file->open(file_path.c_str());
-        files.push_back(file);
+        files1.push_back(file);
     }
-    shc_log_info(shc_logname, "Created contig files\n");
+    std::vector<std::shared_ptr<std::ofstream> > files2;
+    for(comp_num_t i=0; i<curr_component_num; i++)
+    {
+        std::string file_path = dir_path +
+                        (lf.comp_read_prefix + std::to_string(i) + "_p2");
+        std::shared_ptr<std::ofstream> file(new std::ofstream);
+        file->open(file_path.c_str());
+        files2.push_back(file);
+    }
 
-    std::ifstream file1_reader(lf->input_read_path.c_str());
-    std::ifstream file2_reader(lf->input_read_path_2.c_str());
-    shc_log_info(shc_logname, "successfully open read files\n");
+    shc_log_info(shc_logname, "Created contig files\n");
+    std::ifstream file1_reader(read_1_path);
+    std::ifstream file2_reader(read_2_path);
     std::string line1, header1, sequence1;
     std::string line2, header2, sequence2;
-    int interval1 = 1, interval2 = 1;
-    uint64_t byte1 = 0, byte2 = 0;
 
-    std::map<comp_num_t, int> comp_count;
-    std::map<comp_num_t, int> comp_count_aux;
-
-    while (file1_reader.good() && file2_reader.good() )
+    while (std::getline(file1_reader, line1) && std::getline(file2_reader, line2))
     {
-        std::getline(file1_reader, line1);
-        std::getline(file2_reader, line2);
-        //std::cout << "content " << line1 << " " << line2 << std::endl;
         if(line1[0] == '>' && line2[0] == '>')
         {
             if(!sequence1.empty() && !sequence2.empty())
             {
-                //process
-                interval1 = (sequence1.size()-kh->kmer_length+1)/num_test;
-                interval2 = (sequence2.size()-kh->kmer_length+1)/num_test;
-                for(int i=0; i<num_test; i++)
+                assign_pair_read_to_file(header1, sequence1,
+                                         header2, sequence2,
+                                         files1, files2);
+                // here we consider there two reads in case of double strand
+                // read is only assigned to its best comp
+                if(setting.is_double_stranded)
                 {
-                    //shc_log_info(shc_logname, "Before encoding readsize %u at %d\n",sequence.size(), i*interval);
-                    encode_kmer(&sequence1.at(0)+i*interval1, &byte1, kh->kmer_length);
-                    encode_kmer(&sequence2.at(0)+i*interval2, &byte2, kh->kmer_length);
-                    Kmer_counter_map_iterator it1 = kh->kmer_counter.find(byte1);
-                    Kmer_counter_map_iterator it2 = kh->kmer_counter.find(byte2);
-
-                    if(it1!= kh->kmer_counter.end())
-                    {
-
-                        contig_num_t contig_num_for_kmer = (kh->kmer_counter[byte1]).contig;
-                        comp_count[component_array[contig_num_for_kmer]]++;
-
-                        if(metis_setup.is_multiple_partition &&
-                           component_array_aux[contig_num_for_kmer] < curr_component_num
-                           )
-                            comp_count_aux[component_array_aux[contig_num_for_kmer]]++;
-
-
-                    }
-                    if(it2!= kh->kmer_counter.end())
-                    {
-                        contig_num_t contig_num_for_kmer = (kh->kmer_counter[byte1]).contig;
-                        comp_count[component_array[contig_num_for_kmer]]++;
-
-                        if(metis_setup.is_multiple_partition &&
-                           component_array_aux[contig_num_for_kmer] < curr_component_num
-                           )
-                            comp_count_aux[component_array_aux[contig_num_for_kmer]]++;
-                    }
+                    std::reverse(sequence1.begin(), sequence1.end());
+                    std::reverse(sequence2.begin(), sequence2.end());
+                    // note we swap files name, since it is direction is changed
+                    assign_pair_read_to_file(header1, sequence1,
+                                         header2, sequence2,
+                                         files2, files1);
                 }
-                // check if this sequence
-                if(!comp_count.empty())
-                {
-                    auto max_iter = std::max_element(comp_count.begin(), comp_count.end(),
-                            [](const std::pair<comp_num_t, int> & p1,
-                               const std::pair<comp_num_t, int> & p2 )
-                            {
-                                return p1.second < p2.second;
-                            }
-                    );
-
-                    comp_num_t best_comp =  max_iter->first;
-                    //shc_log_info(shc_logname, "Before add to file %s \n",sequence.c_str());
-                    *(files.at(best_comp)) << header1 << std::endl;
-                    *(files.at(best_comp)) << sequence1 << std::endl;
-                    *(files.at(best_comp)) << header2 << std::endl;
-                    *(files.at(best_comp)) << sequence2 << std::endl;
-                    //shc_log_info(shc_logname, "after add to file\n");
-                    comp_count.clear();
-                    sequence1.clear();
-                    sequence2.clear();
-                }
-
-                if(metis_setup.is_multiple_partition && !comp_count_aux.empty())
-                {
-                    auto max_iter = std::max_element(comp_count_aux.begin(), comp_count_aux.end(),
-                            [](const std::pair<comp_num_t, int> & p1,
-                               const std::pair<comp_num_t, int> & p2 )
-                            {
-                                return p1.second < p2.second;
-                            }
-                    );
-
-                    comp_num_t best_comp =  max_iter->first;
-
-                    //shc_log_info(shc_logname, "Before add to file %s \n",sequence.c_str());
-                    *(files.at(best_comp)) << header1 << std::endl;
-                    *(files.at(best_comp)) << sequence1 << std::endl;
-                    *(files.at(best_comp)) << header2 << std::endl;
-                    *(files.at(best_comp)) << sequence2 << std::endl;
-                    //shc_log_info(shc_logname, "after add to file\n");
-                    comp_count_aux.clear();
-                }
+                sequence1.clear(), sequence2.clear();
             }
             header1 = line1;
             header2 = line2;
-            //std::cout << header1 << " " << header2 << std::endl;
         }
         else //line is sequence
         {
@@ -559,133 +1155,361 @@ void Contig_graph_handler::assign_paired_read_to_components(int num_test)
         }
     }
 
-
     for(comp_num_t i=0; i<curr_component_num; i++)
     {
-        (*files.at(i)).close();
+        (*files1.at(i)).close();
+        (*files2.at(i)).close();
     }
 
-    std::vector<std::shared_ptr<std::ofstream> >().swap(files);
+    std::vector<std::shared_ptr<std::ofstream> >().swap(files1);
+    std::vector<std::shared_ptr<std::ofstream> >().swap(files2);
     shc_log_info(shc_logname, "Finish assigning read to component\n");
+}
 
+void Contig_graph_handler::
+assign_pair_read_to_file(std::string & header1, std::string & sequence1,
+                  std::string & header2, std::string & sequence2,
+                  std::vector<std::shared_ptr<std::ofstream> > & files1,
+                  std::vector<std::shared_ptr<std::ofstream> > & files2)
+{
+#ifdef LOG_CONTIG_GRAPH
+    shc_log_info(shc_logname, "Start assigning a pair of read\n");
+#endif
+
+    std::set<comp_num_t> comp_set;
+
+    update_comp_set(comp_set, true, component_array, &sequence1.at(0), sequence1.size());
+    update_comp_set(comp_set, true, component_array, &sequence2.at(0), sequence2.size());
+    if (metis_setup.is_multiple_partition)
+    {
+        update_comp_set(comp_set, true, component_array_aux, &sequence1.at(0), sequence1.size());
+        update_comp_set(comp_set, true, component_array_aux, &sequence2.at(0), sequence2.size());
+    }
+    for(std::set<comp_num_t>::iterator it =comp_set.begin();
+                                       it!=comp_set.end(); it++)
+    {
+        *(files1.at(*it)) << header1 << std::endl;
+        *(files1.at(*it)) << sequence1 << std::endl;
+        *(files2.at(*it)) << header2 << std::endl;
+        *(files2.at(*it)) << sequence2 << std::endl;
+    }
+#ifdef LOG_CONTIG_GRAPH
+    shc_log_info(shc_logname, "Finish assigning a pair of read\n");
+#endif
+}
+
+
+/*  // choose all
+void Contig_graph_handler::
+assign_single_read_to_file_mmap(char * header_ptr, char * seq_ptr, int seq_len)
+{
+    //shc_log_info(shc_logname, "start\n");
+    //std::vector<comp_num_t> components;
+    //std::vector<comp_num_t> counts;
+    std::map<comp_num_t, int> comp_count_map;
+    update_comp_map(comp_count_map, true, component_array, seq_ptr, seq_len);
+    //update_comp_count(components, counts, true, component_array, seq_ptr, seq_len);
+    if (metis_setup.is_multiple_partition)
+        update_comp_map(comp_count_map, true, component_array_aux, seq_ptr, seq_len);
+    for(std::map<comp_num_t, int>::iterator it=comp_count_map.begin();
+                                          it!= comp_count_map.end(); it++)
+    {
+        comp_num_t comp_i = it->first;
+        uint64_t len = seq_ptr-header_ptr+seq_len+1;
+        if(dumper.is_increase_file_sz(comp_i, len))
+        {
+            mmap_files.remap_file_increment_size(comp_i);
+        }
+        mmap_files.mmap_write(comp_i, len, header_ptr);
+    }
+
+    //shc_log_info(shc_logname, "before double stranded\n");
+    if(is_double_stranded)
+    {
+        std::map<comp_num_t, int> ds_comp_map;
+        update_comp_map(ds_comp_map, false, component_array, seq_ptr, seq_len);
+        if (metis_setup.is_multiple_partition)
+            update_comp_map(ds_comp_map, false, component_array_aux, seq_ptr, seq_len);
+        for(std::map<comp_num_t, int>::iterator it=ds_comp_map.begin();
+                                              it!= ds_comp_map.end(); it++)
+        {
+            comp_num_t comp_i = it->first;
+            uint64_t len = seq_ptr-header_ptr+seq_len+1;
+            if(mmap_files.is_increase_file_sz(comp_i, len))
+            {
+                mmap_files.remap_file_increment_size(comp_i);
+            }
+            mmap_files.mmap_write(comp_i, len, header_ptr);
+        }
+    }
+    //shc_log_info(shc_logname, "end\n");
+}
+*/
+
+void Contig_graph_handler::
+assign_pair_read_to_file_mmap_helper(struct Single_dumper & mfs_p1,
+             struct Single_dumper & mfs_p2, char * header_ptr_p1,
+             char * header_ptr_p2, char * seq_ptr_p1, char * seq_ptr_p2,
+             int seq_len_p1, int seq_len_p2, bool is_forward)
+{
+    if(is_assign_best)
+    {
+        std::map<comp_num_t, int> comp_count_map;
+        update_comp_map(comp_count_map, is_forward, component_array, seq_ptr_p1, seq_len_p1);
+        update_comp_map(comp_count_map, is_forward, component_array, seq_ptr_p2, seq_len_p2);
+
+        comp_num_t best_comp = assign_pair_best_comp(mfs_p1, mfs_p2, comp_count_map,
+            seq_ptr_p1, seq_ptr_p2, header_ptr_p1, header_ptr_p2, seq_len_p1, seq_len_p2, is_forward);
+
+        if (metis_setup.is_multiple_partition)
+        {
+            std::map<comp_num_t, int> re_comp_count_map;
+            update_comp_map(re_comp_count_map, is_forward, component_array_aux, seq_ptr_p1, seq_len_p1);
+            update_comp_map(re_comp_count_map, is_forward, component_array_aux, seq_ptr_p2, seq_len_p2);
+            if(component_array_aux[best_comp] < curr_component_num) // comes form complex components i.e. reweighted
+            {
+                assign_pair_best_comp(mfs_p1, mfs_p2, re_comp_count_map,
+                    seq_ptr_p1, seq_ptr_p2, header_ptr_p1, header_ptr_p2, seq_len_p1, seq_len_p2, is_forward);
+            }
+        }
+
+    }
+    else
+    {
+        std::map<comp_num_t, int> comp_count_map;
+        update_comp_map(comp_count_map, is_forward, component_array, seq_ptr_p1, seq_len_p1);
+        update_comp_map(comp_count_map, is_forward, component_array, seq_ptr_p2, seq_len_p2);
+        if (metis_setup.is_multiple_partition)
+        {
+            update_comp_map(comp_count_map, is_forward, component_array_aux, seq_ptr_p1, seq_len_p1);
+            update_comp_map(comp_count_map, is_forward, component_array_aux, seq_ptr_p2, seq_len_p2);
+        }
+
+        assign_pair_all_comp(mfs_p1, mfs_p2, comp_count_map,
+                seq_ptr_p1, seq_ptr_p2, header_ptr_p1, header_ptr_p2, seq_len_p1, seq_len_p2, is_forward);
+    }
+}
+
+
+comp_num_t Contig_graph_handler::
+assign_pair_best_comp(struct Single_dumper & mfs_p1,
+             struct Single_dumper & mfs_p2, std::map<comp_num_t, int> & comp_count,
+    char * seq_ptr_p1, char * seq_ptr_p2, char * header_ptr_p1,
+                char * header_ptr_p2, int seq_len_p1, int seq_len_p2, bool is_forward)
+{
+    comp_num_t comp_i;
+    if(decide_best_comp(comp_count, comp_i))
+    {
+        if(is_forward)
+        {
+            mfs_p1.write_fasta(comp_i, seq_ptr_p1, header_ptr_p1, seq_len_p1);
+            mfs_p2.write_fasta(comp_i, seq_ptr_p2, header_ptr_p2, seq_len_p2);
+        }
+        else
+        {
+            mfs_p1.write_reverse_fasta(comp_i, seq_ptr_p2, header_ptr_p2, seq_len_p2);
+            mfs_p2.write_reverse_fasta(comp_i, seq_ptr_p1, header_ptr_p1, seq_len_p1);
+            /*
+            mfs_p1.write_reverse_fasta(comp_i, seq_ptr_p1, header_ptr_p1,
+                seq_len_p1);
+            mfs_p2.write_reverse_fasta(comp_i, seq_ptr_p2, header_ptr_p2,
+                seq_len_p2);
+            */
+        }
+        return comp_i;
+    }
+    else
+        return curr_component_num; // which is the impossible components
+
+}
+
+void Contig_graph_handler::
+assign_pair_all_comp(struct Single_dumper & mfs_p1,
+             struct Single_dumper & mfs_p2, std::map<comp_num_t, int> & comp_count,
+    char * seq_ptr_p1, char * seq_ptr_p2, char * header_ptr_p1,
+                char * header_ptr_p2, int seq_len_p1, int seq_len_p2, bool is_forward)
+{
+    for(std::map<comp_num_t, int>::iterator it=comp_count.begin();
+                                          it!= comp_count.end(); it++)
+    {
+        comp_num_t comp_i = it->first;
+        if(is_forward)
+        {
+            mfs_p1.write_fasta(comp_i, seq_ptr_p1, header_ptr_p1,
+                seq_len_p1);
+            mfs_p2.write_fasta(comp_i, seq_ptr_p2, header_ptr_p2,
+                seq_len_p2);
+        }
+        else
+        {
+            mfs_p1.write_reverse_fasta(comp_i, seq_ptr_p2, header_ptr_p2, seq_len_p2);
+            mfs_p2.write_reverse_fasta(comp_i, seq_ptr_p1, header_ptr_p1, seq_len_p1);
+        }
+    }
+}
+
+void Contig_graph_handler::
+assign_pair_read_to_file_mmap(struct Single_dumper & mfs_p1,
+             struct Single_dumper & mfs_p2, char * header_ptr_p1,
+             char * header_ptr_p2, char * seq_ptr_p1, char * seq_ptr_p2,
+             int seq_len_p1, int seq_len_p2)
+{
+    assign_pair_read_to_file_mmap_helper(mfs_p1,
+                 mfs_p2, header_ptr_p1,
+                 header_ptr_p2, seq_ptr_p1, seq_ptr_p2,
+                 seq_len_p1, seq_len_p2, true);
+
+    //shc_log_info(shc_logname, "before double stranded\n");
+    if(is_double_stranded)
+    {
+        assign_pair_read_to_file_mmap_helper(mfs_p1,
+                     mfs_p2, header_ptr_p1,
+                     header_ptr_p2, seq_ptr_p1, seq_ptr_p2,
+                     seq_len_p1, seq_len_p2, false);
+    }
+}
+
+ //    choose best only
+void Contig_graph_handler::
+assign_single_read_to_file_mmap(struct Single_dumper & mfs,
+                        char * header_ptr, char * seq_ptr, int seq_len)
+{
+    //shc_log_info(shc_logname, "assign_single_read_to_file_mmap\n");
+    assign_single_read_to_file_mmap_helper(mfs, header_ptr, seq_ptr, seq_len, true);
+    //char test[100000];
+    //memset(test, 0, 100000);
+    //memcpy(test, seq_ptr, seq_len);
+    //shc_log_info(shc_logname, "%s\n", test);
+    if(is_double_stranded)
+    {
+        assign_single_read_to_file_mmap_helper(mfs, header_ptr, seq_ptr, seq_len, false);
+    }
+    //shc_log_info(shc_logname, "finish_single_read_to_file_mmap\n");
+}
+
+comp_num_t Contig_graph_handler::
+assign_single_best_comp(struct Single_dumper & mfs,
+    std::map<comp_num_t, int> & comp_count, char * seq_ptr, char * header_ptr,
+                                        int seq_len, bool is_forward)
+{
+    comp_num_t comp_i;
+    if(decide_best_comp(comp_count, comp_i))
+    {
+        if (is_forward)
+            mfs.write_fasta(comp_i, seq_ptr, header_ptr, seq_len);
+        else
+            mfs.write_reverse_fasta(comp_i, seq_ptr, header_ptr, seq_len);
+        return comp_i;
+    }
+    else
+        return curr_component_num;
+}
+
+void Contig_graph_handler::
+assign_single_all_comp(struct Single_dumper & mfs,
+    std::map<comp_num_t, int> & comp_count, char * seq_ptr, char * header_ptr,
+                                        int seq_len, bool is_forward)
+{
+    for(std::map<comp_num_t, int>::iterator it=comp_count.begin();
+                                          it!= comp_count.end(); it++)
+    {
+        comp_num_t comp_i = it->first;
+        if (is_forward)
+            mfs.write_fasta(comp_i, seq_ptr, header_ptr, seq_len);
+        else
+            mfs.write_reverse_fasta(comp_i, seq_ptr, header_ptr, seq_len);
+    }
+}
+
+void Contig_graph_handler::
+assign_single_read_to_file_mmap_helper(struct Single_dumper & mfs,
+                        char * header_ptr, char * seq_ptr, int seq_len, bool is_forward)
+{
+    if(is_assign_best)
+    {
+        std::map<comp_num_t, int> comp_count_map;
+        update_comp_map(comp_count_map, is_forward, component_array, seq_ptr, seq_len);
+        comp_num_t best_comp = assign_single_best_comp(mfs, comp_count_map, seq_ptr, header_ptr,
+                                                seq_len, is_forward);
+        if(metis_setup.is_multiple_partition)
+        {
+            if(component_array_aux[best_comp] < curr_component_num)
+            {
+                std::map<comp_num_t, int> re_comp_count_map;
+                update_comp_map(re_comp_count_map, is_forward, component_array_aux, seq_ptr, seq_len);
+                assign_single_best_comp(mfs, re_comp_count_map, seq_ptr, header_ptr,
+                                                        seq_len, is_forward);
+            }
+        }
+    }
+    else
+    {
+        std::map<comp_num_t, int> comp_count_map;
+        update_comp_map(comp_count_map, is_forward, component_array, seq_ptr, seq_len);
+        if (metis_setup.is_multiple_partition)
+            update_comp_map(comp_count_map, is_forward, component_array_aux, seq_ptr, seq_len);
+        assign_single_all_comp(mfs, comp_count_map, seq_ptr, header_ptr,
+                                            seq_len, is_forward);
+    }
 }
 
 
 void Contig_graph_handler::
-assign_reads_to_components(int num_test, std::string input_read_path)
+assign_single_read_to_file(std::string & header, std::string & sequence,
+             std::vector<std::shared_ptr<std::ofstream> > & files)
 {
-    //Fasta_reader fasta_reader("SE_read.fasta");
+    std::set<comp_num_t> comp_set;
+
+    update_comp_set(comp_set, true, component_array, &sequence.at(0), sequence.size());
+    if (metis_setup.is_multiple_partition)
+        update_comp_set(comp_set, true, component_array_aux, &sequence.at(0), sequence.size());
+    for(std::set<comp_num_t>::iterator it=comp_set.begin(); it!= comp_set.end(); it++)
+    {
+        *(files.at(*it)) << header << std::endl;
+        *(files.at(*it)) << sequence << std::endl;
+    }
+}
+
+void Contig_graph_handler::
+assign_reads_to_components(std::string input_read_path)
+{
+    start_timer(&cgh_timer);
     shc_log_info(shc_logname, "Start assigning read to component\n");
     //creating dir
     typedef boost::filesystem::path path_t;
-
-    std::string dir_path = lf->output_components_read_dir;
-    path_t comp_read_path(dir_path);
-    if(boost::filesystem::exists(comp_read_path))
-        replace_directory(comp_read_path);
-    else
-        add_directory(comp_read_path);
-    shc_log_info(shc_logname, "Created dir %s\n", dir_path.c_str());
-    std::cout << "created dir " << std::endl;
+    std::string dir_path = lf.output_components_read_dir;
 
     //create files
     std::vector<std::shared_ptr<std::ofstream> > files;
-
     for(comp_num_t i=0; i<curr_component_num; i++)
     {
         std::string file_path = dir_path +
-                        (lf->comp_read_prefix + std::to_string(i));
+                        (lf.comp_read_prefix + std::to_string(i));
         std::shared_ptr<std::ofstream> file(new std::ofstream);
         file->open(file_path.c_str());
-
         files.push_back(file);
     }
     shc_log_info(shc_logname, "Created contig files\n");
 
     //read and process files
     std::ifstream file_reader(input_read_path);
-    shc_log_info(shc_logname, "successfully open read files\n");
     std::string line;
     std::string header;
     std::string sequence;
-    int interval = 1;
-    uint64_t byte = 0;
 
-    std::map<comp_num_t, int> comp_count;
-    std::map<comp_num_t, int> comp_count_aux;
-
-    while (file_reader.good() )
+    while (std::getline(file_reader, line))
     {
-        std::getline(file_reader, line);
         if(line[0] == '>')
         {
             if(!sequence.empty())
             {
-                //process
-                interval = (sequence.size()-kh->kmer_length+1)/num_test;
-                for(int i=0; i<num_test; i++)
+                assign_single_read_to_file(header, sequence, files);
+                // here we consider there two reads in case of double strand,
+                // read is only assigned to its best comp
+                if(setting.is_double_stranded)
                 {
-                    //shc_log_info(shc_logname, "Before encoding readsize %u at %d\n",sequence.size(), i*interval);
-                    encode_kmer(&sequence.at(0)+i*interval, &byte, kh->kmer_length);
-                    Kmer_counter_map_iterator it = kh->kmer_counter.find(byte);
-                    if(it!= kh->kmer_counter.end())
-                    {
-                        contig_num_t contig_num_for_kmer = (kh->kmer_counter[byte]).contig;
-                        //shc_log_info(shc_logname, "contig_num_for_kmer %u\n", contig_num_for_kmer );
-                        //shc_log_info(shc_logname, "component_array[contig_num_for_kmer] %u\n", component_array[contig_num_for_kmer] );
-                        //shc_log_info(shc_logname, "component_array_aux[contig_num_for_kmer] %u\n", component_array_aux[contig_num_for_kmer] );
-                        comp_count[component_array[contig_num_for_kmer]]++;
-
-                        if(metis_setup.is_multiple_partition &&
-                           component_array_aux[contig_num_for_kmer] < curr_component_num
-                           )
-                            comp_count_aux[component_array_aux[contig_num_for_kmer]]++;
-
-                    }
-                }
-                // check if this sequence
-                if(!comp_count.empty())
-                {
-                    auto max_iter = std::max_element(comp_count.begin(), comp_count.end(),
-                            [](const std::pair<comp_num_t, int> & p1,
-                               const std::pair<comp_num_t, int> & p2 )
-                            {
-                                return p1.second < p2.second;
-                            }
-                    );
-
-                    comp_num_t best_comp =  max_iter->first;
-
-                    //shc_log_info(shc_logname, "Before add to file %s \n",sequence.c_str());
-                    *(files.at(best_comp)) << header << std::endl;
-                    *(files.at(best_comp)) << sequence << std::endl;
-                    //shc_log_info(shc_logname, "after add to file\n");
-                    comp_count.clear();
-                }
-#ifdef LOG_CONTIG_GRAPH
-                else
-                {
-                    shc_log_info(shc_logname, "%s does not belong to any comp\n", header.c_str());
-                }
-#endif
-                //for auxilary array
-                if(metis_setup.is_multiple_partition && !comp_count_aux.empty())
-                {
-                    auto max_iter = std::max_element(comp_count_aux.begin(), comp_count_aux.end(),
-                            [](const std::pair<comp_num_t, int> & p1,
-                               const std::pair<comp_num_t, int> & p2 )
-                            {
-                                return p1.second < p2.second;
-                            }
-                    );
-
-                    comp_num_t best_comp =  max_iter->first;
-
-                    //shc_log_info(shc_logname, "Before add to file %s \n",sequence.c_str());
-                    *(files.at(best_comp)) << header << std::endl;
-                    *(files.at(best_comp)) << sequence << std::endl;
-                    //shc_log_info(shc_logname, "after add to file\n");
-                    comp_count_aux.clear();
+                    std::reverse(sequence.begin(), sequence.end()); // in place
+                    assign_single_read_to_file(header, sequence, files);
                 }
                 sequence.clear();
             }
@@ -704,61 +1528,231 @@ assign_reads_to_components(int num_test, std::string input_read_path)
 
     std::vector<std::shared_ptr<std::ofstream> >().swap(files);
     shc_log_info(shc_logname, "Finish assigning read to component\n");
+    std::cout << "finish dump reads " ;
+    stop_timer(&cgh_timer);
 }
+
+void Contig_graph_handler::
+assign_reads_to_components_mmap(std::string input_read_path)
+{
+    start_timer(&cgh_timer);
+    shc_log_info(shc_logname, "Start assigning read to component\n");
+    //creating dir
+    typedef boost::filesystem::path path_t;
+    std::string dir_path = lf.output_components_read_dir;
+
+    std::string file_prefix = dir_path + lf.comp_read_prefix;
+    std::string file_suffix(""); //no suffix
+
+    struct Single_dumper & dumper = fasta_dumper.single_dumper;
+    dumper.setup_all_mmap_dst_files(file_prefix, file_suffix,
+                curr_component_num);
+    //dumper.mmap_src_file(input_read_path);
+
+    dumper.setup_init_mmap_src_file(input_read_path);
+
+    uint64_t last_num = 0;
+
+    printf("statbuf.st_size %ld\n", dumper.statbuf.st_size);
+    shc_log_info(shc_logname, "statbuf.st_size %ld\n", dumper.statbuf.st_size);
+    uint64_t num_line = 0;
+    uint64_t num_read = 0;
+    char * header_ptr;
+    char * seq_ptr;
+    int seq_len;
+    Block_timer read_prog_timer;
+    start_timer(&read_prog_timer);
+    while(dumper.get_src_line(header_ptr, seq_ptr, seq_len))
+    {
+        assign_single_read_to_file_mmap(dumper ,header_ptr, seq_ptr, seq_len);
+        num_read++;
+        if((num_read-last_num) > READ_PROGRESS_STEP)
+        {
+            int percentage = (100 * num_read)/num_single_read_file;
+            std::cout << "[" << percentage << "%] " <<  num_read
+                 << " reads out of " <<  (num_single_read_file)
+                 << " is processed, ";
+            stop_timer(&read_prog_timer);
+            shc_log_info(shc_logname, "[ %u%] %u read out of %u is processed\n",
+                    percentage, num_read, (num_single_read_file));
+            log_stop_timer(&read_prog_timer);
+            start_timer(&read_prog_timer);
+            last_num = num_read;
+        }
+    }
+}
+
 
 void Contig_graph_handler::assign_kmer_to_components()
 {
-    shc_log_info(shc_logname, "Start assigning read to component\n");
+    start_timer(&cgh_timer);
+    shc_log_info(shc_logname, "Start assigning kmer to component\n");
     //creating dir
     typedef boost::filesystem::path path_t;
     typedef boost::filesystem::path dir_t;
     typedef boost::filesystem::path filename_t;
-    path_t base_path = boost::filesystem::current_path();
-    std::string base_path_str(base_path.c_str());
-    std::string dir_path = lf->output_components_kmer_dir;
     char bases[33];
-    bases[kh->kmer_length] = '\0';
+    bases[kmer_length] = '\0';
 
-    path_t comp_kmer_path(dir_path);
-    if(boost::filesystem::exists(comp_kmer_path))
-        replace_directory(comp_kmer_path);
-    else
-        add_directory(comp_kmer_path);
-
+    add_or_overwrite_directory(lf.output_components_kmer_dir);
     //create files
-    std::vector<std::shared_ptr<std::ofstream> > files;
+    kmer_dumper.setup_disk_dumper(lf.output_components_kmer_dir, lf.comp_kmer_prefix);
 
-    for(comp_num_t i=0; i<curr_component_num; i++)
-    {
-        std::string file_path = dir_path +
-                        (lf->comp_kmer_prefix + std::to_string(i));
-        std::shared_ptr<std::ofstream> file(new std::ofstream);
-        file->open(file_path.c_str());
-
-        files.push_back(file);
-    }
-    shc_log_info(shc_logname, "Created kmer files\n");
-
-
+    uint64_t num_dumped_kmer = 0;
+    uint64_t last_num_dumped = 0;
+    uint64_t num_total_kmer = kh->kmer_counter.size();
+    Block_timer kmer_prog_timer;
+    start_timer(&kmer_prog_timer);
     Kmer_counter_map_iterator it;
     for(it=kh->kmer_counter.begin(); it!=kh->kmer_counter.end(); it++)
     {
-        decode_kmer(bases, &(it->first), kh->kmer_length);
-        *files.at(component_array[it->second.contig]) << bases << "\t"
-                << it->second.count << std::endl;
+        decode_kmer(bases, &(it->first), kmer_length);
+
+        kmer_dumper.dump_kmer(component_array[it->second.contig], bases, it->second.count);
 
         if(metis_setup.is_multiple_partition &&
         component_array_aux[it->second.contig] < curr_component_num)
         {
-            *files.at(component_array_aux[it->second.contig]) << bases << "\t"
-                << it->second.count << std::endl;
+            kmer_dumper.dump_kmer(component_array_aux[it->second.contig], bases, it->second.count);
+        }
+
+        if((num_dumped_kmer -last_num_dumped) > KMER_PROGRESS_STEP)
+        {
+            int percentage = (100 * num_dumped_kmer)/num_total_kmer;
+            std::cout << "[" << percentage << "%] " <<  num_dumped_kmer
+                 << " reads out of " <<  (num_total_kmer)
+                 << " is processed, ";
+            stop_timer(&kmer_prog_timer);
+            shc_log_info(shc_logname, "[ %u%] %u read out of %u is processed\n",
+                    percentage, num_dumped_kmer, (num_total_kmer));
+            log_stop_timer(&kmer_prog_timer);
+            start_timer(&kmer_prog_timer);
+            last_num_dumped = num_dumped_kmer;
+        }
+        num_dumped_kmer++;
+    }
+
+    kmer_dumper.write_mem_to_disk();
+    shc_log_info(shc_logname, "Finish assigning kmer to component\n");
+    std::cout << "finish dumping kmer ";
+    stop_timer(&cgh_timer);
+}
+
+void Contig_graph_handler::load_data_and_partition_reads()
+{
+    if(!exist_path(setting.local_files.output_comp_path))
+    {
+        shc_log_error("comp array data not available\n");
+        exit(1);
+    }
+
+    std::ifstream fileReader(setting.local_files.output_comp_path);
+    component_array.clear(); // index represents contig id, content stores comp id
+    component_array_aux.clear(); // used for re-partition
+
+    std::string num_comp_str, comp_str, comp_re_str, temp;
+    int comp = 0;
+    int comp_re = 0;
+
+    std::getline(fileReader, num_comp_str, ' ');
+    std::getline(fileReader, temp);
+    curr_component_num = std::stoi(num_comp_str);
+
+    shc_log_info(shc_logname, "num comp %d\n", curr_component_num);
+    std::cout << "num comp " << curr_component_num << std::endl;
+
+
+    if(!metis_setup.is_multiple_partition)
+    {
+        while(  std::getline(fileReader, comp_str, '\t') &&
+                std::getline(fileReader, temp))
+        {
+            comp = std::stoi(comp_str);
+            component_array.push_back(comp);
+        }
+    }
+    else
+    {
+        while(  std::getline(fileReader, comp_str, '\t') &&
+                std::getline(fileReader, comp_re_str , '\t') &&
+                std::getline(fileReader, temp))
+        {
+            comp = std::stoi(comp_str);
+            comp_re = std::stoi(comp_re_str);
+
+            //shc_log_info(shc_logname, "ori %d, re %d\n", comp, comp_re);
+
+            component_array.push_back(comp);
+            component_array_aux.push_back(comp_re);
+        }
+    }
+    /*
+    shc_log_info(shc_logname, "comp array\n");
+    for(std::vector<comp_num_t>::iterator it= component_array.begin();
+                                   it!=component_array.end(); it++)
+    {
+        shc_log_info(shc_logname, "%d\n", *it);
+    }
+
+    shc_log_info(shc_logname, "aux comp array\n");
+    for(std::vector<comp_num_t>::iterator it= component_array_aux.begin();
+                                   it!=component_array_aux.end(); it++)
+    {
+        shc_log_info(shc_logname, "%d\n", *it);
+    }
+    */
+}
+
+/*
+void Contig_graph_handler::log_contig_graph_edge(bool has_detail)
+{
+    shc_log_info(shc_logname, "num vertex: %d, num edge: %d \n",
+                          boost::num_vertices(graph), boost::num_edges(graph));
+    if(has_detail)
+    {
+        eip_t eip = boost::edges(graph);
+        for(ei_t ei=eip.first; ei!=eip.second; ei++)
+        {
+            shc_log_info(shc_logname, "w: %d\n", graph[*ei].weight);
+        }
+    }
+}
+
+void Contig_graph_handler::log_comp_content()
+{
+    typedef std::map<comp_num_t, std::vector<contig_num_t> > comp_contig_map_t;
+    typedef std::map<comp_num_t, std::vector<contig_num_t> >::iterator comp_contig_map_iterator;
+
+    comp_contig_map_t comp_contig_map;
+    for(int i=0; i<component_array.size(); i++)
+    {
+        comp_num_t comp_i = component_array[i];
+        if(comp_i!=IMPOSSIBLE_COMP_NUM)
+        {
+            comp_contig_map[comp_i].push_back(i);
         }
     }
 
-    for(comp_num_t i=0; i<curr_component_num; i++)
+    for(comp_contig_map_iterator it = comp_contig_map.begin();
+                                 it!=comp_contig_map.end(); ++it)
     {
-        (*files.at(i)).close();
+        shc_log_info(shc_logname, "comp %d has %d contigs\n", it->first, it->second.size());
     }
-    std::vector<std::shared_ptr<std::ofstream> >().swap(files);
-    shc_log_info(shc_logname, "Finish assigning kmer to component\n");
 }
+
+void Contig_graph_handler::log_contigs(std::string file_path)
+{
+    std::ofstream file_writer(file_path);
+    std::pair<vi_t, vi_t> vip = boost::vertices(graph);
+    //walk through the graph list, and update if
+    for(vi_t it=vip.first; it!=vip.second; it++)
+    {
+        bundled_contig_index & node = graph[*it];
+        contig_num_t contig_i = node.contig_index;
+        Contig_handler::Contig_base_info contig_info = ch->get_contig(contig_i);
+        std::string contig(contig_info.base_start, contig_info.len);
+        file_writer << (contig) << std::endl;
+    }
+    file_writer.close();
+}
+*/

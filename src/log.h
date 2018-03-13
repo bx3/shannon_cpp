@@ -21,36 +21,45 @@
 #include "shc_type.h"
 #include <time.h>
 #include <iostream>
+#include <pthread.h>
+#include <unistd.h>
 
 //#define LOG_KMER_DETAIL
+
+extern int init_mem;
 
 #define SHC_LOGGING_ENABLED
 #define SHC_CONTIG_LOGGING_ENABLED
 
 //#define LOG_KMER
 //#define LOG_CONTIG
-//#define LOG_CONTIG_GRAPH
-//#define LOG_METIS
 //#define LOG_DELETED_KMER
 //#define LOG_SEQ_GRAPH
-
-//#define SHOW_SEQ_GRAPH_PROGRESS
+//#define LOG_LP_SUMMARY
 
 #define SHOW_PROGRESS
-#define KMER_PROGRESS_STEP 2000000
+//#define SHOW_CREATE_DIR
+#define KMER_PROGRESS_STEP 1000000
 #define CONTIG_PROGRESS_STEP 5000
 
 #define MINUTE_PER_SEC 60
 #define HOUR_PER_MINUTE 60
+
+#define NANO_PER_SEC 1000000000
+#define MICRO_PER_SEC 1000000
+#define NANO_PER_MICRO 1000
 
 #ifdef SHC_CONTIG_LOGGING_ENABLED
     void shc_contig_log_info(const char* format, ...);
 #endif
 
 struct Block_timer {
+    Block_timer () : nTime(0), time_us(0) {}
     struct timespec nano_start;
     struct timespec nano_stamp;
-    unsigned long nTime;
+    uint64_t nTime;
+    int mem_start;
+    uint64_t time_us;
 };
 
 extern char shc_logname[200];
@@ -66,6 +75,36 @@ void info_log_info(const char * filename, const char* format, ...);
 
 void start_timer(struct Block_timer * bt);
 void stop_timer(struct Block_timer * bt);
+void stop_timer_np(struct Block_timer * bt); //np for no print
+void print_timer(struct Block_timer * bt);
+
+
+
+inline void accurate_start_timer(struct Block_timer * bt)
+{
+    //
+    clock_gettime(CLOCK_MONOTONIC, &bt->nano_start);
+}
+
+inline void accurate_stop_timer(struct Block_timer * bt)
+{
+    clock_gettime(CLOCK_MONOTONIC,&bt->nano_stamp);
+    bt->nTime = (bt->nano_stamp.tv_sec - bt->nano_start.tv_sec)*NANO_PER_SEC +
+             bt->nano_stamp.tv_nsec - bt->nano_start.tv_nsec;
+}
+
+inline void accurate_accumulate_timer(struct Block_timer * bt)
+{
+    clock_gettime(CLOCK_MONOTONIC,&bt->nano_stamp);
+    bt->nTime = (bt->nano_stamp.tv_sec - bt->nano_start.tv_sec)*NANO_PER_SEC +
+             bt->nano_stamp.tv_nsec - bt->nano_start.tv_nsec;
+    bt->time_us += bt->nTime/NANO_PER_MICRO;
+}
+
+void log_stop_timer(struct Block_timer * bt);
+
+int parseLine(char* line);
+int get_proc_mem_value();
 
 template<class T>
 void print_bit(T a)
@@ -82,8 +121,9 @@ void print_bit(T a)
     //print out bit
     for (int i = 0; i< sizeof(a)*8;i++)
     {
-        printf("%d", (((mask<<i) & result)>>i) & mask);   //print out bit in backward order
+        printf("%lu", (((mask<<i) & result)>>i) & mask);   //print out bit in backward order
     }
+    printf("\n");
 }
 
 /**
