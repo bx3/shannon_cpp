@@ -1,25 +1,34 @@
 # Shannon C++ RNA sequencing
 
+This is a **C++** implementatin for the work **ShannonRNA: an Information-Optimal de Novo RNA-Seq Assembler**.  
 
-## Getting Started
+A **python** implementation can be found at *http://sreeramkannan.github.io/Shannon/*, which served as a foundation for the current **C++** implementation.  
 
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See deployment for notes on how to deploy the project on a live system.
+However, this C++ version significantly improves both time and memory efficiency, roughly 10x, so you would prefer using this one.
+
 
 ### Prerequisites
 
-C++ 11
-boost 1.65.1 -- including non header portion -- http://www.boost.org/doc/libs/1_66_0/more/getting_started/unix-variants.html
-metis 5.1.0 -- http://glaros.dtc.umn.edu/gkhome/metis/metis/download
-hopscotch -- https://github.com/Tessil/hopscotch-map
-google sparsehash -- https://github.com/sparsehash/sparsehash
-sparsepp -- https://github.com/greg7mdp/sparsepp
-
-glpk -- linux package
-sort -- linux package
-
-Tested with ubuntu 15.10
+* ubuntu 15.10 or higher
+* C++ 11
 
 ### Installing
+
+* Install METIS
+	* sudo apt-get install libmetis-dev
+	* OR follow instructions from [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/download) .
+* Install cmake 
+	* sudo apt-get install cmake
+* boost library (May be the most painful part)
+	* 
+* glpk 
+	*  sudo apt-get install glpk
+
+* hopscotch -- https://github.com/Tessil/hopscotch-map
+* google sparsehash -- https://github.com/sparsehash/sparsehash
+* sparsepp -- https://github.com/greg7mdp/sparsepp
+
+
 
 
 
@@ -34,15 +43,10 @@ Usage:
 ./Shannon_C_seq custom setting_file
 
 
-### And coding style tests
+## Getting Started
 
+* Try to run command **./Shannon_C_seq custom setting**
 
-
-## Deployment
-
-
-
-## Built With
 
 
 ## Contributing
