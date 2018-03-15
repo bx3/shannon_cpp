@@ -4,11 +4,7 @@ project (Shannon_RNASeq_Cpp)
 set (CMAKE_CXX_STANDARD 11)
 set(CMAKE_BUILD_TYPE Debug)
 
-include_directories(/home/bowen/boost_1_65_1)
 include_directories(/usr/include/)
-include_directories(/home/bowen/hopscotch-map/src)
-include_directories(/home/bowen/sparsepp/)
-
 
 SET(BOOST_ROOT /usr)
 SET(CMAKE_INCLUDE_PATH /usr/include ${CMAKE_INCLUDE_PATH} )
@@ -71,7 +67,7 @@ set(SHANNON_DEVELOP_SOURCE
     src/run_tasks.cpp
 )
 # add the executable
-add_executable(Shannon_D_RNASeq_Cpp ${SHANNON_DEVELOP_SOURCE})
-target_link_libraries(Shannon_D_RNASeq_Cpp multi_graph_handler )
-target_link_libraries(Shannon_D_RNASeq_Cpp contig_graph_handler )
-target_link_libraries(Shannon_D_RNASeq_Cpp primary_lib)
+add_executable(Shannon_RNASeq_Cpp ${SHANNON_DEVELOP_SOURCE})
+target_link_libraries(Shannon_RNASeq_Cpp multi_graph_handler )
+target_link_libraries(Shannon_RNASeq_Cpp contig_graph_handler )
+target_link_libraries(Shannon_RNASeq_Cpp primary_lib)
