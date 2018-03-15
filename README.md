@@ -26,9 +26,9 @@ However, this C++ version significantly improves both time and memory efficiency
 	* remember to install the non-header part of boost. This implementation needs
 		* Boost.ProgramOptions
 		* Boost.Filesystem 
-* glpk 
-	*  sudo apt-get install libglpk-dev
-	*  OR follow instructions from [GLPK](https://en.wikibooks.org/wiki/GLPK/Linux_OS)
+* glpk 	
+	*  install version 4.62 or higher, follow instructions from [GLPK](https://en.wikibooks.org/wiki/GLPK/Linux_OS)
+	*  ~~sudo apt-get install libglpk-dev~~, since it would install an older version, which gives error
 * google sparsehash 
 	* follow instructions from [google sparsehash](https://github.com/sparsehash/sparsehash)
 * hopscotch -- https://github.com/Tessil/hopscotch-map
