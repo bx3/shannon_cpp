@@ -78,7 +78,7 @@ The shannon consists of four major components:
 3. sequence graph multibridging
 4. sparse flowing path decomposing
 
-![Alt text](./doc/?raw=true "Optional Title")
+![Alt text](./doc/shannon_flowchart.PNG?raw=true "Optional Title")
 
 
 
