@@ -33,8 +33,8 @@ However, this C++ version significantly improves both time and memory efficiency
 	*  ~~sudo apt-get install libglpk-dev~~, since it would install an older version, which gives error
 * google sparsehash 
 	* follow instructions from [google sparsehash](https://github.com/sparsehash/sparsehash)
-* hopscotch -- https://github.com/Tessil/hopscotch-map
-* sparsepp -- https://github.com/greg7mdp/sparsepp
+* hopscotch -- https://github.com/Tessil/hopscotch-map (already included in the repo, no action needed)
+* sparsepp -- https://github.com/greg7mdp/sparsepp (already included in the repo, no action needed)
 
 ## Getting Started
 
