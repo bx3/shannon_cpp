@@ -52,9 +52,9 @@ However, this C++ version significantly improves both time and memory efficiency
 	* download from link above, extract and place the whole files in the cmake directory
 
 ## Getting Started
-
-* Try to run command **./Shannon_C_seq shannon **
-
+* Example, there is a single ended read (at dir single_read_path) with read length 100, save it to ouput_path to 
+* Try to run command with absolute paths
+* **./Shannon_C_seq shannon -l default_setting -k 25 -l 100 -s single_read_path -o output_path**
 
 ## Output file structure
 
