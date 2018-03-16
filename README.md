@@ -6,7 +6,19 @@ A **python** implementation can be found at *http://sreeramkannan.github.io/Shan
 
 However, this C++ version significantly improves both time and memory efficiency, roughly 10x, so you would prefer using this one.
 
-
+## Content
+- [Prerequisites](#prerequisites)
+- [Installing](#installing)
+- [Getting started](#getting-started)
+- [Output file structure](#output-file-structure)
+- [Flowchart](#flowchart)
+- [Usage](#usage)
+- [Config file](#config-file)
+- [Memory parameter](#memory-parameter)
+- [Versioning](#versioning)
+- [Author](#author)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
 ### Prerequisites
 
 * ubuntu 15.10 or higher
@@ -23,7 +35,9 @@ However, this C++ version significantly improves both time and memory efficiency
 	* follow instrctions from [JellyFish](http://www.cbcb.umd.edu/software/jellyfish/) 
 * boost library (May be the most painful part if you have an old one on system, cmake might not link properly)
 	* follow instruction from [boost](http://www.boost.org/doc/libs/1_66_0/more/getting_started/unix-variants.html)
-	* ~~sudo apt-get install libboost-all-dev~~, since it would install an older version, which would not compile
+	* ~~sudo apt-get install libboost-all-dev~~, since it would install an older 
+	
+	, which would not compile
 	* remember to install the non-header part of boost. This implementation needs
 		* Boost.ProgramOptions
 		* Boost.Filesystem 
@@ -41,7 +55,7 @@ However, this C++ version significantly improves both time and memory efficiency
 * Try to run command **./Shannon_C_seq custom setting**
 
 
-## Output Files structure
+## Output file structure
 
 ./  
 * algo_input (when only fasta file is provided, this folder becomes jellyfish output)
@@ -73,13 +87,13 @@ However, this C++ version significantly improves both time and memory efficiency
 * reconstructed_seq.fasta_sf (reconstructed seq from sparse flow step)
 * reconstructed_seq.fasta_unfiltered (simply combine fasta_single and fasta_sf)
 
-## How things work
+## Flowchart
 The following flow chart illustrates how this implementation works:
 * each cylinder represents inputs, which was listed in the **output file structure** above, required by each functional block. Item with [] means this file was just created by last functional block.
 ![Alt text](./doc/shannon_flowchart.PNG?raw=true "Optional Title")
 
 
-## Command line explain
+## Usage
 Two modes are available 
 * shannon
 	* shannon provide a way to specify most important parameters through command line 
@@ -104,8 +118,8 @@ Two modes are available
  		* d -- is single stranded
 * custom 
 	* argument: a config file (More details in next section) 
-	* custom provide a fine-tuned control over the whole Shannon_RNA_Seq processing, user can start at any check point to practice new parameters setting, provided that input are available
-	* 19 tests are available to start at any point in the flowchart, provided their input are given at proper place
+	* custom setting provides a fine-tuned control over the whole processing, an user can start at any functional block to practice new parameters
+	* 19 tests are available to start at any point in the flowchart, provided that the corresponding inputs inside a cylinder are available and placed at proper place [See Output file structure](#output-file-structure)
 	* start from beginning, run the whole process: choose 12
 	* run task A, B, C: choose 3
 	* run task B, C   : choose 14
@@ -155,7 +169,7 @@ Usage: each setting file should corresponds to a distinct output path
 	* sf_num_parallel: number of **process** created for solving sparse flow (each process implicitly creats two threads)
 	
 
-## Other parameter
+## Memory parameter
 To address the memory issue, two several are defined 
 * choose methods to represents kmer count: in the file src/shc_types.h
 	* USE_APPROX_COUNT -- use 8 bytes for kmer dictionary value part
@@ -172,7 +186,7 @@ To address the memory issue, two several are defined
 ## Versioning
 1.0.0
 
-## Authors
+## Author
 
 * **Bowen Xue** 
 
