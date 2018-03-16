@@ -33,7 +33,7 @@ However, this C++ version significantly improves both time and memory efficiency
 	* sudo apt-get install cmake
 * Install Jellyfish
 	* follow instrctions from [JellyFish](http://www.cbcb.umd.edu/software/jellyfish/) 
-* boost library (May be the most painful part if you have an old one on system, cmake might not link properly)
+* Install boost library (May be the most painful part if you have an old one on system, cmake might not link properly)
 	* follow instruction from [boost](http://www.boost.org/doc/libs/1_66_0/more/getting_started/unix-variants.html)
 	* ~~sudo apt-get install libboost-all-dev~~, since it would install an older 
 	
@@ -42,14 +42,19 @@ However, this C++ version significantly improves both time and memory efficiency
 		* Boost.ProgramOptions
 		* Boost.Filesystem 
 		* Boost.System
-* glpk 	
+* Install glpk 	
 	*  install version 4.62 or higher, follow instructions from [GLPK](https://en.wikibooks.org/wiki/GLPK/Linux_OS)
 	*  ~~sudo apt-get install libglpk-dev~~, since it would install an older version, which gives error
-* google sparsehash 
+* Install google sparsehash 
 	* follow instructions from [google sparsehash](https://github.com/sparsehash/sparsehash)
 * hopscotch -- https://github.com/Tessil/hopscotch-map (already included in the repo, no action needed)
-* sparsepp -- https://github.com/greg7mdp/sparsepp
-	* download from link above, extract and place the whole files in the cmake directory
+* Download sparsepp -- https://github.com/greg7mdp/sparsepp
+	* download from link above, extract and place the whole files in the CMakeLists.txt directory
+
+* After all, type in the directory of CMakeLists.txt file
+	1. cmake .
+	2. make
+	
 
 ## Getting Started
 * Example, there is a single ended read (at dir single_read_path) with read length 100, save it to ouput_path to 
