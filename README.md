@@ -48,11 +48,12 @@ However, this C++ version significantly improves both time and memory efficiency
 * google sparsehash 
 	* follow instructions from [google sparsehash](https://github.com/sparsehash/sparsehash)
 * hopscotch -- https://github.com/Tessil/hopscotch-map (already included in the repo, no action needed)
-* sparsepp -- https://github.com/greg7mdp/sparsepp (already included in the repo, no action needed)
+* sparsepp -- https://github.com/greg7mdp/sparsepp
+	* download from link above, extract and place the whole files in the cmake directory
 
 ## Getting Started
 
-* Try to run command **./Shannon_C_seq custom setting**
+* Try to run command **./Shannon_C_seq shannon **
 
 
 ## Output file structure
