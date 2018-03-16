@@ -5,6 +5,7 @@ set (CMAKE_CXX_STANDARD 11)
 set(CMAKE_BUILD_TYPE Debug)
 
 include_directories(/usr/include/)
+include_directories(./sparsepp/)
 
 SET(BOOST_ROOT /usr)
 SET(CMAKE_INCLUDE_PATH /usr/include ${CMAKE_INCLUDE_PATH} )
