@@ -54,7 +54,7 @@ However, this C++ version significantly improves both time and memory efficiency
 ## Getting Started
 * Example, there is a single ended read (at dir single_read_path) with read length 100, save it to ouput_path to 
 * Try to run command with absolute paths
-* **./Shannon_C_seq shannon -l default_setting -k 25 -l 100 -s single_read_path -o output_path**
+* **./Shannon_RNASeq_Cpp shannon -l default_setting -k 25 -l 100 -s single_read_path -o output_path**
 
 ## Output file structure
 
