@@ -2,8 +2,8 @@
 	"kmer_length":          "25",
 	"double_strand":        "true",
     
-	"has_single":           "true",
-	"single_read_length":   "101",
+	"has_single":           "false",
+	"single_read_length":   "0",
 
 	"has_pair":             "false",
 	"pair_1_read_length": "0",
@@ -12,13 +12,13 @@
 	"is_compress":          "false",
     
 	"file_structure": {    
-		"input_jf_path"    :  "/data1/bowen/Shannon_C_seq/new_data/medium_c.jf",	    
-		"input_kmer_path"  :  "/data1/bowen/Shannon_C_seq/new_data/medium_c.dict",
-		"input_read_path"  :  "/data1/bowen/Shannon_C_seq/test_data/medium.fasta",
+		"input_jf_path"    :  "",	    
+		"input_kmer_path"  :  "",
+		"input_read_path"  :  "",
 		"input_read_path_1":  "",
 		"input_read_path_2" : "",
-		"output_path"  : "/data1/bowen/Shannon_C_seq/output_SE_medium",
-		"reference_seq_path": "/data1/bowen/Shannon_C_seq/output_SE_medium/medium_SE_reference.fasta"
+		"output_path"  : "",
+		"reference_seq_path": ""
 	},
 
 	"kmer_setup" : {
