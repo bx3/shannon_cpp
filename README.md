@@ -9,6 +9,7 @@ However, this C++ version significantly improves both time and memory efficiency
 ## Content
 - [Prerequisites](#prerequisites)
 - [Installing](#installing)
+- [Input requirement](#input-requirement)
 - [Getting started](#getting-started)
 - [Output file structure](#output-file-structure)
 - [Flowchart](#flowchart)
@@ -35,9 +36,7 @@ However, this C++ version significantly improves both time and memory efficiency
 	* follow instrctions from [JellyFish](http://www.cbcb.umd.edu/software/jellyfish/) 
 * Install boost library (May be the most painful part if you have an old one on system, cmake might not link properly)
 	* follow instruction from [boost](http://www.boost.org/doc/libs/1_66_0/more/getting_started/unix-variants.html)
-	* ~~sudo apt-get install libboost-all-dev~~, since it would install an older 
-	
-	, which would not compile
+	* ~~sudo apt-get install libboost-all-dev~~, since it would install an older, which would not compile
 	* remember to install the non-header part of boost. This implementation needs
 		* Boost.ProgramOptions
 		* Boost.Filesystem 
@@ -60,6 +59,12 @@ However, this C++ version significantly improves both time and memory efficiency
 * Example, there is a single ended read (at dir single_read_path) with read length 100, save it to ouput_path to 
 * Try to run command with absolute paths
 * **./Shannon_RNASeq_Cpp shannon -l default_setting -k 25 -l 100 -s single_read_path -o output_path**
+
+## Input requirement
+* all reads needs to be formatted as following:
+* header-info \n
+* seq \n
+* Hence there should not be multiple lines for one seq
 
 ## Output file structure
 
