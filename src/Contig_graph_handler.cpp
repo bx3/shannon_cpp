@@ -183,6 +183,7 @@ assign_comp_without_graph()
         collect_comp_num = curr_component_num;
         std::string simple_comp(SIMPLE_COMPONENT);
         component_type.push_back(simple_comp);
+        complex_comp_indicator.push_back(false);
         accum_collect_contig_num = 1;
         curr_component_num++;
         is_set_collect_comp_num = true;
@@ -422,6 +423,7 @@ void Contig_graph_handler::break_and_keep_component(graph_t & graph)
             collect_comp_num = curr_component_num;
             std::string simple_comp(SIMPLE_COMPONENT);
             component_type.push_back(simple_comp);
+            complex_comp_indicator.push_back(false);
             accum_collect_contig_num = 1;
             curr_component_num++;
             is_set_collect_comp_num = true;
@@ -484,6 +486,7 @@ void Contig_graph_handler::break_and_keep_component(graph_t & graph)
         {
             std::string complex(COMPLEX_COMPONENT);
             component_type.push_back(complex + std::to_string(num_complex_comp));
+            complex_comp_indicator.push_back(true);
         }
 
         if(metis_setup.is_multiple_partition)
@@ -498,6 +501,7 @@ void Contig_graph_handler::break_and_keep_component(graph_t & graph)
                 std::string re_partition(RE_PARTITION);
                 std::string complex(COMPLEX_COMPONENT);
                 component_type.push_back(re_partition+complex+std::to_string(num_complex_comp));
+                complex_comp_indicator.push_back(true);
             }
             shc_log_info(shc_logname, "Finish repartition\n");
         }
@@ -1263,11 +1267,11 @@ assign_pair_read_to_file_mmap_helper(struct Single_dumper & mfs_p1,
 
         if (metis_setup.is_multiple_partition)
         {
-            std::map<comp_num_t, int> re_comp_count_map;
-            update_comp_map(re_comp_count_map, is_forward, component_array_aux, seq_ptr_p1, seq_len_p1);
-            update_comp_map(re_comp_count_map, is_forward, component_array_aux, seq_ptr_p2, seq_len_p2);
-            if(component_array_aux[best_comp] < curr_component_num) // comes form complex components i.e. reweighted
+            if(complex_comp_indicator[best_comp]) // is complex component
             {
+                std::map<comp_num_t, int> re_comp_count_map;
+                update_comp_map(re_comp_count_map, is_forward, component_array_aux, seq_ptr_p1, seq_len_p1);
+                update_comp_map(re_comp_count_map, is_forward, component_array_aux, seq_ptr_p2, seq_len_p2);
                 assign_pair_best_comp(mfs_p1, mfs_p2, re_comp_count_map,
                     seq_ptr_p1, seq_ptr_p2, header_ptr_p1, header_ptr_p2, seq_len_p1, seq_len_p2, is_forward);
             }
@@ -1431,9 +1435,10 @@ assign_single_read_to_file_mmap_helper(struct Single_dumper & mfs,
         update_comp_map(comp_count_map, is_forward, component_array, seq_ptr, seq_len);
         comp_num_t best_comp = assign_single_best_comp(mfs, comp_count_map, seq_ptr, header_ptr,
                                                 seq_len, is_forward);
+
         if(metis_setup.is_multiple_partition)
         {
-            if(component_array_aux[best_comp] < curr_component_num)
+            if(complex_comp_indicator[best_comp]) // is complex component
             {
                 std::map<comp_num_t, int> re_comp_count_map;
                 update_comp_map(re_comp_count_map, is_forward, component_array_aux, seq_ptr, seq_len);

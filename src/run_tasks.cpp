@@ -70,7 +70,7 @@ void run_custom(int argc, char** argv)
     std::string base_path_str(base_path.c_str());
     //("/shannon_C_setting.txt");
     std::string setting_path = base_path_str + "/" + setting_file_name;
-
+    std::cout << "setting_path " << setting_path << std::endl;
     if(!boost::filesystem::exists(setting_path))
     {
         shc_log_error("No such file: %s\n", setting_path.c_str());
@@ -78,7 +78,7 @@ void run_custom(int argc, char** argv)
     }
 
     int desiredTest = -1;
-    while(desiredTest<0 || desiredTest>19)
+    while(desiredTest<0 || desiredTest>20)
     {
         std::cout << "Select desired application: \n";
         std::cout << "   0) specific test\n";
@@ -101,11 +101,11 @@ void run_custom(int argc, char** argv)
         std::cout << "   17) test_seq_run_it\n";
         std::cout << "   18) sort kmer\n";
         std::cout << "   19) test_filter_output\n";
+        std::cout << "   20) test load_contig_patition_and_multi_seq_sf\n";
         std::cin >> desiredTest;
     }
 
     Shannon_C_setting setting;
-
     parser_setting_file(setting_path, setting);
     memcpy(shc_logname, setting.local_files.log_filename_path.c_str(),
                                         setting.local_files.log_filename_path.size());
@@ -179,10 +179,21 @@ void run_custom(int argc, char** argv)
         case 19:
             test_filter_output(&setting);
             break;
+        case 20:
+            test_load_contig_patition_and_multi_seq_sf(&setting);
+            break;
         default:
             break;
     }
     return;
+}
+
+void test_load_contig_patition_and_multi_seq_sf(Shannon_C_setting * setting)
+{
+    {
+        test_load_contig_graph(setting);
+    }
+    test_multi_seq_sf(setting);
 }
 
 void test_filter_output(Shannon_C_setting * setting)

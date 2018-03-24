@@ -4,11 +4,11 @@ void parser_setting_file(std::string & file_path, Shannon_C_setting & setting)
 {
     using boost::property_tree::ptree;
 
-    std::ifstream json_file(file_path.c_str());
+    std::ifstream json_file(file_path);
     ptree pt;
-
     boost::property_tree::json_parser::read_json(json_file, pt);
     // top level
+
     uint8_t kmer_length = pt.get<uint8_t>("kmer_length");
     bool is_double_stranded = pt.get<bool>("double_strand");
     bool has_pair = pt.get<bool>("has_pair");
@@ -63,6 +63,7 @@ void parser_setting_file(std::string & file_path, Shannon_C_setting & setting)
 
     setting.local_files = lf;
 
+
     // dup_correction
     ptree dup_correction = pt.get_child("kmer_setup");
     uint8_t rmer_length = dup_correction.get<uint8_t>("rmer_length");
@@ -105,18 +106,9 @@ void parser_setting_file(std::string & file_path, Shannon_C_setting & setting)
     int multiple_test = sparse_flow_setup.get<int>("multiple_test");
     int sf_num_parallel = sparse_flow_setup.get<int>("sf_num_parallel");
     setting.sparse_flow_setup.set_para(multiple_test, sf_num_parallel);
-
-    // output setup
-    ptree output_setup = pt.get_child("output_setup");
-    bool kmer_with_info = output_setup.get<bool>("kmer_with_info");
-    bool contig = output_setup.get<bool>("contig");
-    bool component_array = output_setup.get<bool>("component_array");
-    bool read_to_component = output_setup.get<bool>("read_to_component");
-    bool kmer_to_component = output_setup.get<bool>("kmer_to_component");
-
-    setting.output_setup.set_para(kmer_with_info, contig, component_array,
-                         read_to_component, kmer_to_component);
+    shc_log_info(shc_logname, "parsed json info\n");
 }
+
 
 void print_setting(Shannon_C_setting & setting)
 {
@@ -149,7 +141,7 @@ void print_setting(Shannon_C_setting & setting)
     std::cout << "num_sort_thread          : " << ((setting.dup_setting.num_sort_thread)) << std::endl;
     std::cout << std::endl;
 
-    std::cout << "\033[1;35m";  //34 blue, 31 red, 35 purple
+    std::cout << "\033[1;31m";  //34 blue, 31 red, 35 purple
     std::cout << "Metis setup              *********** " << std::endl;
     std::cout << "use_multiple_partition   : " << ((setting.metis_setup.is_multiple_partition)?("Yes"):("No")) << std::endl;
     std::cout << "partition_size           : " << setting.metis_setup.partition_size << std::endl;
@@ -157,7 +149,7 @@ void print_setting(Shannon_C_setting & setting)
     std::cout << "overload                 : " << setting.metis_setup.overload << std::endl;
     std::cout << std::endl;
 
-    std::cout << "\033[1;35m";  //34 blue, 31 red, 35 purple
+    std::cout << "\033[1;34m";  //34 blue, 31 red, 35 purple
     std::cout << "Contig graph setup       *********** " << std::endl;
     std::cout << "num_test                 : " << setting.contig_graph_setup.num_test << std::endl;
     std::cout << "is_assign_best              : " << ((setting.contig_graph_setup.is_assign_best)?("Yes"):("No")) << std::endl;
@@ -173,18 +165,7 @@ void print_setting(Shannon_C_setting & setting)
     std::cout << "sparse flow multiple test: " << setting.sparse_flow_setup.multiple_test << std::endl;
     std::cout << "sparse flow num parallel : " << setting.sparse_flow_setup.sf_num_parallel << std::endl;
     std::cout << std::endl;
-
-    std::cout << "\033[1;34m";  //34 blue, 31 red, 35 purple
-    std::cout << "Output setting           *********** " << std::endl;
-    std::cout << "dump kmer with info      : " << ((setting.output_setup.kmer_with_info)?("Yes"):("No")) << std::endl;
-    std::cout << "dump contig              : " << ((setting.output_setup.contig)?("Yes"):("No")) << std::endl;
-    std::cout << "dump component_array     : " << ((setting.output_setup.component_array)?("Yes"):("No")) << std::endl;
-    std::cout << "dump read to component   : " << ((setting.output_setup.read_to_component)?("Yes"):("No")) << std::endl;
-    std::cout << "dump kmer to component   : " << ((setting.output_setup.kmer_to_component)?("Yes"):("No")) << std::endl;
-
-    std::cout << "\033[0m" << std::endl;
-
-
+    std::cout << "\033[0m";
 }
 
 void log_setting(Shannon_C_setting & setting)
@@ -241,11 +222,4 @@ void log_setting(Shannon_C_setting & setting)
     shc_log_info(shc_logname, "sparse flow num parallel : %d\n", setting.sparse_flow_setup.sf_num_parallel);
     shc_log_info(shc_logname, "\n");
 
-    shc_log_info(shc_logname, "Output setting           *********** \n");
-    shc_log_info(shc_logname, "dump kmer with info      : %s\n", ((setting.output_setup.kmer_with_info)?("Yes"):("No")));
-    shc_log_info(shc_logname, "dump contig              : %s\n", ((setting.output_setup.contig)?("Yes"):("No")));
-    shc_log_info(shc_logname, "dump component_array     : %s\n", ((setting.output_setup.component_array)?("Yes"):("No")));
-    shc_log_info(shc_logname, "dump read to component   : %s\n", ((setting.output_setup.read_to_component)?("Yes"):("No")));
-    shc_log_info(shc_logname, "dump kmer to component   : %s\n", ((setting.output_setup.kmer_to_component)?("Yes"):("No")));
-    shc_log_info(shc_logname, "\n");
 }

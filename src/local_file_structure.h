@@ -145,6 +145,7 @@ struct Local_files {    //"/test_data"
 
     void add_output_path(std::string output_path_)
     {
+        //std::cout << "start add output path" << std::endl;
         output_path = output_path_;
         log_filename_path = output_path + "/log_shannonC";
         output_contig_path = output_path + "/contig";
@@ -195,6 +196,8 @@ struct Local_files {    //"/test_data"
 
 
         add_directory_if_not_exist(algo_input);
+
+        //std::cout << "finish add output path" << std::endl;
     }
 
     // dir path

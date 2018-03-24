@@ -380,7 +380,7 @@ private:
 
     void count_component_size();
     void log_comp_content();
-    void log_contigs(std::string file_path);
+    void log_contigs(std::string file_path);    
 
     kmer_len_t k1mer_len;
 
@@ -399,6 +399,7 @@ private:
     std::vector<comp_num_t> component_array_aux; // used for re-partition
 
     std::vector<std::string> component_type;
+    std::vector<bool> complex_comp_indicator;  //indicate if this component comes from a complex component, i.e. a partitioned components
     int num_complex_comp;
 
     comp_num_t curr_component_num; // after processing the largest comp num is this number -1

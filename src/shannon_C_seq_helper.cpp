@@ -388,6 +388,11 @@ void run_jellyfish(Shannon_C_setting & setting)
             shc_log_info(shc_logname, "finish jellyfish with kmer length %d\n",
                                                 setting.kmer_length);
         }
+        else
+        {
+            std::cout << "Use jellyfish dict at dir " << lf.input_kmer_path << std::endl;
+            std::cout << "Use jellyfish jf file at dir " << lf.input_jf_path << std::endl;
+        }
     }
 }
 

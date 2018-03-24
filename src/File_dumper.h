@@ -500,6 +500,7 @@ struct Single_dumper {
                                     it!=mem_comps.end(); it++)
         {
             int comp_i = *it;
+            //shc_log_info(shc_logname, "dump mem for comp %d\n", comp_i);
             std::map<int, File_man>::iterator fileman_it = comp_fileman_map.find(*it);
             if(fileman_it != comp_fileman_map.end())
             {
