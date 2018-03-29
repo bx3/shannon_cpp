@@ -61,10 +61,11 @@ However, this C++ version significantly improves both time and memory efficiency
 * **./Shannon_RNASeq_Cpp shannon -l default_setting -k 25 -l 100 -s single_read_path -o output_path**
 
 ## Input requirement
+* Input either single-ended or pair-ended need to be FASTA format.
 * all reads needs to be formatted as following:
 * header-info \n
 * seq \n
-* Hence there should not be multiple lines for one seq
+* Hence there should be only two lines for a single record
 
 ## Output file structure
 
@@ -110,7 +111,7 @@ Two modes are available
 	* shannon provide a way to specify most important parameters through command line 
  	* required field
  		* j -- config file, specifying all detail parameter (More details in next section)
- 		* k -- kmer length
+ 		* k -- kmer length (**<=32**)
  		* o -- output directory
  		* input fasta path and lenght
 			* single ended input
@@ -131,17 +132,18 @@ Two modes are available
 	* argument: a config file (More details in next section) 
 	* custom setting provides a fine-tuned control over the whole processing, an user can start at any functional block to practice new parameters
 	* 19 tests are available to start at any point in the flowchart, provided that the corresponding inputs inside a cylinder are available and placed at proper place [See Output file structure](#output-file-structure)
-	* start from beginning, run the whole process: choose 12
-	* run task A, B, C: choose 3
-	* run task B, C   : choose 14
-	* run task C	  : choose 4	
-	* run task D, E, F: choose 13
-	* run task D      : choose 9
-	* run task E	  : choose 11
-	* run single graph in task D: choose 8, then enter graph number
-	* run single graph in task E: choose 10, then enter component graph numner, then graph number
-	* run task F      : choose 19
-	* run evaluation  : choose 16 (provided reference is given)
+	* start from beginning, run the whole process: choose 12 (same as command line)
+	* run task A, B, C          	 : choose 3
+	* run task B, C             	 : choose 14
+	* run task C	            	 : choose 4	
+	* run task C, D, E, F       	 : choose 20
+	* run task D, E, F    	    	 : choose 13
+	* run task D          	   	 : choose 9
+	* run task E	    	         : choose 11
+	* run single compoment in task D : choose 8, then enter component number
+	* run single graph in task E	 : choose 10, then enter component component numner, then graph number
+	* run task F                	 : choose 19	
+	* run evaluation            	 : choose 16 (provided reference is given)
 
 
 ## Config file
@@ -195,7 +197,7 @@ To address the memory issue, two several are defined
 
 
 ## Versioning
-1.0.0
+0.0.0
 
 ## Author
 
