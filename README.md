@@ -62,6 +62,7 @@ However, this C++ version significantly improves both time and memory efficiency
 
 ## Input requirement
 * Input either single-ended or pair-ended need to be FASTA format.
+* useful SED command: sed -n '1~4s/^@/>/p;2~4p' in.fastq > out.fasta
 * all reads needs to be formatted as following:
 * header-info \n
 * seq \n
