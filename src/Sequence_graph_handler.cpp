@@ -534,6 +534,10 @@ bool Sequence_graph_handler::trim_read(std::string & read, uint64_t i_read)
             return false;
         }
     }
+    if(read.size()<kmer_length+2)
+    {
+        return false;
+    }
     return true;
 }
 
@@ -865,21 +869,25 @@ void Sequence_graph_handler::assign_read_to_xnode()
     for(size_t j = 0; j < coll_read_list.get_num_reads(); j++)
     {
         Read_acc acc = coll_read_list.get_read(j);
+        //shc_log_info(shc_logname, "read len %u\n", acc.len);
         //std::string a_read(acc.read_ptr, acc.len);
         //shc_log_info(shc_logname, "%s has count %u\n", a_read.c_str(), acc.read_count);
-        for(int i=1; i<acc.len - kmer_length; i++)
+        if(acc.len > kmer_length)
         {
-            encode_kmer(acc.read_ptr + i, &byte, kmer_length);
-            Kmer_vds_map_iterator it = kmer_vds_map.find(byte);
-            if(it != kmer_vds_map.end())
+            for(int i=1; i<acc.len - kmer_length; i++)
             {
-                std::vector<vd_t> & vd_vec = it.value();
-                for(std::vector<vd_t>::iterator vd_it =vd_vec.begin();
-                                                vd_it!=vd_vec.end(); ++vd_it)
+                encode_kmer(acc.read_ptr + i, &byte, kmer_length);
+                Kmer_vds_map_iterator it = kmer_vds_map.find(byte);
+                if(it != kmer_vds_map.end())
                 {
-                    if(is_read_bridge_node(acc.read_ptr, acc.len, i, *vd_it))
+                    std::vector<vd_t> & vd_vec = it.value();
+                    for(std::vector<vd_t>::iterator vd_it =vd_vec.begin();
+                                                    vd_it!=vd_vec.end(); ++vd_it)
                     {
-                        node_link_read(*vd_it, j, i); //j is virtual read index
+                        if(is_read_bridge_node(acc.read_ptr, acc.len, i, *vd_it))
+                        {
+                            node_link_read(*vd_it, j, i); //j is virtual read index
+                        }
                     }
                 }
             }
