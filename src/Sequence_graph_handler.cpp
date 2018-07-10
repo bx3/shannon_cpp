@@ -30,6 +30,8 @@ void Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
     uint64_t find_known_path_time;
     uint64_t output_time;
 
+    nodes_struct_writer.open(setting.local_files.node_structs_info_path+"/comp" + std::to_string(comp_i));
+
     Block_timer part_timer;
     start_timer(&part_timer);
 
@@ -37,7 +39,7 @@ void Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
     build_num_node = get_num_nodes();
     build_num_edge = get_num_edges();
 #ifdef PRINT_TIME
-    std::cout << "build graph, load read take, " << std::endl;
+    std::cout << "build graph, load "<< coll_read_list.get_num_reads() << " read take, " << std::endl;
     stop_timer(&part_timer);
 #endif
     stop_timer_np(&part_timer);
@@ -90,6 +92,9 @@ void Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
     stop_timer_np(&part_timer);
     collapse_time = part_timer.nTime;
 
+
+    //log_classify_node_types(nodes_struct_writer, 100);
+
 #ifdef PRINT_GRAPH_STATS
     std::cout << "after collapse node " << (get_num_nodes()) << " num edge "
                               << get_num_edges() << std::endl;
@@ -97,6 +102,7 @@ void Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
 
     start_timer(&part_timer);
     update_xnode_set();
+    int num_xnode = xnode_set.size();
 #ifdef PRINT_TIME
     std::cout << "update_xnode_set, " << std::endl;
     stop_timer(&part_timer);
@@ -107,6 +113,7 @@ void Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
 
     start_timer(&part_timer);
     assign_read_to_xnode();
+
 #ifdef PRINT_TIME
     std::cout << "assign_read_to_xnode, " << std::endl;
     stop_timer(&part_timer);
@@ -122,6 +129,8 @@ void Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
 
     start_timer(&part_timer);
     bridge_all_xnodes();
+    int num_xnode_remain = get_num_xnodes();
+    //std::cout << "num_xnode_remain " << num_xnode_remain << std::endl;
     mb_num_node = get_num_nodes();
     mb_num_edge = get_num_edges();
 #ifdef PRINT_TIME
@@ -136,6 +145,29 @@ void Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
               << get_num_edges() << std::endl;
 #endif
 
+    condense_graph();
+    log_classify_node_types(nodes_struct_writer, 100);
+    //log_graph_to_file(graph_writer , 100);
+    //std::cout << "after condense " << (get_num_nodes()) << " num edge "
+    //          << get_num_edges() << std::endl;
+    //log_all_nodes_reads_to_file(reads_writer);
+
+    find_approximate_copy_count();
+
+    start_timer(&part_timer);
+    //break_self_loops();
+    //log_graph_to_file(graph_writer , 101);
+
+#ifdef PRINT_TIME
+    std::cout << "break_self_loops, " << (get_num_nodes()) << " num edge "
+              << get_num_edges() << std::endl;
+    stop_timer(&part_timer);
+#endif
+    //condense_graph();
+    //std::cout << "after condense " << (get_num_nodes()) << " num edge "
+    //          << get_num_edges() << std::endl;
+
+    //log_graph_to_file(graph_writer , 102);
 /*
     special_condense_self_loop();
     condense_graph();
@@ -146,40 +178,43 @@ void Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
 #endif
 */
     //log_all_node(true, false);
-    start_timer(&part_timer);
-    break_self_loops();
-#ifdef PRINT_TIME
-    std::cout << "break_self_loops, " << std::endl;
-    stop_timer(&part_timer);
-#endif
 
-#ifdef PRINT_GRAPH_STATS
-    std::cout << "after break self loop " << (get_num_nodes()) << " num edge "
-              << get_num_edges() << std::endl;
-#endif
 
 
     start_timer(&part_timer);
+    //py_break_cycles();
     break_all_cycles();
+
     cycle_break_num_node = get_num_nodes();
     cycle_break_num_edge = get_num_edges();
 #ifdef PRINT_TIME
-    std::cout << "break_all_cycles, " << std::endl;
+    std::cout << "break_all_cycles, " << (get_num_nodes()) << " num edge "
+              << get_num_edges() << std::endl;
     stop_timer(&part_timer);
 #endif
     stop_timer_np(&part_timer);
     cycle_break_time = part_timer.nTime;
 
+    //int before_rm_node_num = get_num_nodes();
+    //int before_rm_edge_num = get_num_edges();
 
-#ifdef PRINT_GRAPH_STATS
-    std::cout << "after break all cycle " << (get_num_nodes()) << " num edge "
-              << get_num_edges() << std::endl;
-#endif
+    //remove_nodes_edges_if_not_cover_by_reads();
 
-    //find_approximate_copy_count();
+    //int after_rm_node_num = get_num_nodes();
+    //int after_rm_edge_num = get_num_edges();
+
+    //std::cout << "before_rm_node_num " << before_rm_node_num << std::endl;
+    //std::cout << "before_rm_edge_num " << before_rm_edge_num << std::endl;
+    //std::cout << "after_rm_node_num " << after_rm_node_num << std::endl;
+    //std::cout << "after_rm_edge_num " << after_rm_edge_num << std::endl;
+
+    find_approximate_copy_count();
 
     start_timer(&part_timer);
-    find_known_path(max_hop_path);
+    //log_graph_to_file(graph_writer , 103);
+
+
+    int num_known_path_found = find_known_path(max_hop_path);
 #ifdef PRINT_TIME
     std::cout << "find_known_path, " << std::endl;
     stop_timer(&part_timer);
@@ -187,7 +222,7 @@ void Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
     stop_timer_np(&part_timer);
     find_known_path_time = part_timer.nTime;
 
-    //find_copy_count();
+    find_copy_count();
 
     Local_files & lf = setting.local_files;
 
@@ -198,7 +233,15 @@ void Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
     std::string path_dir =
         lf.output_seq_graph_path + lf.path_prefix + std::to_string(comp_i);
 
+    //std::cout << "output node file " << node_dir << std::endl;
+    //std::cout << "output edge file " << edge_dir << std::endl;
+    //std::cout << "output path file " << path_dir << std::endl;
+
+    //std::cout << "num isolated nodes " << get_num_isolated_nodes() << std::endl;
+
     start_timer(&dump_timer);
+    //log_classify_edge_types();
+    //log_graph_to_file(graph_writer , 104);
     output_components(node_dir, edge_dir, path_dir);
 #ifdef PRINT_TIME
     std::cout << "output_components, " << std::endl;
@@ -220,15 +263,15 @@ void Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
                   << rm_sus_num_node << " Edge: " << rm_sus_num_edge  << std::endl;
         std::cout << "collapse_time         " << collapse_time << " sec, Node: "
                   << collapse_num_node << " Edge: " << collapse_num_edge  << std::endl;
-        std::cout << "update_xnode_set_time " << update_xnode_set_time << " sec" << std::endl;
-        std::cout << "assign_read_time      " << assign_read_time << " sec" << std::endl;
+        std::cout << "update_xnode_set_time " << update_xnode_set_time << " sec, num xnode " << num_xnode << std::endl;
+        std::cout << "assign_read_time      " << assign_read_time << " sec, No. assigned reads " << num_assigned_read << " out of total reads " << coll_read_list.get_num_reads() << std::endl;
         std::cout << "resolve_pair_time     " << resolve_pair_timer.nTime << " sec" << std::endl;
         std::cout << "mb_time               " << mb_time << " sec, Node: "
                   << mb_num_node << " Edge: " << mb_num_edge << ", "
                   << total_num_bridged << " nodes bridged"   << std::endl;
         std::cout << "cycle_break_time      " << cycle_break_time << " sec, Node: "
                   << cycle_break_num_node << " Edge: " << cycle_break_num_edge  << std::endl;
-        std::cout << "find_known_path_time  " << find_known_path_time << " sec" << std::endl;
+        std::cout << "find_known_path_time  " << find_known_path_time << " sec, num found " << num_known_path_found << std::endl;
         std::cout << "output_time           " << output_time << " sec, "
                   << num_single_seq << " single seq" <<  std::endl;
         std::cout << "Total time, ";
@@ -244,13 +287,13 @@ void Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
     shc_log_info(shc_logname, "collapse_time         %d sec, Node: %u Edges: %u\n",
                     collapse_time, collapse_num_node, collapse_num_edge);
     shc_log_info(shc_logname, "update_xnode_set_time %d sec\n", update_xnode_set_time);
-    shc_log_info(shc_logname, "assign_read_time      %d sec\n", assign_read_time);
+    shc_log_info(shc_logname, "assign_read_time      %d sec, %d reads\n", assign_read_time, coll_read_list.get_num_reads());
     shc_log_info(shc_logname, "resolve pair time %d sec\n", resolve_pair_timer.nTime);
     shc_log_info(shc_logname, "mb_time               %d sec, Node: %u Edges: %u, %u node bridged, \n",
                     mb_time, mb_num_node, mb_num_edge, total_num_bridged);
     shc_log_info(shc_logname, "cycle_break_time      %d sec, Node: %u Edges: %u\n",
                     cycle_break_time, cycle_break_num_node, cycle_break_num_edge);
-    shc_log_info(shc_logname, "find_known_path_time  %d sec\n", find_known_path_time);
+    shc_log_info(shc_logname, "find_known_path_time  %d sec num found %d\n", find_known_path_time, num_known_path_found);
     shc_log_info(shc_logname, "output_time           %d sec, %u single seq\n", output_time, num_single_seq);
     shc_log_info(shc_logname, "total time \n");
     log_stop_timer(&main_timer);
@@ -300,7 +343,7 @@ get_total_num_reads(std::string file_path_prefix)
         i++;
         file_path = file_path_prefix + "_" + std::to_string(i);
     }
-    assert(total_num_line!=0);
+    //assert(total_num_line!=0);
     return total_num_line;
 }
 
@@ -409,17 +452,27 @@ void Sequence_graph_handler::build_kmer_graph_from_edges()
         }
     }
 
-    // add mode prevalence
+    // add node prevalence
+
     vip_t vip = boost::vertices(graph);
     for(vi_t it=vip.first; it!=vip.second; it++)
     {
-        uint64_t sum_p = 0;
+        uint64_t out_sum_p = 0;
         out_eip_t out_eip = boost::out_edges(*it, graph);
         for(out_ei_t out_ei=out_eip.first; out_ei!=out_eip.second; out_ei++)
         {
-            sum_p += graph[*out_ei].weight;
+            out_sum_p += graph[*out_ei].count;
         }
-        graph[*it].prevalence = sum_p;
+
+        uint64_t in_sum_p = 0;
+        in_eip_t in_eip = boost::in_edges(*it ,graph);
+        for(in_ei_t in_ei=in_eip.first; in_ei!=in_eip.second; in_ei++)
+        {
+            in_sum_p += graph[*in_ei].count;
+        }
+
+
+        graph[*it].prevalence = (in_sum_p+out_sum_p)/2;
     }
 
     load_all_read(kmer_node_map);
@@ -566,6 +619,9 @@ void Sequence_graph_handler::load_all_paired_read(Kmer_Node_map & kmer_node_map)
     read_num_t read_index_p1;
     read_num_t read_index_p2;
 
+    Kmer_counter_map temp_kmer_map;
+    //Read_subsampler read_subsampler(subsample_factor);
+
     while(true)
     {
         //update_edge_count_with_read(read_base_p1, kmer_node_map);
@@ -641,26 +697,31 @@ void Sequence_graph_handler::load_all_paired_read(Kmer_Node_map & kmer_node_map)
             }
         }
         // add reads
-        read_list_p1.add_read(read_base_p1, read_index_p1); //read index local to its dict
-        read_list_p2.add_read(read_base_p2, read_index_p2); //read index local to its dict
-        // assign terminal nodes for each pair of read
-        if(is_valid_pair_vd)
-        {
-            //shc_log_info(shc_logname, "%u\n", i_th_read);
-            //shc_log_info(shc_logname, "p1 %s\n", read_base_p1.c_str());
-            //shc_log_info(shc_logname, "p2 %s\n", read_base_p2.c_str());
 
-            graph[p1_vd_end].term_nodes_info.emplace_back(PAIR_END_NODE, i_th_read);
-            graph[p2_vd_front].term_nodes_info.emplace_back(PAIR_FRONT_NODE, i_th_read);
-            num_valid_pair++;
-            p1_end.push_back(p1_vd_end);
-            p2_front.push_back(p2_vd_front);
-        }
-        else
-        {
-            p1_end.push_back(NULL);
-            p2_front.push_back(NULL);
-        }
+        //if(read_subsampler.simple_decider())
+        //{
+            read_list_p1.add_read(read_base_p1, read_index_p1); //read index local to its dict
+            read_list_p2.add_read(read_base_p2, read_index_p2); //read index local to its dict
+
+            // assign terminal nodes for each pair of read
+            if(is_valid_pair_vd)
+            {
+                //shc_log_info(shc_logname, "%u\n", i_th_read);
+                //shc_log_info(shc_logname, "p1 %s\n", read_base_p1.c_str());
+                //shc_log_info(shc_logname, "p2 %s\n", read_base_p2.c_str());
+
+                graph[p1_vd_end].term_nodes_info.emplace_back(PAIR_END_NODE, i_th_read);
+                graph[p2_vd_front].term_nodes_info.emplace_back(PAIR_FRONT_NODE, i_th_read);
+                num_valid_pair++;
+                p1_end.push_back(p1_vd_end);
+                p2_front.push_back(p2_vd_front);
+            }
+            else
+            {
+                p1_end.push_back(NULL);
+                p2_front.push_back(NULL);
+            }
+        //}
 
         // link two read regardless
         //coll_read_list.link_two_reads(read_index_p1, read_index_p2);
@@ -722,7 +783,12 @@ load_all_single_read(std::string& read_path, Kmer_Node_map & kmer_node_map)
     kmer_base.resize(kmer_length);
 
     int i = 0;
+    int j = 0;
     read_num_t read_index;
+
+    Kmer_counter_map temp_kmer_map;
+    //Read_subsampler read_subsampler(subsample_factor);
+
     while(  std::getline(read_file_reader, temp) &&
             std::getline(read_file_reader, read_base))
     {
@@ -732,12 +798,16 @@ load_all_single_read(std::string& read_path, Kmer_Node_map & kmer_node_map)
         //update_edge_count_with_read(read_base, kmer_node_map);
         if(!trim_read(read_base, i))
             continue;
-        read_list.add_read(read_base, read_index);
+        //if(read_subsampler.simple_decider())
+        //{
+            read_list.add_read(read_base, read_index);
+            j++;
+        //}
         i++;
     }
     read_file_reader.close();
 #ifdef LOG_SEQ_GRAPH
-    shc_log_info(shc_logname, "load %d single reads\n", i);
+    shc_log_info(shc_logname, "load %d single reads\n", j);
 #endif
 }
 
@@ -864,8 +934,8 @@ void Sequence_graph_handler::assign_read_to_xnode()
 #ifdef LOG_SEQ_GRAPH
     shc_log_info(shc_logname, "Reading lines\n");
 #endif
+    num_assigned_read = 0;
     //std::ofstream debug_read_file(setting.local_files.output_path+"/all_read");
-    uint64_t num_assign = 0;
     for(size_t j = 0; j < coll_read_list.get_num_reads(); j++)
     {
         Read_acc acc = coll_read_list.get_read(j);
@@ -886,6 +956,7 @@ void Sequence_graph_handler::assign_read_to_xnode()
                     {
                         if(is_read_bridge_node(acc.read_ptr, acc.len, i, *vd_it))
                         {
+                            num_assigned_read ++;
                             node_link_read(*vd_it, j, i); //j is virtual read index
                         }
                     }
@@ -1869,6 +1940,21 @@ shc_log_info(shc_logname, "after condense, number of vertices is %d, number of e
 #endif
 }
 
+int Sequence_graph_handler::get_num_xnodes()
+{
+    int num_xnode = 0;
+    vip_t vip = boost::vertices(graph);
+    //walk through the graph list, and update if
+    for(vi_t it=vip.first; it!=vip.second; it++)
+    {
+        if(is_xnode(*it))
+        {
+            num_xnode++;
+        }
+    }
+    return num_xnode;
+}
+
 void Sequence_graph_handler::update_xnode_set()
 {
     start_timer(&timer);
@@ -2338,7 +2424,7 @@ void Sequence_graph_handler::bridge_all_xnodes()
 #ifdef LOG_SEQ_GRAPH
     shc_log_info(shc_logname, "Start bridging xnode\n");
 #endif
-    int num_iter = 1;
+    int num_iter = 0;
 
     std::set<vd_t> nodes_visited;
     //shc_log_info(shc_logname, "\t\tbefore resolve\n");
@@ -2382,11 +2468,21 @@ void Sequence_graph_handler::bridge_all_xnodes()
 #endif
         num_edge_added = 0;
         int num_xnode_bridged = 0;
+        //shc_log_info(shc_logname, "start new iter %d\n", num_iter);
+
+        //std::cout << "num nodes "<< get_num_nodes() << std::endl;
+        //std::cout << "num edges "<< get_num_edges() << std::endl;
+        //std::cout << "num isolated nodes " << get_num_isolated_nodes() << std::endl;
+        //std::cout << "num xnode " << xnode_set.size() << std::endl;
+        //if (num_iter >= 2)
+        //    exit(0);
+        //log_graph_to_file(graph_writer, num_iter);
+
         for(Node_set_iterator x_iter=xnode_set.begin();
                             x_iter!=xnode_set.end(); ++x_iter)
         {
-            if(nodes_visited.find(*x_iter) == nodes_visited.end())
-            {
+            //if(nodes_visited.find(*x_iter) == nodes_visited.end())
+            //{
                 nodes_visited.insert(*x_iter);
                 bundled_node_p & node = graph[*x_iter];
                 refresh_bridging_reads(*x_iter);
@@ -2398,7 +2494,7 @@ void Sequence_graph_handler::bridge_all_xnodes()
                     perform_bridging(*x_iter);
                     num_xnode_bridged++;
                 }
-            }
+            //}
         }
         total_num_bridged += num_xnode_bridged;
 
@@ -2427,37 +2523,17 @@ void Sequence_graph_handler::bridge_all_xnodes()
         stop_timer(&test_timer);
 #endif
 
+        //condense_graph();
+
         num_iter++;
         if(num_xnode_bridged==0)
         {
-            //shc_log_info(shc_logname, "%d xnode bridged\n", num_xnode_bridged);
-
-            //std::cout << num_xnode_bridged << " xnode bridged" << std::endl;
-
-
             condense_graph();
-
-            //vip_t vip = boost::vertices(graph);
-            //std::cout << (setting.local_files.output_path + "/analysis/C_after_condense") << std::endl;
-            //for(vi_t it=vip.first; it!=vip.second; it++)
-            //{
-            //    f_write <<  graph[*it].seq << " " << (boost::out_degree(*it, graph))
-            //            << " " << (boost::in_degree(*it, graph))
-            //            << std::endl;
-            //}
-            //f_write.close();
-
             return;
         }
         else
         {
-            //shc_log_info(shc_logname, "total %d xnode bridged\n", total_num_bridged);
-            //get_xnodes(new_nodes, xnode_set);
-            //std::cout << num_xnode_bridged << " xnode bridged" << std::endl;
-            // consider pair
-
             update_xnode_set();
-            //std::cout << " new xnode has "  << xnode_set.size()<< std::endl;
         }
     }
 
@@ -2470,6 +2546,7 @@ void Sequence_graph_handler::perform_bridging(vd_t vd)
     assert(curr_node.reads_info.size() > 0);
     assert(boost::in_degree(vd, graph)>=2 && boost::out_degree(vd, graph)>=2);
 
+    //shc_log_info(shc_logname, "\n");
     std::vector<vd_t> u_list, w_list;
     //std::cout << "bridging " << curr_node.seq << std::endl;
     //shc_log_info(shc_logname, "bridging %s\n", curr_node.seq.c_str());
@@ -2537,7 +2614,6 @@ void Sequence_graph_handler::perform_bridging(vd_t vd)
 #endif
         aer_t aer = boost::add_edge(w_loop_node, u_loop_node, graph);
         graph[aer.first] = bundled_edge_p(loop_weight+2, loop_count);
-        std::cout << "self loop" << std::endl;
         num_edge_added++;
         //shc_log_info(shc_logname, "self loop\n");
         //shc_log_info(shc_logname, "%s link to %s\n", graph[w_loop_node].seq.c_str(), graph[u_loop_node].seq.c_str());
@@ -3267,18 +3343,18 @@ create_right_node(ed_t ed)
     return w;
 }
 
-void Sequence_graph_handler::find_known_path(int max_hop)
+int Sequence_graph_handler::find_known_path(int max_hop)
 {
     start_timer(&timer);
 #ifdef LOG_SEQ_GRAPH
     shc_log_info(shc_logname, "Start find known path\n");
 #endif
-    typedef std::multimap<std::string, Node_index> Kmer_ni_MMap;
-    typedef std::multimap<std::string, Node_index>::iterator
-                                             Kmer_ni_MMap_iterator;
-    typedef std::pair<Kmer_ni_MMap_iterator, Kmer_ni_MMap_iterator>
-                                        Kmer_ni_MMap_iterator_pair;
-    Kmer_ni_MMap kmer_ni_mmap;
+
+    typedef tsl::hopscotch_map<uint64_t, std::vector<Node_index>,
+                   hash_u64, equ64> Kmer_ni_Map;
+    typedef tsl::hopscotch_map<uint64_t, std::vector<Node_index>,
+                    hash_u64, equ64>::iterator Kmer_ni_Map_iterator;
+    Kmer_ni_Map kmer_ni_map;
 
     std::string kmer_base;
     kmer_base.resize(kmer_length);
@@ -3289,59 +3365,104 @@ void Sequence_graph_handler::find_known_path(int max_hop)
 #ifdef LOG_SEQ_GRAPH
     shc_log_info(shc_logname, "Building kmer->vd start_index multimap\n");
 #endif
+    uint64_t byte;
     vip_t vip = boost::vertices(graph);
     for(vi_t vi=vip.first; vi!=vip.second; ++vi)
     {
         bundled_node_p & curr_node = graph[*vi];
+        std::string & node_seq = curr_node.seq;
         for(int i=0; i<curr_node.seq_len()-kmer_length+1; ++i)
         {
-            memcpy(&kmer_base.at(0), &curr_node.seq.at(i), kmer_length);
-            kmer_ni_mmap.insert(std::make_pair(kmer_base, Node_index(*vi, i)));
+            encode_kmer(&node_seq.at(i), &byte, kmer_length);
+            Kmer_ni_Map_iterator it = kmer_ni_map.find(byte);
+            if(it != kmer_ni_map.end())
+            {
+                (it.value()).emplace_back(*vi, i);
+            }
+            else
+            {
+                std::vector<Node_index> vec_seq(1, Node_index(*vi, i));
+                vec_seq.reserve(KNOWN_PATH_VEC_INIT_SIZE);
+                kmer_ni_map.insert(std::make_pair(byte, vec_seq));
+            }
         }
     }
 
-    std::string k_start, k_end;
-    k_start.resize(kmer_length);
-    k_end.resize(kmer_length);
     int num_known_path = 0;
+    int num_known_edge = 0;
+    int num_checked_read = 0;
+    int num_searched_reads = 0;
+    uint64_t start_byte;
+    uint64_t end_byte;
     //iterate through all read to get all known path
-    //shc_log_info(shc_logname, "Iterating reads to find path\n");
+    //shc_log_info(shc_logname, "Iterating reads to find path\n"); << std::endl;
+    //std::ofstream writer(setting.local_files.output_path+"/all_reads.log");
+
+    /*
+    coll_read_list.clear();
+
+    std::string read_path_single_prefix =
+        "/data1/bowen/Shannon_D_seq/output_SE_WW_R/back/back_all_reads/components_reads/comp";
+    size_t file_size =
+        get_total_num_reads(read_path_single_prefix);
+    //std::cout << "comp " << comp_i << "single file size " << file_size << std::endl;
+    coll_read_list.s_reads.setup(file_size);
+    Kmer_Node_map kmer_node_map;
+    int i=0;
+    std::string file_path = read_path_single_prefix + std::to_string(curr_comp) + "_" + std::to_string(i);
+    while(exist_path(file_path))
+    {
+        load_all_single_read(file_path, kmer_node_map);
+        i++;
+        file_path = read_path_single_prefix + "_" + std::to_string(i);
+    }
+    coll_read_list.declare_read_finish();
+    */
+
+    //std::cout << "num reads " << coll_read_list.get_num_reads() << std::endl;
     for(read_num_t i=0; i<coll_read_list.get_num_reads(); i++)
     {
         //shc_log_info(shc_logname, "start new read\n");
+        num_checked_read++;
         Read_acc acc = coll_read_list.get_read(i);
-        memcpy(&k_start.at(0), acc.read_ptr, kmer_length);
-        memcpy(&k_end.at(0),
-                acc.read_ptr+acc.len-kmer_length, kmer_length);
+        //std::string a_read(acc.read_ptr, acc.len);
+        //writer <<a_read << std::endl;
+        encode_kmer(acc.read_ptr, &start_byte, kmer_length);
+        encode_kmer(acc.read_ptr+acc.len-kmer_length, &end_byte, kmer_length);
 
 #ifdef LOG_SEQ_GRAPH
+        char start_back[33];
+        char end_back[33];
+        start_back[kmer_length] = '\0';
+        end_back[kmer_length] = '\0';
+        decode_kmer( start_back, &start_byte, kmer_length);
+        decode_kmer( end_back, &end_byte, kmer_length);
         std::string read_seq(acc.read_ptr, acc.len);
-        shc_log_info(shc_logname, "%u Read %s\n", i, read_seq.c_str());
+        shc_log_info(shc_logname, "Read  %s\n", read_seq.c_str());
+        shc_log_info(shc_logname, "start %s\n", start_back);
+        shc_log_info(shc_logname, "end   %s\n", end_back);
 #endif
 
-        //if the front and end kmers in the read does not corresponds to nodes
-        Kmer_ni_MMap_iterator_pair se_it = kmer_ni_mmap.equal_range(k_start);
-        if(se_it.first==se_it.second)
+        if(kmer_ni_map.find(end_byte) == kmer_ni_map.end())
             continue;
-        se_it = kmer_ni_mmap.equal_range(k_end);
-        if(se_it.first==se_it.second)
+        Kmer_ni_Map_iterator start_it = kmer_ni_map.find(start_byte);
+        if(start_it == kmer_ni_map.end())
             continue;
 
-        int curr_hop = max_hop;
 
-        // find the corresponding start node
-        Kmer_ni_MMap_iterator_pair kni_it_pair =
-                                        kmer_ni_mmap.equal_range(k_start);
+        int curr_hop = 30;//max_hop;
+
+        std::vector<Node_index> & nodes = start_it.value();
+
         //shc_log_info(shc_logname, "search matched nodes\n");
-        for(Kmer_ni_MMap_iterator kni_it =kni_it_pair.first;
-                                  kni_it!=kni_it_pair.second; ++kni_it)
+        num_searched_reads++;
+        for(int j=0; j<nodes.size(); j++)
         {
-            vd_t vd = kni_it->second.vd;
-            read_length_t val_node_index = kni_it->second.start;
+            vd_t vd = nodes[j].vd;
+            read_length_t val_node_index = nodes[j].start;
             bundled_node_p & start_node = graph[vd];
             char * val_node_ptr = &start_node.seq.at(val_node_index);
             read_length_t val_node_len = start_node.seq_len() - val_node_index;
-
 
             // if the first node matches the start of the read
             if(is_partial_match(acc.read_ptr, acc.len,
@@ -3350,38 +3471,45 @@ void Sequence_graph_handler::find_known_path(int max_hop)
                 std::vector<vd_t> path;
                 if(search_seq(acc.read_ptr,
                               acc.len,
-                              kni_it->second.vd,
-                              kni_it->second.start, curr_hop, path))
+                              vd,
+                              val_node_index, curr_hop, path))
                 {
                     // there is a full cover path
                     //shc_log_info(shc_logname, "find matched path\n");
                     //read_known_path_map[i] = path;
+
+                    for(uint64_t i=0; i<path.size()-1; i++)
+                    {
+                        aer_t aer = boost::edge(path[i], path[i+1], graph);
+                        assert(aer.second);
+                        std::map<ed_t, uint64_t>::iterator e_it =
+                                                  known_edges.find(aer.first);
+                        if(e_it == known_edges.end())
+                        {
+                            //shc_log_info(shc_logname, "read count %d\n", acc.read_count);
+                            known_edges.insert(std::make_pair(aer.first, acc.read_count));
+                            num_known_edge++ ;
+                        }
+                        else
+                        {
+                            e_it->second += acc.read_count;
+                        }
+                    }
+
                     if(path.size() > 2)
                     {
                         known_path_set.insert(path);
-
-                        //for(uint64_t i=0; i<path.size()-1; i++)
-                        //{
-                        //    aer_t aer = boost::edge(path[i], path[i+1], graph);
-                        //    assert(aer.second);
-                        //    std::map<ed_t, uint64_t>::iterator e_it =
-                        //                              known_edges.find(aer.first);
-                        //    if(e_it == known_edges.end())
-                        //    {
-                        //        known_edges.insert(std::make_pair(aer.first, acc.read_count));
-                        //    }
-                        //    else
-                        //    {
-                        //        e_it->second += acc.read_count;
-                        //    }
-                        //}
                     }
                 }
             }
         }
     }
-    num_known_path = known_path_set.size();
+    //std::cout << "num_checked_read " << num_checked_read << std::endl;
+    //std::cout << "num_searched_reads " << num_searched_reads << std::endl;
 
+    num_known_path = known_path_set.size();
+    //std::cout << "find " << num_known_path << " known paths\n";
+    //std::cout << "find " << num_known_edge << " known edges\n";
 #ifdef LOG_SEQ_GRAPH
     shc_log_info(shc_logname, "Finish find known path, Finding %d full matching path\n", num_known_path);
 #endif
@@ -3390,6 +3518,8 @@ void Sequence_graph_handler::find_known_path(int max_hop)
     std::cout << "finding " << num_known_path << " known path finish, ";
     stop_timer(&timer);
 #endif
+
+    return num_known_path;
     //bebug
     /*
     for(std::set<std::vector<vd_t> >::iterator it=known_path_set.begin();
@@ -3404,6 +3534,103 @@ void Sequence_graph_handler::find_known_path(int max_hop)
         }
     }
     */
+}
+
+void Sequence_graph_handler::log_classify_edge_types()
+{
+    std::ofstream writer(setting.local_files.output_path + "/prune_edge");
+
+    int case_1 = 0;
+    int case_2 = 0;
+    int case_3 = 0;
+    int total_0_edge = 0;
+    int total_edge = 0;
+    int total_case_1 = 0;
+    int total_case_2 = 0;
+    int total_case_3 = 0;
+    eip_t eip = boost::edges(graph);
+    for(ei_t ei=eip.first; ei!=eip.second; ei++)
+    {
+        vd_t vd_1 = boost::source(*ei, graph);
+        vd_t vd_2 = boost::target(*ei, graph);
+        int in_degree_v1 = boost::in_degree(vd_1, graph);
+        int out_degree_v2 = boost::out_degree(vd_2, graph);
+        int out_degree_v1 = boost::out_degree(vd_1, graph);
+        int in_degree_v2 = boost::in_degree(vd_2, graph);
+        if (graph[*ei].count == 0)
+        {
+            total_0_edge++;
+            if(in_degree_v1==0 || out_degree_v2==0)
+                case_1 ++;
+            else if (out_degree_v1==1 || in_degree_v2 == 1)
+                case_2 ++;
+            else if (out_degree_v1>=2 and in_degree_v2 >=2)
+                case_3 ++;
+            else
+            {
+                std::cout << "other cases "
+                          <<  " in_degree_v1 " << in_degree_v1
+                          <<  " out_degree_v1 " << out_degree_v1
+                          <<  " in_degree_v2 " << in_degree_v2
+                          <<  " out_degree_v2 " << out_degree_v2 << std::endl;
+                exit(0);
+            }
+        }
+
+        total_edge++;
+        if(in_degree_v1==0 || out_degree_v2==0)
+            total_case_1 ++;
+        else if (out_degree_v1==1 || in_degree_v2 == 1)
+            total_case_2 ++;
+        else if (out_degree_v1>=2 and in_degree_v2 >=2)
+            total_case_3 ++;
+        else
+        {
+            std::cout << "other cases "
+                      <<  " in_degree_v1 " << in_degree_v1
+                      <<  " out_degree_v1 " << out_degree_v1
+                      <<  " in_degree_v2 " << in_degree_v2
+                      <<  " out_degree_v2 " << out_degree_v2 << std::endl;
+            exit(0);
+        }
+    }
+    writer << "total_0_edge\t" << total_0_edge << "\t" << total_edge << std::endl;
+    writer << "case_1\t" << case_1 << "\t" << total_case_1 << std::endl;
+    writer << "case_2\t" << case_2 << "\t" << total_case_2 << std::endl;
+    writer << "case_3\t" << case_3 << "\t" << total_case_3 << std::endl;
+}
+
+void Sequence_graph_handler::log_classify_node_types(std::ofstream & writer, int id)
+{
+    vip_t vip = boost::vertices(graph);
+    //walk through the graph list, and update if
+    for(vi_t it=vip.first; it!=vip.second; it++)
+    {
+        vd_t vd = *it;
+        std::string & node_seq = graph[vd].seq;
+        int out_degree = boost::out_degree(vd, graph);
+        int in_degree = boost::in_degree(vd, graph);
+
+        writer << id << "\t" << node_seq << "\t" << in_degree << "\t"
+               << out_degree;
+
+        in_eip_t in_eip = boost::in_edges(vd,graph);
+        for(in_ei_t in_ei=in_eip.first; in_ei!=in_eip.second; in_ei++)
+        {
+           vd_t vd_source = boost::source(*in_ei, graph);
+           writer << "\t" << graph[vd_source].seq << "\t" << graph[*in_ei].weight
+                  << "\t" << graph[*in_ei].count;
+        }
+
+        out_eip_t out_eip = boost::out_edges(vd,graph);
+        for(out_ei_t out_ei=out_eip.first; out_ei!=out_eip.second; out_ei++)
+        {
+            vd_t vd_target = boost::target(*out_ei, graph);
+            writer << "\t" << graph[vd_target].seq << "\t" << graph[*out_ei].weight
+                   << "\t" << graph[*out_ei].count;
+        }
+        writer << std::endl;
+    }
 }
 
 
@@ -3517,9 +3744,9 @@ void Sequence_graph_handler::break_self_loops()
             if(vd_target == vd)  // a self loop
             {
                 self_loop_edge.push_back(out_ei);
-                bundled_node_p & node = graph[vd];
-                bundled_edge_p & edge_p = graph[*out_ei];
-                node.seq = node.seq + node.seq.substr(edge_p.weight);
+                //bundled_node_p & node = graph[vd];
+                //bundled_edge_p & edge_p = graph[*out_ei];
+                //node.seq = node.seq + node.seq.substr(edge_p.weight);
                 if(boost::out_degree(vd, graph)==1)
                 {
                     shc_log_info(shc_logname, "have a isolated self loops\n");
@@ -3546,17 +3773,21 @@ void Sequence_graph_handler::break_self_loops()
 void Sequence_graph_handler::py_break_cycles()
 {
     std::set<vd_t> no_cycle;
-    std::deque<vd_t> cycle;
 
+    std::deque<vd_t> cycle;
     while(py_find_cycle(no_cycle, cycle))
     {
         simple_break_cycle(cycle);
+        cycle.clear();
     }
+    condense_graph();
 }
 
+// return true when detect a cycle
 bool Sequence_graph_handler::py_find_cycle(std::set<vd_t> & no_cycle,
             std::deque<vd_t> & cycle)
 {
+    shc_log_info(shc_logname, "start find cycle\n");
     vip_t vip = boost::vertices(graph);
     for(vi_t it=vip.first; it!=vip.second; it++)
     {
@@ -3565,37 +3796,52 @@ bool Sequence_graph_handler::py_find_cycle(std::set<vd_t> & no_cycle,
         if(nc_it == no_cycle.end())
         {
             std::vector<vd_t> traversed;
-            if(py_reachable_cycle(vd, no_cycle, traversed, cycle))
+            py_reachable_cycle(vd, no_cycle, traversed, cycle);
+            if (cycle.size() > 0)
                 return true;
-            else
-                return false;
         }
-
     }
+    return false;
 }
 
-bool Sequence_graph_handler::py_reachable_cycle( vd_t vd,
+void Sequence_graph_handler::py_reachable_cycle( vd_t vd,
             std::set<vd_t> & no_cycle, std::vector<vd_t> & traversed, std::deque<vd_t> & cycle)
 {
+    traversed.push_back(vd);
+    shc_log_info(shc_logname, "curr vd %u\n", graph[vd].node_id);
+    for(int i=0; i<traversed.size(); i++)
+    {
+        shc_log_info(shc_logname, "traversed %d %u\n",i, graph[traversed[i]].node_id);
+    }
     out_eip_t out_eip = boost::out_edges(vd,graph);
     for(out_ei_t out_ei=out_eip.first; out_ei!=out_eip.second; out_ei++)
     {
         vd_t vd_target = boost::target(*out_ei, graph);
         std::vector<vd_t>::iterator it =
-            std::find(traversed.begin(), traversed.end(), vd_target);
+                std::find(traversed.begin(), traversed.end(), vd_target);
         if(it != traversed.end()) // contain cycle
         {
-            traversed.push_back(vd);
-            cycle.assign(it, traversed.end());
-            return true;
+            cycle.clear();
+            for(std::vector<vd_t>::iterator tr_it=it; tr_it!=traversed.end(); tr_it++)
+            {
+                cycle.push_back(*tr_it);
+            }
+            cycle.push_back(vd_target);
+            shc_log_info(shc_logname, "detect a cycle\n");
+            for(int i=0; i<cycle.size(); i++)
+            {
+                shc_log_info(shc_logname, "cycle %d %u\n",i, graph[cycle[i]].node_id);
+            }
+            return;
         }
         if (no_cycle.find(vd) != no_cycle.end())
             continue;
-        py_reachable_cycle( vd, no_cycle, traversed, cycle);
+        py_reachable_cycle( vd_target, no_cycle, traversed, cycle);
         if(cycle.size() > 0)
-            return true;
+            return;
     }
-    return false;
+    no_cycle.insert(vd);
+    return;
 }
 
 void Sequence_graph_handler::break_all_cycles()
@@ -3611,10 +3857,12 @@ void Sequence_graph_handler::break_all_cycles()
     while (find_cycle(acyclic_node_set, cycle_path))
     {
         //shc_log_info(shc_logname, "Start break cycle with size %d\n", cycle_path.size());
-        if(!break_cycle(cycle_path))
-        {
-            simple_break_cycle(cycle_path);
-        }
+
+        simple_break_cycle(cycle_path);
+        //if(!break_cycle(cycle_path))
+        //{
+        //    simple_break_cycle(cycle_path);
+        //}
         //shc_log_info(shc_logname, "start break path\n");
         //
         cycle_path.clear();
@@ -3624,7 +3872,7 @@ void Sequence_graph_handler::break_all_cycles()
     }
 
     //std::cout << "Finish break " << j << " cycle\n";
-
+    //log_graph_to_file(graph_writer , 200);
     condense_graph();
     //condense_graph();
 #ifdef LOG_SEQ_GRAPH
@@ -3643,7 +3891,10 @@ void Sequence_graph_handler::break_all_cycles()
  */
 void Sequence_graph_handler::simple_break_cycle(std::deque<vd_t> & cycle_path)
 {
-    vd_t vd_remove = cycle_path[0];
+    vd_t vd_remove = cycle_path[1]; //according to python implementation, take 1
+    //std::cout << graph[vd_remove].seq << std::endl;
+    //shc_log_info(shc_logname, "rm %u\n", graph[vd_remove].node_id);
+    //boost::remove_edge(cycle_path[0], cycle_path[1], graph);
     boost::clear_vertex(vd_remove, graph);
     assert(1==exist_vd.erase(vd_remove));
     boost::remove_vertex(vd_remove, graph);
@@ -3663,6 +3914,9 @@ find_cycle(std::set<vd_t> & acyclic_node_set, std::deque<vd_t> & cycle_path)
             if(is_node_inside_cycle(vd, acyclic_node_set, cycle_path))
             {
                 //shc_log_info(shc_logname, "finish find_cycle\n");
+                for(int i=0; i<cycle_path.size(); i++)
+                    cycle_writer << graph[cycle_path[i]].seq << "\t";
+                cycle_writer << std::endl;
                 return true;
             }
         }
@@ -4067,6 +4321,9 @@ void Sequence_graph_handler::output_components(std::string & node_dir,
     std::set<vd_t> black_nodes;
     uint64_t i =0;
     uint64_t single_seq_i = 0;
+
+    uint64_t num_edge_written = 0;
+    uint64_t num_edge_skipped = 0;
     //for all nodes
     vip_t vip = boost::vertices(graph);
     for(vi_t it=vip.first; it!=vip.second; it++)
@@ -4083,7 +4340,8 @@ void Sequence_graph_handler::output_components(std::string & node_dir,
 #ifdef LOG_SEQ_GRAPH
             shc_log_info(shc_logname, "nodes has size %d\n", nodes.size());
 #endif
-            variant_topological_sort(nodes, sorted_nodes);
+            bool is_DAC = variant_topological_sort(nodes, sorted_nodes);
+            assert(is_DAC);
             assert(sorted_nodes.size()==nodes.size());
 
 #ifdef LOG_SEQ_GRAPH
@@ -4098,9 +4356,9 @@ void Sequence_graph_handler::output_components(std::string & node_dir,
                 black_nodes.insert(vd_curr);
                 //std::cout << "graph[vd_curr].seq_len() " << graph[vd_curr].seq_len() << std::endl;
                 if(graph[vd_curr].seq_len() >
-                                setting.multi_graph_setup.single_node_seq_len)
+                                setting.output_seq_min_len)
                 {
-                    sinlge_node_writer << "> s_" << curr_comp << "_"
+                    sinlge_node_writer << ">s_" << curr_comp << "_"
                                  << (single_seq_i++) << std::endl;
                     sinlge_node_writer << graph[vd_curr].seq << std::endl;
                 }
@@ -4121,6 +4379,7 @@ void Sequence_graph_handler::output_components(std::string & node_dir,
 
             path_file << "VD1\tVD2 ..." << std::endl;
             // output path
+
             for(std::vector<vd_t>::iterator it= sorted_nodes.begin();
                                             it!=sorted_nodes.end(); ++it)
             {
@@ -4141,7 +4400,16 @@ void Sequence_graph_handler::output_components(std::string & node_dir,
             for(std::set<ed_t>::iterator it=edges.begin(); it!=edges.end(); ++it)
             {
                 if(graph[*it].count > 0)
+                {
+                    std::string temp = edge_to_string(*it);
+                    //shc_log_info(shc_logname, "test %s\n", temp.c_str());
                     edge_file << edge_to_string(*it) << std::endl;
+                    num_edge_written ++;
+                }
+                else
+                {
+                    num_edge_skipped++;
+                }
             }
             i++;
 
@@ -4150,6 +4418,8 @@ void Sequence_graph_handler::output_components(std::string & node_dir,
             path_file.close();
         }
     }
+    //std::cout << "num_edge_skipped " << num_edge_skipped << std::endl;
+    //std::cout << "num_edge_written " << num_edge_written << std::endl;
     num_single_seq = single_seq_i;
     sinlge_node_writer.close();
     if(!is_run_single_component)
@@ -4268,7 +4538,8 @@ bool Sequence_graph_handler::is_suspicious(vd_t vd)
     bundled_node_p & curr_node = graph[vd];
     int inD = boost::in_degree(vd, graph);
     int outD = boost::out_degree(vd, graph);
-
+    //std::cout << "size_threshold " << size_threshold << std::endl;
+    //std::cout << "prevalence_threshold " << prevalence_threshold << std::endl;
     if((inD==0 || outD==0) && curr_node.seq_len()<=size_threshold)
         return true;
 
@@ -4495,12 +4766,15 @@ vd_t Sequence_graph_handler::collapse(vd_t vd_1, vd_t vd_2)
 {
     bundled_node_p & node_1 = graph[vd_1];
     bundled_node_p & node_2 = graph[vd_2];
+    //std::cout << "prevalence 1 " << node_1.prevalence << " "<< node_1.seq <<std::endl;
+    //std::cout << "prevalence 2 " << node_2.prevalence << " "<< node_2.seq <<std::endl;
     if(node_1.prevalence > node_2.prevalence)
     {
         node_1.prevalence +=  node_2.prevalence;
         erase_terminal_node_info(vd_2);
         boost::clear_vertex(vd_2, graph);
-        //std::cout << "collapse " << node_2.seq << std::endl;
+
+        //std::cout << "collapse 2 " << node_2.prevalence << std::endl;
         return vd_2;
     }
     else if(node_1.prevalence < node_2.prevalence)
@@ -4508,12 +4782,12 @@ vd_t Sequence_graph_handler::collapse(vd_t vd_1, vd_t vd_2)
         node_2.prevalence += node_1.prevalence;
         erase_terminal_node_info(vd_1);
         boost::clear_vertex(vd_1, graph);
-        //std::cout << "collapse " << node_1.seq << std::endl;
+        //std::cout << "collapse 1 " << node_1.prevalence << std::endl;
         return vd_1;
     }
     else
     {
-        if(node_1.seq < node_2.seq)
+        if(node_1.seq > node_2.seq)
         {
             node_2.prevalence += node_1.prevalence;
             erase_terminal_node_info(vd_1);
@@ -4557,7 +4831,9 @@ get_predecessors(vd_t vd, std::set<vd_t> & predecessors)
 
 void Sequence_graph_handler::find_copy_count()
 {
+    int check_num_known_edges = 0;
     vip_t vip = boost::vertices(graph);
+    std::set<ed_t> remove_edges;
     for(vi_t it=vip.first; it!=vip.second; it++)
     {
         //uint64_t total_node = 0;
@@ -4569,10 +4845,47 @@ void Sequence_graph_handler::find_copy_count()
             double ec = 0;
             bundled_edge_p & edge_p = graph[*out_ei];
             std::map<ed_t, uint64_t>::iterator e_it = known_edges.find(*out_ei);
-            if(e_it == known_edges.end())
+
+            vd_t vd_1 = boost::source(*out_ei, graph);
+            vd_t vd_2 = boost::target(*out_ei, graph);
+            int in_degree_v1 = boost::in_degree(vd_1, graph);
+            int out_degree_v2 = boost::out_degree(vd_2, graph);
+            int out_degree_v1 = boost::out_degree(vd_1, graph);
+            int in_degree_v2 = boost::in_degree(vd_2, graph);
+
+            //if(edge_p.count<=1  &&
+            //  (in_degree_v1 <=2 || out_degree_v2<=2 || out_degree_v1<=2 || in_degree_v2<=2))
+            //{
+            //    ec = 0;
+            //    remove_edges.insert(*out_ei);
+            //}
+
+            if(e_it == known_edges.end() ) // no such edge
+            {
+                /*
+
+
+                if(in_degree_v1 != 0 && out_degree_v2 != 0)
+                {
+                    if (out_degree_v1==1 || in_degree_v2 == 1)
+                    {
+                        ec = 0;
+                        remove_edges.insert(*out_ei);
+                    }
+                }
+                continue; // no update edge count
+                */
                 ec = 0;
+                remove_edges.insert(*out_ei);
+
+            }
             else
+            {
                 ec = e_it->second;
+                assert(e_it->second != 0);
+                check_num_known_edges++;
+            }
+
             //total_node += ec
             edge_p.count = ec/std::max(
                     static_cast<double>(coll_read_list.L- edge_p.weight-1),
@@ -4580,13 +4893,28 @@ void Sequence_graph_handler::find_copy_count()
 
         }
     }
+    for(std::set<ed_t>::iterator it=remove_edges.begin();
+        it != remove_edges.end(); it++)
+    {
+        boost::remove_edge(*it, graph);
+    }
+
+    //std::cout << "check num known edges " << check_num_known_edges << std::endl;
 }
 
 void Sequence_graph_handler::find_approximate_copy_count()
 {
-    shc_log_info(shc_logname, "find_approximate_copy_count\n");
-
+    //shc_log_info(shc_logname, "find_approximate_copy_count\n");
     vip_t vip = boost::vertices(graph);
+    for(vi_t it=vip.first; it!=vip.second; it++)
+    {
+        vd_t vd = *it;
+        bundled_node_p & node = graph[vd];
+        node.norm = node.seq_len() - kmer_length + 1;
+        node.copy_count = double(node.prevalence)/node.norm;
+    }
+
+    vip = boost::vertices(graph);
     for(vi_t it=vip.first; it!=vip.second; it++)
     {
         vd_t vd_source = *it;
@@ -4601,8 +4929,9 @@ void Sequence_graph_handler::find_approximate_copy_count()
                     static_cast<kmer_count_node_t>(coll_read_list.L-edge_p.weight-1),
                     static_cast<kmer_count_node_t>(0));
 
-            kmer_count_node_t node_counts = node_source.prevalence +
-                                            node_target.prevalence;
+            kmer_count_node_t node_counts =
+                                    node_source.copy_count * node_source.norm +
+                                    node_target.copy_count * node_target.norm;
             if (norm==0)
                 edge_p.count = 0;
             else
@@ -4645,6 +4974,33 @@ update_edge_count_with_read(std::string & base, Kmer_Node_map & kmer_node_map)
     }
 }
 
+
+void Sequence_graph_handler::remove_nodes_edges_if_not_cover_by_reads()
+{
+    if(setting.filter_single)
+    {
+        shc_log_info(shc_logname, "total num nodes %d\n", get_num_nodes());
+        vip_t vip = boost::vertices(graph);
+        //walk through the graph list, and update if
+        std::set<vd_t> remove_vds;
+        for(vi_t it=vip.first; it!=vip.second; it++)
+        {
+            vd_t & vd = *it;
+            bundled_node_p & node = graph[vd];
+            if( node.reads_info.size() == 0 &&
+                node.seq_len() < min_read_len-2)
+            {
+                shc_log_info(shc_logname, "min len %u\n", min_read_len);
+                boost::clear_vertex(vd, graph);
+                remove_vds.insert(vd);
+            }
+        }
+        for(std::set<vd_t>::iterator it=remove_vds.begin(); it!=remove_vds.end(); it++)
+        {
+            boost::remove_vertex(*it, graph);
+        }
+    }
+}
 
 
 
@@ -4875,4 +5231,70 @@ void Sequence_graph_handler::log_term_array(bool is_show_seq)
 
     }
     shc_log_info(shc_logname, "\t\t END LOG TERM NODE\n\n");
+}
+
+int Sequence_graph_handler::get_num_isolated_nodes()
+{
+    vip_t vip = boost::vertices(graph);
+    int num_isolated_nodes = 0;
+    //walk through the graph list, and update if
+    for(vi_t it=vip.first; it!=vip.second; it++)
+    {
+        vd_t vd = *it;
+        if(boost::in_degree(vd, graph) == 0 &&
+           boost::out_degree(vd, graph) == 0)
+        {
+            num_isolated_nodes++;
+        }
+    }
+    return num_isolated_nodes;
+}
+
+void Sequence_graph_handler::log_graph_to_file(std::ofstream & writer, int id)
+{
+    vip_t vip = boost::vertices(graph);
+    //walk through the graph list, and update if
+    for(vi_t it=vip.first; it!=vip.second; it++)
+    {
+        vd_t vd = *it;
+        std::string & node_seq = graph[vd].seq;
+        int out_degree = boost::out_degree(vd, graph);
+        int in_degree = boost::in_degree(vd, graph);
+        out_eip_t out_eip = boost::out_edges(vd,graph);
+        for(out_ei_t out_ei=out_eip.first; out_ei!=out_eip.second; out_ei++)
+        {
+            vd_t vd_target = boost::target(*out_ei, graph);
+            writer << id << "\t" << node_seq << "\t" << graph[vd_target].seq << "\t"
+                   << in_degree << "\t" << out_degree << "\t"
+                   << graph[*out_ei].weight << std::endl;
+        }
+
+        if( out_degree==0 && boost::in_degree(vd, graph)==0)
+            writer << id << "\t" << node_seq << std::endl;
+
+    }
+}
+
+void Sequence_graph_handler::log_all_nodes_reads_to_file(std::ofstream & writer)
+{
+    vip_t vip = boost::vertices(graph);
+    writer << "algo iter 0" << std::endl;
+    //walk through the graph list, and update if
+    for(vi_t it=vip.first; it!=vip.second; it++)
+    {
+        vd_t vd = *it;
+        bundled_node_p & curr_node = graph[vd];
+        writer << "seq " << curr_node.seq.c_str()  << std::endl;
+        writer << "in  degree " << boost::in_degree(vd, graph) << std::endl;
+        writer << "out degree " << boost::out_degree(vd, graph) << std::endl;
+        writer << "num read " << curr_node.reads_info.size() << std::endl;
+        for(std::vector<Bdg_read_info>::iterator ri_it=curr_node.reads_info.begin();
+                                          ri_it!=curr_node.reads_info.end(); ++ri_it)
+        {
+            // if the same read is processed, ignore the rest
+            Read_acc acc = coll_read_list.get_read(ri_it->read_id);
+            std::string read(acc.read_ptr, acc.len);
+            writer << "read " <<   read << std::endl;
+        }
+    }
 }

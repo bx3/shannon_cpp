@@ -40,6 +40,7 @@
 
 //debug
 //#define LOG_LP_SUMMARY
+//#define LOG_FLOW
 //#define LOG_SF
 
 #define EMPTY_NODE_ID (std::pow(2,sizeof(node_id_t)*8-1)-1)
@@ -86,7 +87,7 @@ public:
     struct Path_info {
         Path_info(int id_, int location_) : id(id_), location(location_) {}
         int id;
-        int location; //start from 0
+        int location; //start from 0, unit is number of vd
     };
 
     typedef std::pair<int, double> index_flow_t;
@@ -146,6 +147,9 @@ public:
     void log_all_node(bool is_log_node);
     void log_node_info(vd_t vd, bool is_log_nodes);
 
+    void log_flow(std::vector<double> & flow, std::vector<vd_t> & in_nodes,
+                                              std::vector<vd_t> & out_nodes);
+
 
 private:
     // reconstructing graph
@@ -169,15 +173,18 @@ private:
     // sparse flow
     void sparse_flow_on_all_nodes();
     bool sparse_flow_on_one_node(vd_t vd, std::vector<double> & flow,
-            std::vector<double> & in_counts, std::vector<double> & out_counts);
+            std::vector<double> & in_counts, std::vector<double> & out_counts,
+            std::vector<int> & sub_flow_indicator, std::vector<vd_t> & in_nodes,
+                                                      std::vector<vd_t> & out_nodes);
     // get known path indicator
     vd_t get_ori_vd(vd_t vd_source);
-    void get_sub_flow_indicator(vd_t vd, std::vector<int> & sub_flow_indicator);
+    void get_sub_flow_indicator(vd_t vd, std::vector<int> & sub_flow_indicator,
+                   std::vector<vd_t> & in_nodes, std::vector<vd_t> & out_nodes);
     void make_in_out_flow_equal(std::vector<double> & in_counts,
                                              std::vector<double> & out_counts);
     double path_decompose(vd_t vd, std::vector<double>& gamma,
                           std::vector<double> & equ_constraint,
-            std::vector<int>& sub_flow_indicator, std::vector<double> & flow);
+            std::vector<int>& sub_flow_indicator, std::vector<double> & flow, double & scale);
     void truncate_flow_value(int num_in, int num_out,
              std::vector<double> & flow, std::vector<double> & flow_2,
              std::vector<double> & in_counts, std::vector<double> & out_counts);
@@ -257,7 +264,7 @@ private:
     Node_path_MMap paths_for_node;
 
     //Vd_Vd_map new_to_ori;
-    Vd_Vds_map vd_conatins_map;
+    Vd_Vds_map vd_contains_map;
 
     vd_t vd_start;
     vd_t vd_end;
@@ -312,7 +319,7 @@ struct Sparse_flow_works {
             if(num_comp_left%SF_WORK_STEP_UPDATE==0)
             {
                 int percentage = (100 * (sparse_flow_work.init_total_work-num_comp_left))/sparse_flow_work.init_total_work;
-                printf("[ %3d%%] process %4d, \t num left %d/%d\n",
+                printf("[ %3d%%] SF process %4d, \t num left %d/%d\n",
                         percentage, sparse_flow_work.process_i, num_comp_left,
                         sparse_flow_work.init_total_work);
             }

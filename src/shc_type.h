@@ -13,8 +13,8 @@
 #include <assert.h>
 #include <limits>
 
-#define USE_APPROX_COUNT
-//#define USE_EXACT_COUNT
+//#define USE_APPROX_COUNT
+#define USE_EXACT_COUNT
 
 typedef uint32_t contig_num_t;
 #define MAX_CONTIG_NUM UINT32_MAX
@@ -52,9 +52,9 @@ typedef uint32_t  kmer_count_t;
 
 #define IMPOSSIBLE_NODE_ID (std::pow(2,sizeof(node_id_t)*8-3)-2)
 
-#define NODE_ID_START 0 //0
-#define NODE_ID_END 1  //1
-#define NODE_ID_NORMAL_START 2 //2
+#define NODE_ID_START 1000000000 //0
+#define NODE_ID_END 1000000001  //1
+#define NODE_ID_NORMAL_START 0 //2
 
 #define IMPOSSIBLE_CONTIG_NUM (std::pow(2,sizeof(contig_num_t)*8-1)-2)
 #define IMPOSSIBLE_COMP_NUM (std::pow(2,sizeof(comp_num_t)*8-2)-2)

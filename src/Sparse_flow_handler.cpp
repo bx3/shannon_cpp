@@ -33,12 +33,19 @@ void * Sparse_flow_handler::run_sparse_flow_handler_helper(
     load_path(path_path);
 
     add_start_end_node();
-    //log_graph_struct(false);
-    sparse_flow_on_all_nodes();
-    //log_graph_struct(false);
-    dump_SF_seq(output_path, write_lock_ptr);
 
-    clear();
+    if (get_num_nodes() <= 3)
+    {
+        dump_SF_seq(output_path, write_lock_ptr);
+        clear();
+    }
+    else
+    {
+        //log_graph_struct(false);
+        sparse_flow_on_all_nodes();
+        dump_SF_seq(output_path, write_lock_ptr);
+        clear();
+    }
 }
 
 
@@ -51,7 +58,7 @@ void Sparse_flow_handler::clear()
     known_paths.clear();
     known_paths.shrink_to_fit();
     paths_for_node.clear();
-    vd_conatins_map.clear();
+    vd_contains_map.clear();
 
     vd_start = NULL;
     vd_end = NULL;
@@ -76,6 +83,8 @@ void Sparse_flow_handler::process_one_graph_component(int graph_i,std::string & 
     comp_id = 3000;
     graph_id = graph_i;
 
+    //exit(0);
+
     //log_graph_struct(false);
     load_path(path_path);
 
@@ -85,6 +94,14 @@ void Sparse_flow_handler::process_one_graph_component(int graph_i,std::string & 
               << get_num_edges() << std::endl;
 #endif
     //log_graph_struct(false);
+    if(get_num_nodes() <= 3)
+    {
+        dump_SF_seq(setting.local_files.reconstructed_seq_path);
+        return;
+    }
+
+    //log_all_node(true);
+
     sparse_flow_on_all_nodes();
 #ifdef LOG_SF
     std::cout << "after SF, node num " << get_num_nodes() << " num edges "
@@ -159,18 +176,53 @@ bool Sparse_flow_handler::load_graph(std::string & node_file, std::string & edge
 #endif
     if(!boost::filesystem::exists(node_file))
     {
+        std::cout << "input comp " << comp_id << " graph " << graph_id
+                  <<  "node file does not exist" << std::endl;
+        std::cout << node_file << std::endl;
         return false;
     }
     if(!boost::filesystem::exists(edge_file))
     {
+        std::cout << "input graph edge file does not exist" << std::endl;
+        std::cout << edge_file << std::endl;
         return false;
     }
 
-    bool is_valid_node = load_node(node_file);
-    bool is_valid_edge = load_edge(edge_file);
+    std::ifstream node_file_reader(node_file);
+    std::string header_str;
+    std::getline(node_file_reader, header_str);
+    std::vector<std::string> strs;
+    boost::split(strs, header_str, boost::is_any_of("\t"));
+    node_file_reader.close();
 
-    //bool is_valid_node = load_py_node(node_file);
-    //bool is_valid_edge = load_py_edge(edge_file);
+    bool is_valid_node = false;
+    bool is_valid_edge = false;
+
+    if(strs.size()== 3)
+    {
+        is_valid_node = load_node(node_file);
+        is_valid_edge = load_edge(edge_file);
+    }
+    else if(strs.size()== 4)
+    {
+        is_valid_node = load_py_node(node_file);
+        is_valid_edge = load_py_edge(edge_file);
+    }
+    else
+    {
+        shc_log_error("comp %d graph %d node file header read error: %s\n",
+                        comp_id, graph_id, header_str);
+        return false;
+    }
+
+    if(!is_valid_node)
+    {
+        std::cout << "input graph is not a valid graph, nodes file error" << std::endl;
+    }
+    if(!is_valid_edge)
+    {
+        std::cout << "input graph is not a valid graph, edge file error" << std::endl;
+    }
 
     //std::cout << "Graph contains " << (boost::num_vertices(graph)) << " nodes" << std::endl;
     //std::cout << "Graph contains " << (boost::num_edges(graph)) << " edges" << std::endl;
@@ -430,10 +482,13 @@ void Sparse_flow_handler::sparse_flow_on_all_nodes()
     {
         vd_t vd = *it;
         std::deque<vd_t> contain_array(1, vd);
-        vd_conatins_map.insert(std::make_pair(vd, contain_array));
+        vd_contains_map.insert(std::make_pair(vd, contain_array));
     }
 
-    int algo_iter = 0, node_iter = 0;
+    std::ofstream writer("/home/bowen/Shannon_D_RNA_seq/sf.log");
+
+    int algo_iter = 0;
+    int node_iter = 0;
     while(!done)
     {
 #ifdef LOG_SF
@@ -444,112 +499,120 @@ void Sparse_flow_handler::sparse_flow_on_all_nodes()
         // modify later in topological order
         std::set<vd_t> remove_vd;
 
-        link_all_Y_path(remove_vd);
+        //link_all_Y_path(remove_vd);
 
-        for(std::vector<vd_t>::iterator it = sorted_vds.begin();
-                                        it!= sorted_vds.end(); it++)
+        //if (algo_iter ==1)
+        //{
+        //    std::cout << "node_iter " << node_iter << std::endl;
+        //    std::cout << "node left " << sorted_vds.size() << std::endl;
+        //    exit(0);
+        //}
+        node_iter =  0;
+
+        for(uint64_t node_i=0; node_i<sorted_vds.size(); node_i++)
         {
-            vd_t vd = *it;
+            vd_t vd = sorted_vds[node_i];
             //shc_log_info(shc_logname, "***********************\n");
             //log_local_node(vd, false);
-
+            //shc_log_info(shc_logname, "anS %d %s\n", graph[vd].node_id, graph[vd].seq.c_str());
+            //continue;
+            //node_iter++;
             if(vd==vd_start || vd==vd_end)
             {
-#ifdef LOG_SF
-                shc_log_info(shc_logname, "After Y link, is source or sink\n");
-#endif
+                //shc_log_info(shc_logname, "node is source or sink\n");
                 continue;
             }
-            if(boost::in_degree(vd, graph)==0 && boost::out_degree(vd, graph)==0)
+            if(boost::in_degree(vd, graph) <=1)
             {
-#ifdef LOG_SF
-                shc_log_info(shc_logname, "After Y link, isolated node\n");
-#endif
+                //shc_log_info(shc_logname, "in degree <= 1\n");
                 continue;
             }
+            //if(boost::out_degree(vd, graph) ==1)
+            //{
+            //    out_eip_t out_eip = boost::out_edges(vd,graph);
+            //    vd_t vd_target = boost::target(*(out_eip.first), graph);
+            //    if (vd_target == vd_end)
+            //        continue;
+            //}
 
-            if(local_condense(vd, remove_vd)!=NULL)
+            //node_i++;
+
+            if(boost::out_degree(vd, graph) ==1)
             {
-#ifdef LOG_SF
-                shc_log_info(shc_logname, "After Y link, condensed\n");
+                //shc_log_info(shc_logname, "Y node modify\n");
+                std::vector<vd_t> surround_nodes;
+                out_eip_t out_eip = boost::out_edges(vd,graph);
+                vd_t vd_target = boost::target(*out_eip.first, graph);
+                in_eip_t in_eip = boost::in_edges(vd,graph);
+                for(in_ei_t in_ei=in_eip.first; in_ei!=in_eip.second; in_ei++)
+                {
+                    vd_t vd_source = boost::source(*in_ei, graph);
+                    //if (vd_source != vd_start)
+                    //{
+                    //    shc_log_info(shc_logname, "%d -> %d\n",
+                    //            graph[vd_source].node_id, graph[vd_target].node_id);
+                    //}
+                }
 
-#endif
+
+                link_Y_path(vd);
+                //condense_nodes(surround_nodes, remove_vd);
             }
             else
             {
+
+                //shc_log_info(shc_logname, "X node modify\n");
+                node_iter++;
+                std::vector<double> flow;
+                std::vector<vd_t> in_nodes, out_nodes;
+                std::vector<double> in_counts, out_counts;
+                get_in_out_edges(vd, in_nodes, out_nodes, in_counts, out_counts);
+
+                // get known path indicator in an array
+                 // for indicating which sub flow is unknown
+                std::vector<int> sub_flow_indicator;
+                get_sub_flow_indicator(vd, sub_flow_indicator, in_nodes, out_nodes);
+
+
+                //for(double in_c : in_counts)
+                //    printf("in count :  %f\n", in_c);
+                //for(double out_c : out_counts)
+                //    printf("out: %f\n", out_c);
+
+                //exit(0);
+                //shc_log_info(shc_logname, "BSF\n");
+                //log_local_node(vd, false);
+                bool is_unique = sparse_flow_on_one_node(vd, flow,
+                                   in_counts, out_counts, sub_flow_indicator, in_nodes, out_nodes);
+                //if(!is_unique)
+                //    shc_log_warning("non unique flow\n");
 #ifdef LOG_SF
-                shc_log_info(shc_logname, "After Y link, not condensed\n");
-#endif
-            }
-
-
-            int in_degree = boost::in_degree(vd, graph);
-            int out_degree = boost::out_degree(vd, graph);
-
-            if(in_degree==1 && out_degree==1)
-            {
-                //shc_log_info(shc_logname, "After Y link, in out 1\n");
-                continue;
-            }
-            else if(in_degree==1 || out_degree==1 )
-            {
-                if(link_Y_path(vd))
+                int num_out = boost::out_degree(vd, graph);
+                for(int k=0; k<flow.size(); ++k)
                 {
-                    //shc_log_info(shc_logname, "After Y link, Y linked\n");
-                    remove_vd.insert(vd);
+                    int i, j;
+                    get_i_j(k, num_out, i, j);
+                    if(flow[k]!=0)
+                    {
+                        vd_t u = in_nodes[i];
+                        vd_t w = out_nodes[j];
+                        //std::cout << "flow from " << graph[u].node_id << " to "
+                        //          << graph[w].node_id << std::endl;
+                        shc_log_info(shc_logname, "***********************\n");
+                        shc_log_info(shc_logname, "%d -> %d\n", graph[u].node_id, graph[w].node_id);
+                    }
                 }
-                else
-                {
-                    //shc_log_info(shc_logname, "After Y link, connected to source or sink\n");
-                }
-                continue;
-            }
-
-            node_iter++;
-            std::vector<double> flow;
-            std::vector<vd_t> in_nodes, out_nodes;
-            std::vector<double> in_counts, out_counts;
-            get_in_out_edges(vd, in_nodes, out_nodes, in_counts, out_counts);
-
-            /*
-            for(vd_t in_vd : in_nodes)
-                shc_log_info(shc_logname, "in:  %u\n", graph[in_vd].node_id);
-            for(vd_t out_vd : out_nodes)
-                shc_log_info(shc_logname, "out: %u\n", graph[out_vd].node_id);
-            */
-            //shc_log_info(shc_logname, "BSF\n");
-            //log_local_node(vd, false);
-            bool is_unique = sparse_flow_on_one_node(vd, flow, in_counts, out_counts);
-            //if(!is_unique)
-            //    shc_log_warning("non unique flow\n");
-#ifdef LOG_SF
-            //if(graph[vd].node_id == 16)
-            //{
-
-            int num_out = boost::out_degree(vd, graph);
-            for(int k=0; k<flow.size(); ++k)
-            {
-                int i, j;
-                get_i_j(k, num_out, i, j);
-                if(flow[k]!=0)
-                {
-                    vd_t u = in_nodes[i];
-                    vd_t w = out_nodes[j];
-                    std::cout << "flow from " << graph[u].node_id << " to "
-                              << graph[w].node_id << std::endl;
-                    shc_log_info(shc_logname, "flow from %d to %d\n",
-                                graph[u].node_id, graph[w].node_id);
-                }
-            }
-            //}
+                shc_log_info(shc_logname, "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE\n");
 #endif
 
-            modify_local_graph(vd, flow, in_nodes, out_nodes);
+                modify_local_graph(vd, flow, in_nodes, out_nodes);
 
-            link_leaf_node_to_terminal(in_nodes, out_nodes);
-            condense_nodes(in_nodes,  remove_vd);
-            condense_nodes(out_nodes, remove_vd);
-            remove_vd.insert(vd);
+                //link_leaf_node_to_terminal(in_nodes, out_nodes);
+                //condense_nodes(in_nodes,  remove_vd);
+                //condense_nodes(out_nodes, remove_vd);
+                remove_vd.insert(vd);
+                //exit(0); //hello
+            }
         }
         //log_term_node(true, true, false);
         //file_node << "node iter" << std::to_string(node_iter) << std::endl;
@@ -561,7 +624,7 @@ void Sparse_flow_handler::sparse_flow_on_all_nodes()
         //if (sf_setting.is_use_topo_reverse)
         //    update_sorted_vds(true);
         //else
-        update_sorted_vds(false);
+            update_sorted_vds(false);
 
         remove_decomposed_node(remove_vd);
 
@@ -581,6 +644,27 @@ void Sparse_flow_handler::sparse_flow_on_all_nodes()
     //log_graph_struct(false);
 
     //file_node.close();
+}
+
+void Sparse_flow_handler::log_flow(std::vector<double> & flow,
+                std::vector<vd_t> & in_nodes, std::vector<vd_t> & out_nodes)
+{
+    int num_out = out_nodes.size();
+    for(int k=0; k<flow.size(); ++k)
+    {
+        int i, j;
+        get_i_j(k, num_out, i, j);
+        if(flow[k]!=0)
+        {
+            vd_t u = in_nodes[i];
+            vd_t w = out_nodes[j];
+            //std::cout << "flow from " << graph[u].node_id << " to "
+            //          << graph[w].node_id << std::endl;
+            shc_log_info(shc_logname, "***********************\n");
+            shc_log_info(shc_logname, "%d -> %d\n", graph[u].node_id, graph[w].node_id);
+        }
+    }
+    shc_log_info(shc_logname, "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE\n");
 }
 
 void Sparse_flow_handler::link_all_Y_path(std::set<vd_t> & remove_vd)
@@ -692,18 +776,39 @@ get_scale(std::vector<double> & in_counts, std::vector<double> & out_counts)
 
 bool Sparse_flow_handler::
 sparse_flow_on_one_node(vd_t vd, std::vector<double> & min_flow,
-              std::vector<double> & in_counts, std::vector<double> & out_counts)
+              std::vector<double> & in_counts, std::vector<double> & out_counts,
+              std::vector<int> & sub_flow_indicator, std::vector<vd_t> & in_nodes,
+                                                        std::vector<vd_t> & out_nodes)
 {
 #ifdef LOG_SF
     shc_log_info(shc_logname, "\t\t SF on node %d\n", graph[vd].node_id);
 #endif
-    //setting
-    sf_setting.tol = get_norm_1(in_counts)*sf_setting.eps;
+
     int num_in = boost::in_degree(vd, graph);
     int num_out = boost::out_degree(vd, graph);
+
+    if(num_in == 1)
+    {
+        //shc_log_error("look at a  node with in edge num = 1\n");
+        //exit(0);
+    }
+    //if(num_out == 1)
+    //{
+    //
+    //}
+
+    //setting
+    sf_setting.tol = get_norm_1(in_counts)*sf_setting.eps;
     set_trials(num_in, num_out);
 
 #ifdef LOG_LP_SUMMARY
+    shc_log_info(shc_logname, "in nodes order:\n");
+    for(int i=0; i<in_nodes.size(); i++)
+        shc_log_info(shc_logname, "%u:\n", graph[in_nodes[i]].node_id);
+    shc_log_info(shc_logname, "out nodes order:\n");
+    for(int i=0; i<out_nodes.size(); i++)
+        shc_log_info(shc_logname, "%u:\n", graph[out_nodes[i]].node_id);
+
     shc_log_info(shc_logname, "BEFORE in counts:\n");
     for(std::vector<double>::iterator it=in_counts.begin(); it!=in_counts.end(); ++it)
         shc_log_info(shc_logname, "%f\n", *it);
@@ -727,9 +832,6 @@ sparse_flow_on_one_node(vd_t vd, std::vector<double> & min_flow,
         shc_log_info(shc_logname, "%f\n", *it);
     shc_log_info(shc_logname, "in sum %f, out sum %f\n", sum_vector(in_counts), sum_vector(out_counts));
 #endif
-    // get known path indicator in an array
-    std::vector<int> sub_flow_indicator; // for indicating which sub flow is unknown
-    get_sub_flow_indicator(vd, sub_flow_indicator);
 
     int min_num_flow = num_in*num_out + 1;
     int flow_times = 0;
@@ -739,6 +841,15 @@ sparse_flow_on_one_node(vd_t vd, std::vector<double> & min_flow,
     shc_log_info(shc_logname, "Before path decom %d trails, %d in %d out\n",
                                         sf_setting.num_trials, num_in, num_out);
 #endif
+
+    double scale = get_scale(in_counts, out_counts);
+    //std::cout << "scale " << scale << std::endl;
+    for(std::vector<double>::iterator it=equ_constraint.begin();
+                            it!=equ_constraint.end(); it++)
+    {
+        (*it) /= scale;
+    }
+
     // loop over trial times and choose the best
     for(int i=0; i< sf_setting.num_trials; ++i)
     {
@@ -751,21 +862,11 @@ sparse_flow_on_one_node(vd_t vd, std::vector<double> & min_flow,
             gamma.push_back(std::abs(distribution(generator)));
         }
 
-        double scale = get_scale(in_counts, out_counts);
-        for(std::vector<double>::iterator it=equ_constraint.begin();
-                                it!=equ_constraint.end(); it++)
-        {
-            (*it) /= scale;
-        }
-
         double obj_value = path_decompose(vd, gamma, equ_constraint,
-                                           sub_flow_indicator, flow);
+                                           sub_flow_indicator, flow, scale);
 
-        for(std::vector<double>::iterator it=equ_constraint.begin();
-                               it!=equ_constraint.end(); it++)
-        {
-           (*it) *= scale;
-        }
+
+
 
         //shc_log_info(shc_logname, "flow size %d\n", flow.size());
         std::vector<double> flow_sol(flow); // a copy
@@ -775,15 +876,24 @@ sparse_flow_on_one_node(vd_t vd, std::vector<double> & min_flow,
 
         //old_truncate_flow_value(num_in, num_out, flow, flow_sol,
         //                                        in_counts, out_counts);
-
-
+#ifdef LOG_LP_SUMMARY
+        shc_log_info(shc_logname, "after trunc solution summary\n");
+        for(int k=0; k<flow.size(); k++)
+        {
+            int i, j;
+            get_i_j(k, num_out, i, j);
+            shc_log_info(shc_logname, "f(%d,%d) = %f\n", i,j, flow.at(k));
+        }
+#endif
         // update procedures
-        int num_flow = get_num_nonzero_flow(flow, sub_flow_indicator);
+        int num_flow = get_num_nonzero_flow(flow_sol, sub_flow_indicator);
+        //shc_log_info(shc_logname, "num non known_path flow %d\n", num_flow);
 
         if(num_flow < min_num_flow)
         {
             min_num_flow = num_flow;
             min_flow = flow;
+            //log_flow(flow, in_nodes, out_nodes);
             flow_times = 1;
             min_unknown_flow = dot_product(sub_flow_indicator, min_flow);
         }
@@ -799,10 +909,12 @@ sparse_flow_on_one_node(vd_t vd, std::vector<double> & min_flow,
             if(is_update_flow(flow, min_flow, sub_flow_indicator, min_unknown_flow))
             {
                 min_flow = flow;
+                //log_flow(flow, in_nodes, out_nodes);
                 min_unknown_flow = dot_product(sub_flow_indicator, min_flow);
             }
         }
     }
+
 
     //int num_flow_before_sparser = get_num_nonzero_flow(min_flow);
     //std::cout << "before py_make_flow_sparser, num non-zero flow " <<
@@ -871,34 +983,23 @@ void Sparse_flow_handler::update_sorted_vds(bool is_reverse)
         vd_t vd = *it;
         int in_degree = boost::in_degree(vd, graph);
         int out_degree = boost::out_degree(vd, graph);
-        if( vd!=vd_start && vd!=vd_end && (in_degree!=0 && out_degree!=0) )
+        //shc_log_info(shc_logname, "node %u, in:%d out:%d\n", )
+        if( (in_degree!=0 && out_degree!=0) &&
+            vd!=vd_start && vd!=vd_end )
         {
-            if(in_degree == 1)
-            {
-                in_eip_t in_eip = boost::in_edges(vd, graph);
-                vd_t vd_source = boost::source(*in_eip.first, graph);
-                if (vd_source == vd_start)
-                    continue;
-            }
-            if(out_degree == 1)
-            {
-                out_eip_t out_eip = boost::out_edges(vd, graph);
-                vd_t vd_target = boost::target(*out_eip.first, graph);
-                if (vd_target == vd_end)
-                    continue;
-            }
-
             if(in_degree>1 || out_degree>1)
             {
+                if (in_degree<=1)
+                    continue;
                 new_sorted_vds.push_back(vd);
                 //shc_log_info(shc_logname, "vd %d is kept\n", graph[vd].node_id);
-                //log_local_node(vd, false);
+                log_local_node(vd, false);
             }
         }
     }
-#ifdef LOG_SF
-    shc_log_info(shc_logname, "%d nodes are kept\n", new_sorted_vds.size());
-#endif
+    //std::cout << new_sorted_vds.size() << "nodes are kept\n";
+    //shc_log_info(shc_logname, "%d nodes are kept\n", new_sorted_vds.size());
+
     sorted_vds = new_sorted_vds;
     if(is_reverse)
         std::reverse(sorted_vds.begin(), sorted_vds.end());
@@ -936,7 +1037,7 @@ void Sparse_flow_handler::modify_local_graph(vd_t v, std::vector<double> & flow,
             //std::cout << "graph[v_new].id " << graph[v_new].node_id << std::endl;
             //new_to_ori[v_new] = v;
 
-            vd_conatins_map.insert(std::make_pair(v_new, vd_conatins_map[v]));
+            vd_contains_map.insert(std::make_pair(v_new, vd_contains_map[v]));
 
             aer_t aer_u_vn = boost::add_edge(u, v_new, graph);
             graph[aer_u_vn.first] = bundled_edge_p(edge_u_v.weight, flow[k]);
@@ -1031,8 +1132,8 @@ is_update_flow(std::vector<double> & flow, std::vector<double> & min_flow,
     bool cond_1 = min_flow.size()==0;
     bool cond_2 = get_flow_difference(flow, min_flow) < sf_setting.tol &&
                   dot_product(sub_flow_indicator, flow) < min_unknown_flow;
-    bool cond_3 = std::accumulate(flow.begin(), flow.end(), 0) >
-                  std::accumulate(min_flow.begin(), min_flow.end(), 0);
+    bool cond_3 = std::accumulate(flow.begin(), flow.end(), 0.0) >
+                  std::accumulate(min_flow.begin(), min_flow.end(), 0.0);
     return cond_1 || cond_2 || cond_3;
 }
 
@@ -1048,7 +1149,7 @@ void Sparse_flow_handler::truncate_flow_value(int m, int n,
     {
         for(int j=0; j<n; j++)
         {
-            double sub_flow = flow[j*m+i];
+            double sub_flow = flow[i*n+j];
             double min_count = std::min(in_counts[i], out_counts[j]);
             if (sub_flow < sf_setting.removal_factor*min_count)
             {
@@ -1086,7 +1187,7 @@ void Sparse_flow_handler::truncate_flow_value(int m, int n,
                 if(is_only_in_flow)
                     continue;
 
-                flow[j*m+i] = 0;
+                flow[i*n+j] = 0;
             }
         }
     }
@@ -1101,26 +1202,37 @@ void Sparse_flow_handler::old_truncate_flow_value(int m, int n,
         for(int j=0; j<n; j++)
         {
             double min_count = std::min(in_counts[i], out_counts[j]);
+#ifdef LOG_LP_SUMMARY
+            shc_log_info(shc_logname, "in %d: %f, out %d: %f\n", i, in_counts[i], j, out_counts[j]);
+            shc_log_info(shc_logname, "flow %f tol %f rm %f\n",
+                flow[i*n+j], sf_setting.tol, sf_setting.removal_factor*min_count);
+#endif
+
             // for flow 2
-            if (flow_2[j*m+i] < sf_setting.sparsity_factor*min_count)
+            if (flow_2[i*n+j] < sf_setting.sparsity_factor*min_count)
             {
-                flow_2[j*m+i] = 0;
+                flow_2[i*n+j] = 0;
             }
 
-            if (flow[j*m+i] < sf_setting.removal_factor*min_count ||
-                flow[j*m+i] < sf_setting.tol)
+            if (flow[i*n+j] < sf_setting.removal_factor*min_count ||
+                flow[i*n+j] < sf_setting.tol)
             {
-                flow[j*m+i] = 0;
-                flow_2[j*m+i] = 0;
+#ifdef LOG_LP_SUMMARY
+                shc_log_info(shc_logname, "flow %d %d set to 0\n", i, j);
+#endif
+                flow[i*n+j] = 0;
+                flow_2[i*n+j] = 0;
             }
 
-            if (flow_2[j*m+i] < 0)
+            if (flow_2[i*n+j] < 0)
             {
-                flow[j*m+i] = 0;
-                flow_2[j*m+i] = 0;
+                flow[i*n+j] = 0;
+                flow_2[i*n+j] = 0;
             }
-
-            if(flow[j*m+i] < 0)
+#ifdef LOG_LP_SUMMARY
+            shc_log_info(shc_logname, "\n");
+#endif
+            if(flow[i*n+j] < 0)
             {
                 shc_log_error("LP optimize, get negative flow\n");
                 exit(1);
@@ -1131,7 +1243,7 @@ void Sparse_flow_handler::old_truncate_flow_value(int m, int n,
 
 double Sparse_flow_handler::path_decompose(vd_t vd, std::vector<double>& gamma,
         std::vector<double> & equ_constraint,
-        std::vector<int>& sub_flow_indicator, std::vector<double> & flow)
+        std::vector<int>& sub_flow_indicator, std::vector<double> & flow, double & scale)
 {
     //shc_log_info(shc_logname, "Start decompose\n");
     glp_prob *lp;
@@ -1208,7 +1320,7 @@ double Sparse_flow_handler::path_decompose(vd_t vd, std::vector<double>& gamma,
     shc_log_info(shc_logname, "\t\t%d Equal constraint\n", equ_constraint.size());
     for(int k=1; k<=num_equ_constraint; k++)
     {
-        shc_log_info(shc_logname, "%d: xxx = %f\n", k, equ_constraint.at(k-1));
+        shc_log_info(shc_logname, "%d: xxx = %f\n", k, scale*equ_constraint.at(k-1));
 
     }
     for(int k=1; k<=num_coeff; k++)
@@ -1226,6 +1338,14 @@ double Sparse_flow_handler::path_decompose(vd_t vd, std::vector<double>& gamma,
 
     for(int i=1; i<=num_cost_var; i++)
         flow.push_back(glp_get_col_prim(lp, i));
+
+    for(std::vector<double>::iterator it=flow.begin();
+                           it!=flow.end(); it++)
+    {
+       (*it) *= scale;
+       //std::cout << *it << std::endl;
+    }
+
 #ifdef LOG_LP_SUMMARY
     shc_log_info(shc_logname, "solution summary\n");
     for(int k=0; k<flow.size(); k++)
@@ -1255,6 +1375,25 @@ dump_SF_seq(std::string & out_file)
     stack_vd.push_back(vd_start);
 
     std::ofstream file_writer(out_file);
+    std::cout << "vd end in degree " << boost::in_degree(vd_end, graph)  << std::endl;
+    std::cout << "vd start out degree " << boost::out_degree(vd_start, graph)  << std::endl;
+    vip_t vip = boost::vertices(graph);
+    //walk through the graph list, and update if
+    for(vi_t it=vip.first; it!=vip.second; it++)
+    {
+        vd_t vd=*it;
+        if(vd != vd_end)
+        {
+            if(boost::in_degree(vd, graph) > 1)
+            {
+                shc_log_error("node %u has indegree > 1\n", graph[vd].node_id);
+                log_node_info(vd, true);
+                exit(0);
+            }
+        }
+    }
+
+    log_all_node(true);
 
     output_seq_helper(file_writer, curr_seq, delimit, stack_vd);
 
@@ -1290,7 +1429,7 @@ output_seq_helper(std::ofstream & file_writer, std::string & curr_seq,
     if( vd == vd_end)
     {
         std::string out_seq = curr_seq.substr(0, delimit.at(delimit.size()-2));
-        if(out_seq.size() > setting.multi_graph_setup.single_node_seq_len)
+        if(out_seq.size() > setting.output_seq_min_len)
         {
             file_writer << ">comp_" << comp_id << "_graph_" << graph_id << "_"
                         << (num_out_seq++) << std::endl;
@@ -1327,7 +1466,7 @@ output_seq_helper_mt(std::ofstream & file_writer, pthread_mutex_t * writer_lock_
     if( vd == vd_end)
     {
         std::string out_seq = curr_seq.substr(0, delimit.at(delimit.size()-2));
-        if(out_seq.size() > setting.multi_graph_setup.single_node_seq_len)
+        if(out_seq.size() > setting.output_seq_min_len)
         {
             pthread_mutex_lock(writer_lock_ptr);
             file_writer << ">comp_" << comp_id << "_graph_" << graph_id << "_"
@@ -1338,20 +1477,23 @@ output_seq_helper_mt(std::ofstream & file_writer, pthread_mutex_t * writer_lock_
     }
     else
     {
-        out_eip_t out_eip = boost::out_edges(vd, graph);
-        for(out_ei_t out_ei=out_eip.first; out_ei!=out_eip.second; out_ei++)
+        if(boost::out_degree(vd, graph) > 0)
         {
-            vd_t vd_target = boost::target(*out_ei, graph);
-            bundled_edge_p & edge_p = graph[*out_ei];
-            curr_seq += graph[vd_target].seq.substr(edge_p.weight);
-            delimit.push_back(curr_seq.size());
-            stack_vd.push_back(vd_target);
+            out_eip_t out_eip = boost::out_edges(vd, graph);
+            for(out_ei_t out_ei=out_eip.first; out_ei!=out_eip.second; out_ei++)
+            {
+                vd_t vd_target = boost::target(*out_ei, graph);
+                bundled_edge_p & edge_p = graph[*out_ei];
+                curr_seq += graph[vd_target].seq.substr(edge_p.weight);
+                delimit.push_back(curr_seq.size());
+                stack_vd.push_back(vd_target);
 
-            output_seq_helper_mt(file_writer, writer_lock_ptr, curr_seq, delimit, stack_vd);
+                output_seq_helper_mt(file_writer, writer_lock_ptr, curr_seq, delimit, stack_vd);
 
-            stack_vd.pop_back();
-            delimit.pop_back();
-            curr_seq.resize(delimit.back());
+                stack_vd.pop_back();
+                delimit.pop_back();
+                curr_seq.resize(delimit.back());
+            }
         }
     }
 }
@@ -1363,31 +1505,29 @@ output_seq_helper_mt(std::ofstream & file_writer, pthread_mutex_t * writer_lock_
  * [f(1,1), f(1,2), f(2,1), f(2,2), f(3,1), f(3,2)]
  */
 void Sparse_flow_handler::
-get_sub_flow_indicator(vd_t vd, std::vector<int> & sub_flow_indicator)
+get_sub_flow_indicator(vd_t vd, std::vector<int> & sub_flow_indicator,
+                    std::vector<vd_t> & in_nodes, std::vector<vd_t> & out_nodes)
 {
 #ifdef LOG_SF
     shc_log_info(shc_logname, "Start sub flow indicator\n");
 #endif
     // get all paths for this node
-    Vd_Vds_map_iterator vd_conatins_it = vd_conatins_map.find(vd);
-    if(vd_conatins_it == vd_conatins_map.end())
+    Vd_Vds_map_iterator vd_conatins_it = vd_contains_map.find(vd);
+    if(vd_conatins_it == vd_contains_map.end())
     {
         shc_log_warning("contain map does not conatin\n");
         exit(0);
     }
     std::deque<vd_t> & contained_vds = vd_conatins_it->second;
 
-    in_eip_t in_eip = boost::in_edges(vd, graph);
-    for(in_ei_t in_ei=in_eip.first; in_ei!=in_eip.second; in_ei++)
+    for(int i=0; i<in_nodes.size(); i++)
     {
-        vd_t vd_source = boost::source(*in_ei, graph);
-        vd_t u = vd_conatins_map[vd_source].back();
-
-        out_eip_t out_eip = boost::out_edges(vd, graph);
-        for(out_ei_t out_ei=out_eip.first; out_ei!=out_eip.second; out_ei++)
+        vd_t vd_source = in_nodes[i];
+        vd_t u = vd_contains_map[vd_source].back();
+        for(int j=0; j<out_nodes.size(); j++)
         {
-            vd_t vd_target = boost::target(*out_ei, graph);
-            vd_t w = vd_conatins_map[vd_target].front();
+            vd_t vd_target = out_nodes[j];
+            vd_t w = vd_contains_map[vd_target].front();
 
             if(!is_subflow_on_vd_unknown(contained_vds.front(), u, w, 1, contained_vds.size()))
             {
@@ -1405,6 +1545,7 @@ get_sub_flow_indicator(vd_t vd, std::vector<int> & sub_flow_indicator)
             sub_flow_indicator.push_back(1);
         }
     }
+
 #ifdef LOG_SF
     for(int i=0; i< sub_flow_indicator.size(); i++)
     {
@@ -1415,10 +1556,10 @@ get_sub_flow_indicator(vd_t vd, std::vector<int> & sub_flow_indicator)
 
 /**
  * check two conditions around vd, which is an original node loaded from file,
- * for a single read which contains vd.
- * 1. if u is b_dist before location of vd inside a read ,
- * 2. if w is a_dist after location of vd inside a read ,
- * return false, if both conditions are true, i.e. this vd is not unknown
+ * for a single path which contains vd.
+ * 1. if u is b_dist before location of vd inside a path ,
+ * 2. if w is a_dist after location of vd inside a path ,
+ * return false, if both conditions are true, i.e. this vd is not unknown,hence known
  * return true otherwise
  */
 bool Sparse_flow_handler::
@@ -1570,7 +1711,7 @@ double Sparse_flow_handler::get_norm_2(std::vector<double> & v)
 
 double Sparse_flow_handler::get_norm_1(std::vector<double> & v)
 {
-    return std::accumulate(v.begin(), v.end(), 0, norm_1_helper);
+    return std::accumulate(v.begin(), v.end(), 0.0, norm_1_helper);
 }
 
 int Sparse_flow_handler::get_num_nonzero_flow(std::vector<double> & flow,
@@ -1605,8 +1746,8 @@ double Sparse_flow_handler::get_flow_difference(std::vector<double> & flow1,
                                std::vector<double> & flow2)
 {
     assert(flow1.size() == flow2.size());
-    double sum_1 = std::accumulate(flow1.begin(), flow1.end(), 0);
-    double sum_2 = std::accumulate(flow2.begin(), flow2.end(), 0);
+    double sum_1 = std::accumulate(flow1.begin(), flow1.end(), 0.0);
+    double sum_2 = std::accumulate(flow2.begin(), flow2.end(), 0.0);
     return abs(sum_1 - sum_2);
 }
 
@@ -1633,84 +1774,53 @@ int Sparse_flow_handler::sum_vector(std::vector<int> & v)
 
 /**
  * for nodes like
- *  x \                  /  x
- *  x -  x - x or x -  x -  x
- *  x /                  \  x
+ *  x \                         /  x
+ *  x -  x - x but not[ x -  x -  x ]
+ *  x /                        \  x
  *  merge middle nodes to the left nodes or right nodes respectively
  * return if delete this node
  */
 bool Sparse_flow_handler::link_Y_path(vd_t vd)
 {
+    //shc_log_info(shc_logname, "\t\t link Y path\n");
     int in_degree = boost::in_degree(vd, graph);
     int out_degree = boost::out_degree(vd, graph);
-    assert((in_degree==1&& out_degree>1) || (out_degree==1 && in_degree>1));
+    assert((out_degree==1 && in_degree>1));
 
     bundled_node_p & curr_node = graph[vd];
     // link in to out
-    if(in_degree==1)
+
+    out_eip_t out_eip = boost::out_edges(vd,graph);
+    vd_t vd_target = boost::target(*out_eip.first, graph);
+    bundled_edge_p & out_edge_p = graph[*out_eip.first];
+
+    //if(vd_target == vd_end)
+    //    return false;
+
+    double sum_in_count = 0;
+    in_eip_t in_eip = boost::in_edges(vd,graph);
+    for(in_ei_t in_ei=in_eip.first; in_ei!=in_eip.second; in_ei++)
     {
-        in_eip_t in_eip = boost::in_edges(vd,graph);
-        vd_t vd_source = boost::source(*in_eip.first, graph);
-        if (vd_source == vd_start)
-            return false;
-
-        bundled_edge_p & in_edge_p = graph[*in_eip.first];
-
-        double sum_out_count = 0;
-        out_eip_t out_eip = boost::out_edges(vd, graph);
-        for(out_ei_t out_ei=out_eip.first; out_ei!=out_eip.second; out_ei++)
-        {
-            bundled_edge_p & edge_p = graph[*out_ei];
-            sum_out_count += edge_p.count;
-        }
-        double scale = in_edge_p.count/sum_out_count;
-
-        out_eip = boost::out_edges(vd, graph);
-        for(out_ei_t out_ei=out_eip.first; out_ei!=out_eip.second; out_ei++)
-        {
-            vd_t vd_target = boost::target(*out_ei, graph);
-            bundled_node_p & target_node = graph[vd_target];
-            bundled_edge_p & edge_p = graph[*out_ei];
-            target_node.seq = curr_node.seq + target_node.seq.substr(edge_p.weight);
-            aer_t aer = boost::add_edge(vd_source, vd_target, graph);
-            graph[aer.first] = bundled_edge_p(in_edge_p.weight, edge_p.count*scale);//in_edge_p;
-
-            update_contain_map(vd_target, vd);
-        }
+        bundled_edge_p & edge_p = graph[*in_ei];
+        sum_in_count += edge_p.count;
     }
-    else
+
+    double scale = out_edge_p.count/sum_in_count;
+
+    in_eip = boost::in_edges(vd,graph);
+    for(in_ei_t in_ei=in_eip.first; in_ei!=in_eip.second; in_ei++)
     {
-        out_eip_t out_eip = boost::out_edges(vd,graph);
-        vd_t vd_target = boost::target(*out_eip.first, graph);
-        bundled_edge_p & out_edge_p = graph[*out_eip.first];
+        vd_t vd_source = boost::source(*in_ei, graph);
+        bundled_node_p & source_node = graph[vd_source];
+        bundled_edge_p & edge_p = graph[*in_ei];
+        source_node.seq = source_node.seq + curr_node.seq.substr(edge_p.weight);
+        aer_t aer = boost::add_edge(vd_source, vd_target, graph);
+        graph[aer.first] = bundled_edge_p(out_edge_p.weight, edge_p.count*scale); //out_edge_p;
 
-        if(vd_target == vd_end)
-            return false;
-
-        double sum_in_count = 0;
-        in_eip_t in_eip = boost::in_edges(vd,graph);
-        for(in_ei_t in_ei=in_eip.first; in_ei!=in_eip.second; in_ei++)
-        {
-            bundled_edge_p & edge_p = graph[*in_ei];
-            sum_in_count += edge_p.count;
-        }
-
-        double scale = out_edge_p.count/sum_in_count;
-
-        in_eip = boost::in_edges(vd,graph);
-        for(in_ei_t in_ei=in_eip.first; in_ei!=in_eip.second; in_ei++)
-        {
-            vd_t vd_source = boost::source(*in_ei, graph);
-            bundled_node_p & source_node = graph[vd_source];
-            bundled_edge_p & edge_p = graph[*in_ei];
-            source_node.seq = source_node.seq + curr_node.seq.substr(edge_p.weight);
-            aer_t aer = boost::add_edge(vd_source, vd_target, graph);
-            graph[aer.first] = bundled_edge_p(out_edge_p.weight, edge_p.count*scale); //out_edge_p;
-
-            //for path indicator
-            update_contain_map(vd_source, vd);
-        }
+        //for path indicator
+        update_contain_map(vd_source, vd);
     }
+
     //clean vertex
     //shc_log_info(shc_logname, "linked Y path, node %u, inD %d, outD %d\n",
     //                            curr_node.node_id, in_degree, out_degree);
@@ -1722,11 +1832,11 @@ bool Sparse_flow_handler::link_Y_path(vd_t vd)
 void Sparse_flow_handler::update_contain_map(vd_t vd_containing, vd_t vd_contained)
 {
     //for path indicator
-    Vd_Vds_map_iterator vd_conatins_it = vd_conatins_map.find(vd_containing);
-    if(vd_conatins_it !=  vd_conatins_map.end())
+    Vd_Vds_map_iterator vd_conatins_it = vd_contains_map.find(vd_containing);
+    if(vd_conatins_it !=  vd_contains_map.end())
     {
-        Vd_Vds_map_iterator vd_contained_it = vd_conatins_map.find(vd_contained);
-        if(vd_contained_it==vd_conatins_map.end())
+        Vd_Vds_map_iterator vd_contained_it = vd_contains_map.find(vd_contained);
+        if(vd_contained_it==vd_contains_map.end())
         {
             shc_log_warning("contain does not have vd\n");
             exit(0);
@@ -1830,7 +1940,7 @@ void Sparse_flow_handler::log_local_node(vd_t vd, bool is_show_seq)
         vd_t vd_target = boost::target(*out_ei, graph);
         shc_log_info(shc_logname, "OUT VD: %6d\n",graph[vd_target].node_id);
     }
-    Vd_Vds_map_iterator contain_it = vd_conatins_map.find(vd);
+    Vd_Vds_map_iterator contain_it = vd_contains_map.find(vd);
     std::deque<vd_t> & vec = contain_it->second;
     for(int i=0; i<vec.size();i++)
     {

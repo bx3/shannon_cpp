@@ -298,6 +298,69 @@ uint64_t get_num_kmer(std::string in_file)
     return num_seq;
 }
 
+
+void replace_space_with_underscore(std::string & s)
+{
+    for(int i=0; i<s.size(); i++)
+    {
+        char & letter = s[i];
+        if(letter == ' ')
+            letter = '_';
+    }
+}
+
+std::string get_current_calender_time()
+{
+    time_t rawtime;
+    time (&rawtime);
+    char* time_buf_ptr= ctime (&rawtime);
+    std::string s(time_buf_ptr);
+
+    std::vector<std::string> tokens;
+    std::string token;
+    for(int i=0; i<s.size(); i++)
+    {
+        if(s[i] == ' ' || s[i] == '\n')
+        {
+            if (!token.empty())
+            {
+                tokens.push_back(token);
+                token.clear();
+            }
+        }
+        else
+        {
+            token += s[i];
+        }
+    }
+
+    std::string & day_time = tokens[3];
+    int j =0;
+    for (int i=0; i<day_time.size(); i++)
+    {
+            if(day_time[i]== ':' && j == 0)
+            {
+                    day_time[i]='h';
+                    j ++;
+            }
+            else if (day_time[i]== ':' && j == 1)
+            {
+                    day_time[i]='m';
+                    j ++;
+            }
+            else if (day_time[i]== ':' && j == 2)
+            {
+                    day_time[i]='s';
+                    break;
+            }
+    }
+    day_time.push_back('s');
+    std::string out_str = "date_" + tokens[4]+ '_' +  tokens[1] + '_' +  tokens[2] + '_' +tokens[3] ;
+    std::cout << "data " << out_str << std::endl;
+
+    return out_str;
+}
+
 /*
 void set_input_pair_path(s &input_kmer_name , s &input_kmer_name_2,
                          s &input_read_name,  s &input_read_name_2)

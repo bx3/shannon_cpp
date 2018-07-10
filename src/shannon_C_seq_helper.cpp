@@ -18,12 +18,22 @@ void eval_reconstructed_seq(Local_files & lf)
         std::string curr_path = "./";
         convert_relative_path_to_abs(curr_path);
 
+        std::string local_cp_eval_file = lf.eval_dir_path + "/reference.fasta";
+        std::string local_cp_eval_file_cmd =
+            "cp " + lf.reference_seq_path + " " + local_cp_eval_file;
+        run_command(local_cp_eval_file_cmd.c_str(), true);
+
         std::string cmd = "python " + curr_path + "/analysis/compare_trans.py " +
-                          lf.reference_seq_path + " " +
+                          local_cp_eval_file + " " +
                           lf.reconstructed_seq_path + " " +
                           lf.eval_path;
         std::cout << cmd << std::endl;
         system(cmd.c_str());
+
+        std::string rm_local_eval_file_cmd = "rm " + local_cp_eval_file;
+        run_command(rm_local_eval_file_cmd.c_str(), true);
+        std::string rm_local_cp_eval_nospace_file_cmd = "rm " + local_cp_eval_file + "_nospace";
+        run_command(rm_local_cp_eval_nospace_file_cmd.c_str(), true);
     }
     else
     {
@@ -31,21 +41,99 @@ void eval_reconstructed_seq(Local_files & lf)
     }
 }
 
-void check_read_type_consistency(Shannon_C_setting & setting)
+void count_seq_types_num(std::string filename, int & num_single_seq,
+                        int & num_contig_seq, int & num_sf_seq)
 {
-    Local_files & lf = setting.local_files;
-    if(setting.has_single)
+    num_single_seq = 0;
+    num_contig_seq = 0;
+    num_sf_seq = 0;
+
+    std::ifstream reader(filename);
+    std::string line;
+    while(std::getline(reader, line))
     {
-        assert(setting.single_read_length > 0);
-        assert(!lf.input_read_path.empty());
+        if(line[0] == '>')
+        {
+            char start_letter = line[1];
+            if(start_letter=='s')
+                num_single_seq++;
+            else if(start_letter == 'C')
+                num_contig_seq++;
+            else if(start_letter =='c')
+                num_sf_seq ++;
+            else
+            {
+                std::cerr << "unknown type seq" << std::endl;
+                exit(0);
+            }
+        }
     }
-    if(setting.has_pair)
+}
+
+std::string get_py_eval_summary(Local_files & lf, std::vector<std::string> & py_summaries)
+{
+    std::ifstream reader(lf.eval_path);
+    std::string line;
+    std::string last_line;
+    while(std::getline(reader, line))
     {
-        assert(setting.pair_1_read_length > 0);
-        assert(setting.pair_2_read_length > 0);
-        assert(!lf.input_read_path_1.empty());
-        assert(!lf.input_read_path_2.empty());
+        if(line[0] == '#')
+        {
+            py_summaries.push_back(line);
+        }
     }
+    reader.close();
+    return "";//line.substr(i);
+}
+
+int eval_align_counts(std::string filename,
+        int & num_single_seq, int & num_contig_seq, int & num_sf_seq,
+        int & num_single_contribute, int & num_contig_contribute,
+        int & num_sf_contribute)
+{
+    num_single_seq = 0;
+    num_contig_seq = 0;
+    num_sf_seq = 0;
+
+    std::ifstream reader(filename);
+    std::string ref_name, recon_name, rest;
+    std::set<std::string> single_contributing_seq;
+    std::set<std::string> comp_contributing_seq;
+    std::set<std::string> contig_contributing_seq;
+    int total_align = 0;
+    while(std::getline(reader, ref_name, '\t') &&
+          std::getline(reader, recon_name, '\t') &&
+          std::getline(reader, rest))
+    {
+        total_align++;
+        char start_letter = recon_name[0];
+        //std::cout << "recon_name" << recon_name << std::endl;
+        //std::cout << "start_letter" << start_letter << std::endl;
+        if(start_letter=='s')
+        {
+            num_single_seq++;
+            single_contributing_seq.insert(recon_name);
+        }
+        else if(start_letter == 'C')
+        {
+            num_contig_seq++;
+            contig_contributing_seq.insert(recon_name);
+        }
+        else if(start_letter =='c')
+        {
+            num_sf_seq ++;
+            comp_contributing_seq.insert(recon_name);
+        }
+        else
+        {
+            shc_log_error("unknown type seq");
+            exit(0);
+        }
+    }
+    num_single_contribute = single_contributing_seq.size();
+    num_contig_contribute = contig_contributing_seq.size();
+    num_sf_contribute = comp_contributing_seq.size();
+    return total_align;
 }
 
 void
@@ -236,9 +324,6 @@ void parse_jf_info(Local_files & lf, JF_stats & jf_stats)
     std::string cmd("jellyfish stats ");
     std::string jf_info_file(lf.output_path+ "/jf_stats");
 
-    std::cout << "lf.input_jf_path " << lf.input_jf_path << std::endl;
-    std::cout << "jf_info_file     " << jf_info_file << std::endl;
-
     if(!exist_path(jf_info_file) || is_file_empty(jf_info_file))
     {
         cmd += (lf.input_jf_path + " > " + jf_info_file);
@@ -264,10 +349,14 @@ void parse_jf_info(Local_files & lf, JF_stats & jf_stats)
             std::cout << "read something strange" << name << std::endl;
     }
 
-    std::cout << "uniq_num  " << jf_stats.uniq_num << "\n"
-              << "dist_num  " << jf_stats.dist_num << "\n"
-              << "total_num " << jf_stats.total_num << "\n"
-              << "max_count " << jf_stats.max_count << std::endl;
+    if(jf_stats.total_num == 0)
+    {
+        std::cerr << "[Error] jf stats file error, check if jellyfish stats run properly, "
+                  << "total number of kmer shown to be 0 " << std::endl;
+        exit(0);
+    }
+
+
 }
 
 void run_command(std::string cmd, bool print_cmd)
@@ -384,14 +473,19 @@ void run_jellyfish(Shannon_C_setting & setting)
             run_command(cmd_count, true);
             run_command(cmd_dump, true);
 
-            std::cout << " Finish jellyfish: " << std::endl;
+            std::cout << " Finish jellyfish" << std::endl;
             shc_log_info(shc_logname, "finish jellyfish with kmer length %d\n",
                                                 setting.kmer_length);
         }
         else
         {
-            std::cout << "Use jellyfish dict at dir " << lf.input_kmer_path << std::endl;
-            std::cout << "Use jellyfish jf file at dir " << lf.input_jf_path << std::endl;
+            std::string msg("Use existing jellyfish dict at path\n\t");
+            msg += lf.input_kmer_path + "\n";
+            msg += "\tdelete this file if input reads have changed.\n\n";
+            msg += "\tUse jellyfish jf file at path\n\t";
+            msg += lf.input_jf_path + "\n";
+            msg += "\tdelete this file if input reads have changed.\n\n";
+            print_important_notice(msg);
         }
     }
 }

@@ -42,6 +42,13 @@ void Contig_graph_handler::run_contig_graph_handler()
     start_timer(&cgh_main_timer);
     std::cout << "start group contig " <<  std::endl;
     group_components();
+
+    shc_log_info(shc_logname, "log complex comp num edges\n");
+    for(int i=0; i<comps_num_edges.size();i++ )
+    {
+        shc_log_info(shc_logname, "comp %d has %d edges\n", i, comps_num_edges[i]);
+    }
+
     shc_log_info(shc_logname, "finish group contig\n");
     log_stop_timer(&cgh_main_timer);
 #ifdef SHOW_PROGRESS
@@ -52,7 +59,17 @@ void Contig_graph_handler::run_contig_graph_handler()
 
     add_or_overwrite_directory(lf.output_components_read_dir);
 
+
+    dump_filtered_contig();
+
     fasta_dumper.setup_dump_files(component_size);
+
+    //std::ofstream ana_file_writer(lf.output_path + "/sampling.log");
+    comp_total_kmer_count.assign(curr_component_num, std::vector<uint64_t>());
+    comp_num_reads.assign(curr_component_num, 0);
+    comp_num_kmers.assign(curr_component_num, 0);
+    read_sampler.setup(curr_component_num);
+
 
     // assigning reads
     if(setting.has_single)
@@ -86,6 +103,7 @@ void Contig_graph_handler::run_contig_graph_handler()
 #endif
     }
     fasta_dumper.finalize_dump_files();
+
     // dumping kmers
     start_timer(&cgh_timer);
     std::cout << "start assigning kmer" << std::endl;
@@ -98,6 +116,37 @@ void Contig_graph_handler::run_contig_graph_handler()
     std::cout << "finish assigning kmer, ";
     stop_timer(&cgh_timer);
 #endif
+
+    //for(uint64_t i=0; i<curr_component_num ; i++)
+    //{
+    //    for(uint64_t j=0; j<comp_total_kmer_count[i].size(); j++ )
+    //    {
+    //        ana_file_writer << comp_total_kmer_count[i][j] << "\t";
+    //    }
+    //    ana_file_writer << comp_num_reads[i]
+    //                    << "\t" << comp_num_kmers[i] << std::endl;
+    //}
+    //ana_file_writer.close();
+}
+
+void Contig_graph_handler::dump_filtered_contig()
+{
+    std::ofstream writer(setting.local_files.filtered_contig);
+    uint64_t write_index = 0;
+    for(uint64_t i=0; i<component_array.size(); i++)
+    {
+        comp_num_t comp_j = component_array[i];
+        if(complex_comp_indicator[comp_j])
+        {
+            writer << ">Contig_" << write_index << std::endl;
+            char * base_start;
+            uint64_t len;
+            ch->get_contig(i, base_start, len);
+            std::string contig(base_start, len);
+            writer << contig << std::endl;
+            write_index ++;
+        }
+    }
 }
 
 //return true when graph is needed, false if it is ok
@@ -201,7 +250,7 @@ assign_comp_without_graph()
     }
 
     // start with a new component number
-    if (accum_collect_contig_num >= give_up_num)
+    if (accum_collect_contig_num >= non_partition_size)
     {
 #ifdef LOG_CONTIG_GRAPH
         shc_log_info(shc_logname, "component %u has %d no-metis contig\n",
@@ -321,7 +370,7 @@ void Contig_graph_handler::assign_comp_with_graph()
     {
         contig_num_t i = contig_stack.back();
         contig_stack.pop_back();
-
+        //curr_contig = i;
         char * base_start;
         uint64_t len;
         ch->get_contig(i, base_start, len);
@@ -337,6 +386,7 @@ void Contig_graph_handler::assign_comp_with_graph()
         {
             //if(j%setting.contig_graph_setup.down_sample == 0)
             //{
+            //conn_point = j;
             uint64_t byte;
             encode_kmer(base_start+j, &byte, kmer_length);
             Kmer_counter_map_iterator it = kh->kmer_counter.find(byte);
@@ -469,7 +519,8 @@ void Contig_graph_handler::break_and_keep_component(graph_t & graph)
                           static_cast<float>(metis_setup.partition_size)));    //note
         //std::cout << "num vertices " << num_vertices << std::endl;
         //std::cout << "partition size " << metis_setup.partition_size << std::endl;
-        //std::cout << "partition to " << partition << std::endl;
+        std::cout << "partition to " << partition << std::endl;
+        shc_log_info(shc_logname, "partition to %d\n", partition);
 
         metis_setup.num_partition = std::min(static_cast<idx_t>(100), partition);
         //shc_log_info(shc_logname, "metis to asked to break %d partition\n", metis_setup.num_partition);
@@ -489,6 +540,21 @@ void Contig_graph_handler::break_and_keep_component(graph_t & graph)
             complex_comp_indicator.push_back(true);
         }
 
+        // log component
+        comps_num_edges.resize(curr_component_num,0);
+        eip_t eip = boost::edges(graph);
+        for(ei_t ei=eip.first; ei!=eip.second; ei++)
+        {
+            vd_t source = boost::source(*ei, graph);
+            vd_t target = boost::target(*ei, graph);
+            if(component_array[int(source)] == component_array[int(target)] && component_array[int(source)] != IMPOSSIBLE_COMP_NUM)
+            {
+                //shc_log_info(shc_logname, "component_array[int(source)] %d\n", component_array[int(source)]);
+                //shc_log_info(shc_logname, "component_array[int(target)] %d\n", component_array[int(target)]);
+                comps_num_edges[component_array[int(source)]] ++;
+            }
+        }
+
         if(metis_setup.is_multiple_partition)
         {
             shc_log_info(shc_logname, "Starting repartition\n");
@@ -504,8 +570,24 @@ void Contig_graph_handler::break_and_keep_component(graph_t & graph)
                 complex_comp_indicator.push_back(true);
             }
             shc_log_info(shc_logname, "Finish repartition\n");
+
+            // log component
+            comps_num_edges.resize(curr_component_num,0);
+            eip_t eip = boost::edges(graph);
+            for(ei_t ei=eip.first; ei!=eip.second; ei++)
+            {
+                vd_t source = boost::source(*ei, graph);
+                vd_t target = boost::target(*ei, graph);
+                if(component_array_aux[int(source)] == component_array_aux[int(target)] && component_array_aux[int(source)] != IMPOSSIBLE_COMP_NUM)
+                {
+                    //shc_log_info(shc_logname, "component_array[int(source)] %d\n", component_array_aux[int(source)]);
+                    //shc_log_info(shc_logname, "component_array[int(target)] %d\n", component_array[int(target)]);
+                    comps_num_edges[component_array_aux[int(source)]] ++;
+                }
+            }
         }
         num_complex_comp++;
+
 
         //std::string contig_file = setting.local_files.output_path + "/contig_file";
         //log_contigs(contig_file);
@@ -705,7 +787,7 @@ get_connected_contig_index( Kmer_counter_map_iterator & it, graph_t & graph,
                 if (contigA_index != contigB_index)
                 {
                     //shc_log_info(shc_logname, "Find new contig %u, before increment edge with me %u\n", contigB_index, contigA_index);
-
+                    //shc_log_info(shc_logname, "%u, at %d\n", curr_contig, conn_point);
                     update_graph(contig_vertex_map, graph, curr_vd, contigB_index);
 
                     if(explorable_contig_set.is_explorable(contigB_index))
@@ -901,6 +983,16 @@ void Contig_graph_handler::dump_component_array(std::string & filename)
     }
     outfile.close();
     shc_log_info(shc_logname, "Finish log_component_array\n");
+
+    std::ofstream comp_type_writer(lf.output_path + "/comp_types.log");
+    comp_type_writer << curr_component_num
+      << " components, c for complex, s for simple"
+      << std::endl;
+    for (int i=0; i<curr_component_num; i++)
+    {
+        comp_type_writer << component_type[i] << std::endl;
+    }
+    comp_type_writer.close();
 }
 
 
@@ -943,8 +1035,11 @@ update_comp_count(std::vector<comp_num_t> & components,
 
 void Contig_graph_handler::
 update_comp_map(std::map<comp_num_t, int> & comp_map, bool is_forward,
-                std::vector<comp_num_t> & comp_array,  char * seq,  int len)
+                std::vector<comp_num_t> & comp_array,  char * seq,  int len,
+                double & avg_count)
 {
+    avg_count = 0; // default min count
+    double num_valid_test = 0;
     int interval = (len-kmer_length+1)/num_test;
     uint64_t byte;
     for(int i=0; i<num_test; i++)
@@ -963,8 +1058,11 @@ update_comp_map(std::map<comp_num_t, int> & comp_map, bool is_forward,
             {
                 comp_map[comp_num_for_contig]++;
             }
+            avg_count += get_count(it->second.count, compress_ratio);
+            num_valid_test += 1.0;
         }
     }
+    avg_count = avg_count/num_valid_test; //
 }
 
 void Contig_graph_handler::
@@ -1258,35 +1356,52 @@ assign_pair_read_to_file_mmap_helper(struct Single_dumper & mfs_p1,
 {
     if(is_assign_best)
     {
+        double avg_count_p1, avg_count_p2;
         std::map<comp_num_t, int> comp_count_map;
-        update_comp_map(comp_count_map, is_forward, component_array, seq_ptr_p1, seq_len_p1);
-        update_comp_map(comp_count_map, is_forward, component_array, seq_ptr_p2, seq_len_p2);
+        update_comp_map(comp_count_map, is_forward, component_array,
+                        seq_ptr_p1, seq_len_p1, avg_count_p1);
+        update_comp_map(comp_count_map, is_forward, component_array,
+                        seq_ptr_p2, seq_len_p2, avg_count_p2);
+        bool skip_first = false;
+        comp_num_t best_comp;
 
-        comp_num_t best_comp = assign_pair_best_comp(mfs_p1, mfs_p2, comp_count_map,
-            seq_ptr_p1, seq_ptr_p2, header_ptr_p1, header_ptr_p2, seq_len_p1, seq_len_p2, is_forward);
+        best_comp = assign_pair_best_comp(mfs_p1, mfs_p2,
+            comp_count_map, seq_ptr_p1, seq_ptr_p2, header_ptr_p1,
+            header_ptr_p2, seq_len_p1, seq_len_p2, is_forward, avg_count_p1, avg_count_p2);
+
+
 
         if (metis_setup.is_multiple_partition)
         {
-            if(complex_comp_indicator[best_comp]) // is complex component
+            if((best_comp!=curr_component_num && complex_comp_indicator[best_comp])) // is complex component
             {
+                double re_avg_count_p1, re_avg_count_p2;
                 std::map<comp_num_t, int> re_comp_count_map;
-                update_comp_map(re_comp_count_map, is_forward, component_array_aux, seq_ptr_p1, seq_len_p1);
-                update_comp_map(re_comp_count_map, is_forward, component_array_aux, seq_ptr_p2, seq_len_p2);
-                assign_pair_best_comp(mfs_p1, mfs_p2, re_comp_count_map,
-                    seq_ptr_p1, seq_ptr_p2, header_ptr_p1, header_ptr_p2, seq_len_p1, seq_len_p2, is_forward);
+                update_comp_map(re_comp_count_map, is_forward,
+                  component_array_aux, seq_ptr_p1, seq_len_p1, re_avg_count_p1);
+                update_comp_map(re_comp_count_map, is_forward,
+                  component_array_aux, seq_ptr_p2, seq_len_p2, re_avg_count_p2);
+
+                best_comp = assign_pair_best_comp(mfs_p1, mfs_p2, re_comp_count_map,
+                    seq_ptr_p1, seq_ptr_p2, header_ptr_p1, header_ptr_p2,
+                    seq_len_p1, seq_len_p2, is_forward, re_avg_count_p1, re_avg_count_p2);
             }
         }
-
     }
     else
     {
+        double avg_count_p1, avg_count_p2;
         std::map<comp_num_t, int> comp_count_map;
-        update_comp_map(comp_count_map, is_forward, component_array, seq_ptr_p1, seq_len_p1);
-        update_comp_map(comp_count_map, is_forward, component_array, seq_ptr_p2, seq_len_p2);
+        update_comp_map(comp_count_map, is_forward, component_array,
+                        seq_ptr_p1, seq_len_p1, avg_count_p1);
+        update_comp_map(comp_count_map, is_forward, component_array,
+                        seq_ptr_p2, seq_len_p2, avg_count_p2);
         if (metis_setup.is_multiple_partition)
         {
-            update_comp_map(comp_count_map, is_forward, component_array_aux, seq_ptr_p1, seq_len_p1);
-            update_comp_map(comp_count_map, is_forward, component_array_aux, seq_ptr_p2, seq_len_p2);
+            update_comp_map(comp_count_map, is_forward, component_array_aux,
+                            seq_ptr_p1, seq_len_p1, avg_count_p1);
+            update_comp_map(comp_count_map, is_forward, component_array_aux,
+                            seq_ptr_p2, seq_len_p2, avg_count_p2);
         }
 
         assign_pair_all_comp(mfs_p1, mfs_p2, comp_count_map,
@@ -1298,29 +1413,45 @@ assign_pair_read_to_file_mmap_helper(struct Single_dumper & mfs_p1,
 comp_num_t Contig_graph_handler::
 assign_pair_best_comp(struct Single_dumper & mfs_p1,
              struct Single_dumper & mfs_p2, std::map<comp_num_t, int> & comp_count,
-    char * seq_ptr_p1, char * seq_ptr_p2, char * header_ptr_p1,
-                char * header_ptr_p2, int seq_len_p1, int seq_len_p2, bool is_forward)
+                char * seq_ptr_p1, char * seq_ptr_p2, char * header_ptr_p1,
+                char * header_ptr_p2, int seq_len_p1, int seq_len_p2, bool is_forward,
+                double & avg_count_p1, double & avg_count_p2)
 {
     comp_num_t comp_i;
     if(decide_best_comp(comp_count, comp_i))
     {
-        if(is_forward)
+        if(read_sampler.decide_to_keep_read(avg_count_p1, comp_i) ||
+           read_sampler.decide_to_keep_read(avg_count_p2, comp_i))
         {
-            mfs_p1.write_fasta(comp_i, seq_ptr_p1, header_ptr_p1, seq_len_p1);
-            mfs_p2.write_fasta(comp_i, seq_ptr_p2, header_ptr_p2, seq_len_p2);
+
+            if(is_forward)
+            {
+                mfs_p1.write_fasta(comp_i, seq_ptr_p1, header_ptr_p1, seq_len_p1);
+                mfs_p2.write_fasta(comp_i, seq_ptr_p2, header_ptr_p2, seq_len_p2);
+            }
+            else
+            {
+                mfs_p1.write_reverse_fasta(comp_i, seq_ptr_p2, header_ptr_p2, seq_len_p2);
+                mfs_p2.write_reverse_fasta(comp_i, seq_ptr_p1, header_ptr_p1, seq_len_p1);
+                /*
+                mfs_p1.write_reverse_fasta(comp_i, seq_ptr_p1, header_ptr_p1,
+                    seq_len_p1);
+                mfs_p2.write_reverse_fasta(comp_i, seq_ptr_p2, header_ptr_p2,
+                    seq_len_p2);
+                */
+            }
+            if(comp_i !=curr_component_num)
+            {
+                if(avg_count_p1<=kmer_count_thresh && avg_count_p2<=kmer_count_thresh)
+                {
+                    //comp_total_kmer_count[comp_i].push_back((avg_count_p2+avg_count_p1)/2);
+                    //comp_num_reads[comp_i] += 1;
+                }
+            }
+            return comp_i;
         }
         else
-        {
-            mfs_p1.write_reverse_fasta(comp_i, seq_ptr_p2, header_ptr_p2, seq_len_p2);
-            mfs_p2.write_reverse_fasta(comp_i, seq_ptr_p1, header_ptr_p1, seq_len_p1);
-            /*
-            mfs_p1.write_reverse_fasta(comp_i, seq_ptr_p1, header_ptr_p1,
-                seq_len_p1);
-            mfs_p2.write_reverse_fasta(comp_i, seq_ptr_p2, header_ptr_p2,
-                seq_len_p2);
-            */
-        }
-        return comp_i;
+            return curr_component_num;
     }
     else
         return curr_component_num; // which is the impossible components
@@ -1394,16 +1525,28 @@ assign_single_read_to_file_mmap(struct Single_dumper & mfs,
 comp_num_t Contig_graph_handler::
 assign_single_best_comp(struct Single_dumper & mfs,
     std::map<comp_num_t, int> & comp_count, char * seq_ptr, char * header_ptr,
-                                        int seq_len, bool is_forward)
+                                int seq_len, bool is_forward, double & avg_count)
 {
     comp_num_t comp_i;
     if(decide_best_comp(comp_count, comp_i))
     {
-        if (is_forward)
-            mfs.write_fasta(comp_i, seq_ptr, header_ptr, seq_len);
+        if(read_sampler.decide_to_keep_read(avg_count, comp_i))
+        {
+            if (is_forward)
+                mfs.write_fasta(comp_i, seq_ptr, header_ptr, seq_len);
+            else
+                mfs.write_reverse_fasta(comp_i, seq_ptr, header_ptr, seq_len);
+            // collect stat
+            if(avg_count < kmer_count_thresh)
+            {
+                //comp_total_kmer_count[comp_i].push_back(avg_count);
+                //comp_num_reads[comp_i] += 1;
+            }
+
+            return comp_i;
+        }
         else
-            mfs.write_reverse_fasta(comp_i, seq_ptr, header_ptr, seq_len);
-        return comp_i;
+            return curr_component_num;
     }
     else
         return curr_component_num;
@@ -1431,28 +1574,38 @@ assign_single_read_to_file_mmap_helper(struct Single_dumper & mfs,
 {
     if(is_assign_best)
     {
+        double avg_count;
         std::map<comp_num_t, int> comp_count_map;
-        update_comp_map(comp_count_map, is_forward, component_array, seq_ptr, seq_len);
-        comp_num_t best_comp = assign_single_best_comp(mfs, comp_count_map, seq_ptr, header_ptr,
-                                                seq_len, is_forward);
+        update_comp_map(comp_count_map, is_forward, component_array,
+                        seq_ptr, seq_len, avg_count);
+        comp_num_t best_comp = curr_component_num;
+        best_comp = assign_single_best_comp(mfs, comp_count_map, seq_ptr, header_ptr,
+                                                seq_len, is_forward, avg_count);
 
         if(metis_setup.is_multiple_partition)
         {
-            if(complex_comp_indicator[best_comp]) // is complex component
+            if(best_comp!=curr_component_num &&complex_comp_indicator[best_comp]) // is complex component
             {
+                double re_avg_count;
                 std::map<comp_num_t, int> re_comp_count_map;
-                update_comp_map(re_comp_count_map, is_forward, component_array_aux, seq_ptr, seq_len);
-                assign_single_best_comp(mfs, re_comp_count_map, seq_ptr, header_ptr,
-                                                        seq_len, is_forward);
+                update_comp_map(re_comp_count_map, is_forward,
+                        component_array_aux, seq_ptr, seq_len, re_avg_count);
+                best_comp = assign_single_best_comp(mfs, re_comp_count_map, seq_ptr,
+                                     header_ptr, seq_len, is_forward, re_avg_count);
             }
         }
     }
     else
     {
+        double avg_count;
         std::map<comp_num_t, int> comp_count_map;
-        update_comp_map(comp_count_map, is_forward, component_array, seq_ptr, seq_len);
+        update_comp_map(comp_count_map, is_forward, component_array,
+                        seq_ptr, seq_len, avg_count);
         if (metis_setup.is_multiple_partition)
-            update_comp_map(comp_count_map, is_forward, component_array_aux, seq_ptr, seq_len);
+        {
+            update_comp_map(comp_count_map, is_forward, component_array_aux,
+                            seq_ptr, seq_len, avg_count);
+        }
         assign_single_all_comp(mfs, comp_count_map, seq_ptr, header_ptr,
                                             seq_len, is_forward);
     }
@@ -1574,7 +1727,7 @@ assign_reads_to_components_mmap(std::string input_read_path)
         if((num_read-last_num) > READ_PROGRESS_STEP)
         {
             int percentage = (100 * num_read)/num_single_read_file;
-            std::cout << "[" << percentage << "%] " <<  num_read
+            std::cout << "[" << percentage << "%] ASSIGN READS TO COMP " <<  num_read
                  << " reads out of " <<  (num_single_read_file)
                  << " is processed, ";
             stop_timer(&read_prog_timer);
@@ -1614,18 +1767,20 @@ void Contig_graph_handler::assign_kmer_to_components()
         decode_kmer(bases, &(it->first), kmer_length);
 
         kmer_dumper.dump_kmer(component_array[it->second.contig], bases, it->second.count);
+        //comp_num_kmers[component_array[it->second.contig]] ++;
 
         if(metis_setup.is_multiple_partition &&
         component_array_aux[it->second.contig] < curr_component_num)
         {
             kmer_dumper.dump_kmer(component_array_aux[it->second.contig], bases, it->second.count);
+            //comp_num_kmers[component_array_aux[it->second.contig]] ++;
         }
 
         if((num_dumped_kmer -last_num_dumped) > KMER_PROGRESS_STEP)
         {
             int percentage = (100 * num_dumped_kmer)/num_total_kmer;
-            std::cout << "[" << percentage << "%] " <<  num_dumped_kmer
-                 << " reads out of " <<  (num_total_kmer)
+            std::cout << "[" << percentage << "%] ASSIGN KMER TO COMP " <<  num_dumped_kmer
+                 << " kmers out of " <<  (num_total_kmer)
                  << " is processed, ";
             stop_timer(&kmer_prog_timer);
             shc_log_info(shc_logname, "[ %u%] %u read out of %u is processed\n",

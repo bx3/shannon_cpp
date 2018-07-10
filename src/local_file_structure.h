@@ -16,8 +16,13 @@
 #include <string.h>
 #include <stdlib.h>
 #include <fstream>
+#include <chrono>
+#include <ctime>
+
 #include "log.h"
 #include <stdio.h>
+//#include "shannon_C_seq_helper.h"
+
 
 struct Local_files;
 
@@ -46,6 +51,9 @@ bool is_abs_path(std::string & a_path);
 
 uint64_t get_num_seq(std::string in_file);
 uint64_t get_num_kmer(std::string in_file);
+
+void replace_space_with_underscore(std::string & s);
+std::string get_current_calender_time();
 
 
 #define TEST_NUM_READ 1000
@@ -77,6 +85,7 @@ struct Local_files {    //"/test_data"
 
     void reset_paths()
     {
+        start_time = get_current_calender_time();
         if(!input_kmer_path.empty())
             has_single = true;
         else
@@ -96,7 +105,9 @@ struct Local_files {    //"/test_data"
         output_comp_path = output_path + "/comp_array";
         output_kmer_path = output_path + "/kmer";
         deleted_contig_path = output_path + "/deleted_kmer";
+        deleted_contig_path = output_path + "/deleted_kmer";
 
+        filtered_contig = output_path + "/contig_filtered.fasta";
 
         output_components_read_dir = output_path + "/components_reads";
         output_components_kmer_dir = output_path + "/components_kmer";
@@ -113,19 +124,23 @@ struct Local_files {    //"/test_data"
         reconstructed_seq_path = output_path + "/reconstructed_seq.fasta";
         reconstructed_single_path = reconstructed_seq_path + "_single";
         reconstructed_sf_path = reconstructed_seq_path + "_sf";
+        unfiltered_length_reconst_seq = reconstructed_seq_path + "_unfiltered_len";
 
         // others
         duplicate_removed_read_dir = output_path + "/duplicate_remove_reads";
         comp_read_prefix = "/comp";
         comp_kmer_prefix = "/kmer";
 
-        eval_path = output_path + "/eval.log";
+        eval_dir_path = output_path + "/eval_files";
+        eval_path = eval_dir_path + "/eval_" + start_time + ".log";
         algo_input = output_path + "/algo_input";
 
         unfilter_file = output_kmer_path + std::string("_unfiltered");
         sorted_unfilter_file = output_kmer_path + std::string("_unfiltered_sorted");
 
         single_node_dir = output_seq_graph_path + "/Single_nodes";
+
+        node_structs_info_path = output_path + "/nodes_struct_files";
 
 
         // prepare dir and files
@@ -140,11 +155,25 @@ struct Local_files {    //"/test_data"
         if( !boost::filesystem::exists(output_seq_graph_result_path_boost) )
             add_directory(output_seq_graph_result_path_boost);
 
+        boost::filesystem::path eval_dir_path_boost(eval_dir_path);
+        if( !boost::filesystem::exists(eval_dir_path_boost) )
+            add_directory(eval_dir_path_boost);
+
+
+        boost::filesystem::path node_structs_info_path_boost(node_structs_info_path);
+        if( !boost::filesystem::exists(node_structs_info_path_boost) )
+            add_directory(node_structs_info_path_boost);
+
+        boost::filesystem::path summary_file_path_boost(summary_file_path);
+        if( !boost::filesystem::exists(summary_file_path_boost) )
+            add_directory(summary_file_path_boost);
+
         add_directory_if_not_exist(algo_input);
     }
 
     void add_output_path(std::string output_path_)
     {
+        start_time = get_current_calender_time();
         //std::cout << "start add output path" << std::endl;
         output_path = output_path_;
         log_filename_path = output_path + "/log_shannonC";
@@ -152,6 +181,9 @@ struct Local_files {    //"/test_data"
         output_comp_path = output_path + "/comp_array";
         output_kmer_path = output_path + "/kmer";
         deleted_contig_path = output_path + "/deleted_kmer";
+        summary_file_path = output_path + "/summary";
+
+        filtered_contig = output_path + "/contig_filtered.fasta";
 
         memcpy(shc_logname, log_filename_path.c_str(),
                                         log_filename_path.size());
@@ -169,19 +201,23 @@ struct Local_files {    //"/test_data"
         reconstructed_seq_path = output_path + "/reconstructed_seq.fasta";
         reconstructed_single_path = reconstructed_seq_path + "_single";
         reconstructed_sf_path = reconstructed_seq_path + "_sf";
+        unfiltered_length_reconst_seq = reconstructed_seq_path + "_unfiltered_len";
 
         // others
         duplicate_removed_read_dir = output_path + "/duplicate_remove_reads";
         comp_read_prefix = "/comp";
         comp_kmer_prefix = "/kmer";
 
-        eval_path = output_path + "/eval.log";
+        eval_dir_path = output_path + "/eval_files";
+        eval_path = eval_dir_path + "/eval_" + start_time + ".log";
         algo_input = output_path + "/algo_input";
 
         unfilter_file = output_kmer_path + std::string("_unfiltered");
         sorted_unfilter_file = output_kmer_path + std::string("_unfiltered_sorted");
 
         single_node_dir = output_seq_graph_path + "/Single_nodes";
+
+        node_structs_info_path = output_path + "/nodes_struct_files";
 
         // prepare dir and files
         boost::filesystem::path output_path_boost(output_path);
@@ -193,7 +229,17 @@ struct Local_files {    //"/test_data"
         boost::filesystem::path output_seq_graph_result_path_boost(output_seq_graph_result_path);
         if( !boost::filesystem::exists(output_seq_graph_result_path_boost) )
             add_directory(output_seq_graph_result_path_boost);
+        boost::filesystem::path eval_dir_path_boost(eval_dir_path);
+        if( !boost::filesystem::exists(eval_dir_path_boost) )
+            add_directory(eval_dir_path_boost);
 
+        boost::filesystem::path node_structs_info_path_boost(node_structs_info_path);
+        if( !boost::filesystem::exists(node_structs_info_path_boost) )
+            add_directory(node_structs_info_path_boost);
+
+        boost::filesystem::path summary_file_path_boost(summary_file_path);
+        if( !boost::filesystem::exists(summary_file_path_boost) )
+            add_directory(summary_file_path_boost);
 
         add_directory_if_not_exist(algo_input);
 
@@ -245,6 +291,15 @@ struct Local_files {    //"/test_data"
 
     std::string sorted_unfilter_file;
     std::string unfilter_file;
+    std::string summary_file_path;
+
+    std::string eval_dir_path;
+    std::string filtered_contig;
+    std::string unfiltered_length_reconst_seq;
+    std::string node_structs_info_path;
+
+    std::string start_time;
+    std::string end_time;
 private:
     //input name
     std::string contig_name;

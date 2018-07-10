@@ -51,23 +51,28 @@ struct Duplicate_setting {
 
 struct Contig_graph_setup {
     Contig_graph_setup () {}
-    Contig_graph_setup(int num_test_, bool is_assign_best_) :
-                       num_test(num_test_), is_assign_best(is_assign_best_) {}
-    void set_para(int num_test_, bool is_assign_best_)
+    Contig_graph_setup(int num_test_, bool is_assign_best_, int read_sampler_k_) :
+                       num_test(num_test_), is_assign_best(is_assign_best_),
+                       read_sampler_k(read_sampler_k_) {}
+    void set_para(int num_test_, bool is_assign_best_, int read_sampler_k_)
     {
         num_test=num_test_;
         is_assign_best = is_assign_best_;
+        read_sampler_k = read_sampler_k_;
     }
 
     int num_test;
     bool is_assign_best;
+    int read_sampler_k;
 };
 
 struct Metis_setup {
     Metis_setup() {}
-    Metis_setup(bool imp, idx_t partition_size_, real_t overload_, idx_t penalty_):
+    Metis_setup(bool imp, idx_t partition_size_, real_t overload_, idx_t penalty_,
+                idx_t non_partition_size_):
             is_multiple_partition(imp), partition_size(partition_size_),
-            overload(overload_), penalty(penalty_)
+            overload(overload_), penalty(penalty_),
+            non_partition_size(non_partition_size_)
     {
         inMem = 0;
         ncon = 1;
@@ -82,6 +87,7 @@ struct Metis_setup {
         penalty = ms.penalty;
         inMem = ms.inMem;
         ncon = ms.ncon;
+        non_partition_size = ms.non_partition_size;
     }
 
     Metis_setup& operator = (const Metis_setup & ms)
@@ -92,13 +98,15 @@ struct Metis_setup {
         penalty = ms.penalty;
         inMem = ms.inMem;
         ncon = ms.ncon;
+        non_partition_size = ms.non_partition_size;
     }
 
     void set_para(bool imp, idx_t partition_size_, real_t overload_,
-                                                                idx_t penalty_)
+                            idx_t penalty_, idx_t non_partition_size_)
     {
         is_multiple_partition = imp;
         partition_size = partition_size_;
+        non_partition_size = non_partition_size_;
         overload = overload_;
         penalty = penalty_;
         inMem = 0;
@@ -107,6 +115,7 @@ struct Metis_setup {
     }
 
     idx_t partition_size;
+    idx_t non_partition_size;
     real_t overload;
     idx_t penalty;
     idx_t inMem;
@@ -142,28 +151,25 @@ struct Output_setup {
 struct Multi_graph_setup {
     Multi_graph_setup () {}
     Multi_graph_setup(int num_parallel_, int max_hop_pair_,
-                      int max_hop_path_, int single_node_seq_len_,
+                      int max_hop_path_,
                       int mate_pair_len_) :
                     num_parallel(num_parallel_), max_hop_pair(max_hop_pair_),
                     max_hop_path(max_hop_path_),
-                    single_node_seq_len(single_node_seq_len_),
                     mate_pair_len(mate_pair_len_) {}
 
     void set_para(int num_parallel_, int max_hop_pair_,
-                  int max_hop_path_, int single_node_seq_len_,
+                  int max_hop_path_,
                   int mate_pair_len_)
     {
         num_parallel = num_parallel_;
         max_hop_pair = max_hop_pair_;
         max_hop_path = max_hop_path_;
-        single_node_seq_len = single_node_seq_len_;
         mate_pair_len = mate_pair_len_;
     }
 
     int num_parallel;
     int max_hop_pair;
     int max_hop_path;
-    int single_node_seq_len;
     int mate_pair_len;
 };
 
@@ -197,6 +203,11 @@ struct Shannon_C_setting {
     bool is_double_stranded;
     bool is_compress;
 
+    bool filter_single;
+    bool filter_paired;
+
+    int output_seq_min_len;
+
     Local_files local_files;
 
     Duplicate_setting dup_setting;
@@ -211,6 +222,7 @@ struct Shannon_C_setting {
     Sparse_flow_setup sparse_flow_setup;
 };
 
+std::string get_setting_string(Shannon_C_setting & setting);
 void parser_setting_file(std::string & file_path, Shannon_C_setting & setting);
 void print_setting(Shannon_C_setting & setting);
 void log_setting(Shannon_C_setting & setting);

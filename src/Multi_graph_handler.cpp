@@ -1,12 +1,31 @@
 #include "Multi_graph_handler.h"
 
-void Multi_graph_handler::
-count_num_component_with_file(std::string & kmer_path)
+int Multi_graph_handler::
+count_num_component_sparse_flow()
 {
+    num_comp = 0;
+    for(auto& entry : boost::make_iterator_range(
+        boost::filesystem::directory_iterator(setting.local_files.output_seq_graph_path), {}))
+    {
+        int test_index = setting.local_files.output_seq_graph_path.size() + 7;
+        std::string entry_str = entry.path().string();
+        //std::cout << "entry_str " << entry_str << std::endl;
+        if(entry_str[test_index] == 'p')
+            num_comp++;
+        //std::cout << entry << "\n";
+    }
+    std::cout << "number of component for sparse flow is " << num_comp << std::endl;
+    return num_comp;
+}
+
+int Multi_graph_handler::count_num_component_seq_graph()
+{
+    std::string kmer_path(setting.local_files.output_components_kmer_dir);
     int kmer_counter = count_num_files(kmer_path);
     //assert(read_counter==kmer_counter);
     num_comp = kmer_counter;
-    std::cout << "number of component is " << num_comp << std::endl;
+    std::cout << "number of component for seq graph is " << num_comp << std::endl;
+    return num_comp;
 }
 
 void Multi_graph_handler::dump_all_single_nodes_to_reconstruct_output()
@@ -47,16 +66,40 @@ void Multi_graph_handler::deallocate_mem()
     Rmer_contig_map().swap(rmer_contig_map);
 }
 
+void Multi_graph_handler::check_if_required_files_exist()
+{
+    if(exist_path(setting.local_files.output_components_read_dir))
+        return;
+    else
+    {
+        std::cerr << "[Error] partitioned components reads directory not exist at " << std::endl;
+        std::cerr << setting.local_files.output_components_read_dir << std::endl;
+        exit(0);
+    }
+
+    if(exist_path(setting.local_files.output_components_kmer_dir))
+        return;
+    else
+    {
+        std::cerr << "[Error] partitioned components kmer directory not exist at " << std::endl;
+        std::cerr << setting.local_files.output_components_kmer_dir << std::endl;
+        exit(0);
+    }
+}
+
 void Multi_graph_handler::run_multi_seq_graph()
 {
     struct Block_timer msq_timer;
 
     start_timer(&msq_timer);
     std::cout << "start multibridge" << std::endl;
+    check_if_required_files_exist();
+
     int num_parallel = setting.multi_graph_setup.num_parallel;
-    if(num_parallel > get_num_components())
-        num_parallel = get_num_components();
-    process_multi_seq_graph(num_parallel, get_num_components());
+    int num_comp_for_seq = get_num_components_seq_graph();
+    if(num_parallel > num_comp_for_seq)
+        num_parallel = num_comp_for_seq;
+    process_multi_seq_graph(num_parallel, num_comp_for_seq);
     dump_all_single_nodes_to_reconstruct_output();
     shc_log_info(shc_logname, "finish multibridge\n");
     log_stop_timer(&msq_timer);
@@ -96,6 +139,14 @@ void Multi_graph_handler::collect_process_file(int num_parallel)
     std::cout << "remove all temp process sparse flow output file under comp_graph_output" << std::endl;
 }
 
+void Multi_graph_handler::combine_contigs_seq_output()
+{
+    //std::string awk_cmd("awk '{if ( NR >= \"2\" ) print}' ");
+    std::string cmd("cat " + setting.local_files.filtered_contig +
+                    " >> " + setting.local_files.reconstructed_seq_path);
+    run_command(cmd, true);
+}
+
 void Multi_graph_handler::combine_sf_single_seq_output()
 {
     std::string seq_out_single(setting.local_files.reconstructed_single_path);
@@ -108,16 +159,45 @@ void Multi_graph_handler::combine_sf_single_seq_output()
     }
 }
 
-void Multi_graph_handler::run_multi_sparse_flow()
+void Multi_graph_handler::combine_all_reconst_seq_to_output()
+{
+    std::string seq_out_single(setting.local_files.reconstructed_single_path);
+    if(!boost::filesystem::exists(seq_out_single))
+    {
+        std::cerr << "multibridge output single nodes file [reconstructed_seq.fasta_single] does not exist\n";
+        exit(0);
+    }
+    if(!boost::filesystem::exists(setting.local_files.reconstructed_sf_path))
+    {
+        std::cerr << "sparse flow output file [reconstructed_seq.fasta_sf] does not exist\n";
+        exit(0);
+    }
+    if(!boost::filesystem::exists(setting.local_files.filtered_contig))
+    {
+        std::cerr << "filtered contig output file [contig_filtered.fasta] does not exist\n";
+        exit(0);
+    }
+
+
+    std::string cmd("cat  " + seq_out_single+ " " +
+                     setting.local_files.reconstructed_sf_path + " " +
+                     setting.local_files.filtered_contig);
+    cmd += " > ";
+    cmd += setting.local_files.reconstructed_seq_path;
+    run_command(cmd, true);
+
+}
+
+// specific comp set to be -1 for all comp
+void Multi_graph_handler::run_multi_sparse_flow(int specific_comp)
 {
     struct Block_timer msf_timer;
     start_timer(&msf_timer);
     std::cout << "start multi-thread sparse flow" << std::endl;
 
     int num_parallel = setting.sparse_flow_setup.sf_num_parallel;
-    if(num_parallel > get_num_components())
-        num_parallel = get_num_components();
-    process_sparse_flow_graph(num_parallel, get_num_components());
+    int num_comp_parse_flow = get_num_components_sparse_flow();
+    process_sparse_flow_graph(num_parallel, num_comp_parse_flow, specific_comp);
     //exit(0);
     collect_process_file(num_parallel);
 
@@ -340,15 +420,34 @@ void Multi_graph_handler::process_multi_seq_graph(int num_parallel, int num_comp
 }
 
 
-void Multi_graph_handler::process_sparse_flow_graph(int num_parallel, int num_components)
+void Multi_graph_handler::process_sparse_flow_graph(int & num_parallel, int num_components, int specific_comp)
 {
-    std::deque<Comp_graph> work_queue;
-    std::vector<std::deque<Comp_graph>> process_queue(num_parallel, std::deque<Comp_graph>());
-
-
     int start_class = 0;
     int end_class = num_components;
     Local_files & lf = setting.local_files;
+    if(specific_comp!=-1)
+    {
+        std::string comp_node_dir = lf.output_seq_graph_path + lf.node_prefix + std::to_string(specific_comp);
+        std::string comp_edge_dir = lf.output_seq_graph_path + lf.edge_prefix + std::to_string(specific_comp);
+        std::string comp_path_dir = lf.output_seq_graph_path + lf.path_prefix + std::to_string(specific_comp);
+        if (exist_path(comp_node_dir) && exist_path(comp_edge_dir) &&
+            exist_path(comp_path_dir))
+        {
+            start_class = specific_comp;
+            end_class = specific_comp+1;
+        }
+        else
+        {
+            shc_log_error("please specify a valid component for multi-sparse flow\n");
+            exit(1);
+        }
+    }
+
+    std::cout << "start_class " << start_class <<std::endl;
+    std::cout << "end_class " << end_class <<std::endl;
+
+    std::deque<Comp_graph> work_queue;
+
     for(int i=start_class; i<end_class; i++)
     {
         std::string path(lf.output_seq_graph_path +
@@ -359,6 +458,11 @@ void Multi_graph_handler::process_sparse_flow_graph(int num_parallel, int num_co
             work_queue.push_back(Comp_graph(i, j));
         }
     }
+
+    if(num_parallel > work_queue.size())
+        num_parallel = work_queue.size();
+
+    std::vector<std::deque<Comp_graph>> process_queue(num_parallel, std::deque<Comp_graph>());
 
     partition_work_to_process_randomize(num_parallel, work_queue, process_queue);
     for(int i=0; i<process_queue.size(); i++)
@@ -637,6 +741,28 @@ find_representatives(std::string in_file, std::string output_file)
     file_writer.close();
 }
 
+void Multi_graph_handler::filter_output_seq_by_length()
+{
+    std::string mv_cmd("mv ");
+    mv_cmd = mv_cmd + setting.local_files.reconstructed_seq_path + " " +
+                setting.local_files.unfiltered_length_reconst_seq;
+    run_command(mv_cmd, true);
+    std::ofstream filtered_writer(setting.local_files.reconstructed_seq_path);
+    std::ifstream unfiltered_reader(setting.local_files.unfiltered_length_reconst_seq);
+    std::string header, seq;
+    while(std::getline(unfiltered_reader, header, '\n'),
+          std::getline(unfiltered_reader, seq, '\n'))
+    {
+        if (seq.size() > setting.output_seq_min_len)
+        {
+            filtered_writer << header << std::endl;
+            filtered_writer << seq << std::endl;
+        }
+    }
+    filtered_writer.close();
+    unfiltered_reader.close();
+}
+
 // return true if it is duplicate
 bool Multi_graph_handler::
 duplicate_check_ends(std::vector<std::string> & seqs, uint64_t header, bool rc)
@@ -727,6 +853,134 @@ duplicate_check_ends(std::vector<std::string> & seqs, uint64_t header, bool rc)
     return false;
 
 
+}
+
+
+//take rec_fasta, read_1, read_2 files of type.
+//Output in out_fasta. Temp dir = out_dir.
+//Output fasta is in out_dir/reconstructed.fasta
+//Flags is '-f --ff' for fasta and forward-forward
+//Flags is '-q --fr' for fastq and forward-reverse
+void Multi_graph_handler::filter_FP(std::string reconstructed_seq_path)
+{
+    if(setting.has_pair && setting.filter_paired)
+    {
+        shc_log_info(shc_logname, "start filter_FP\n");
+        Local_files & lf = setting.local_files;
+        std::string fp_dir = setting.local_files.output_path + "/fp_files";
+        boost::filesystem::path fp_dir_boost(fp_dir);
+        if( !boost::filesystem::exists(fp_dir_boost) )
+            add_directory(fp_dir_boost);
+
+        std::string output_hisat = fp_dir + "/rec.hisat";
+        std::string output_sam = fp_dir + "/rec.sam";
+        std::string output_bam = fp_dir + "/rec.bam";
+        std::string output_sam_sort = fp_dir + "/rec_sort";
+        std::string output_sam_depth = fp_dir + "/rec.depth";
+
+        std::string & read_1 = lf.input_read_path_1;
+        std::string & read_2 = lf.input_read_path_2;
+
+        std::string hisat_build_cmd =
+                "hisat-build " + reconstructed_seq_path + " " + output_hisat;
+        std::cout << "Build hisat file" << std::endl;
+        run_command(hisat_build_cmd, true);
+
+        std::string hisat_align_cmd =
+                "hisat --no-spliced-alignment --no-discordant -f --ff  -x "
+                + output_hisat + " -1 " + read_1 + " -2 " + read_2 + " -S "
+                + output_sam;
+        std::cout << "Align" << std::endl;
+        run_command(hisat_align_cmd, true);
+
+        std::cout << "Process SAM / BAM file to get depth information" << std::endl;
+        std::string samtool_bam_cmd = "samtools view -bS -f 0x2 " + output_sam +
+                                      " > " + output_bam;
+        run_command(samtool_bam_cmd, true);
+
+        std::string sam_sort_cmd = "samtools sort " + output_bam + " -o " + output_sam_sort;
+        run_command(sam_sort_cmd, true);
+
+        std::string sam_depth_cmd = "samtools depth " + output_sam_sort + " > " +
+                                    output_sam_depth;
+        run_command(sam_depth_cmd, true);
+
+        std::string filter_FP_log = fp_dir + "/FP.log";
+        std::string filter_FP_output = fp_dir + "/FP_reconstructe_seq";
+
+        write_filtered_tr(output_sam_depth, reconstructed_seq_path,
+                          filter_FP_output, filter_FP_log);
+        /*
+        std::string save_org_cmd("mv " + reconstructed_seq_path + " " +
+                                 fp_dir + "/reconstructed_org.fasta");
+        run_command(save_org_cmd, true);
+        std::string rename_new_seq_cmd("mv " + filter_FP_output + " " +
+                                       reconstructed_seq_path);
+        run_command(rename_new_seq_cmd, true);
+        */
+        exit(0);
+
+    }
+    else
+    {
+        std::cout << "input does not contain pair or filter_paired parameter "
+                  << "in config file set to false. So skip filter false positive "
+                  << "with Hisat" << std::endl;
+    }
+}
+
+void Multi_graph_handler::
+write_filtered_tr(std::string depth_file, std::string in_tr_file,
+                                    std::string out_tr_file, std::string log_file)
+{
+    typedef tsl::hopscotch_map<std::string, uint32_t> Tr_hits_map;
+    typedef tsl::hopscotch_map<std::string, uint32_t>::iterator Tr_hits_map_iterator;
+    Tr_hits_map tr_hits;
+
+    std::ifstream depth_file_reader(depth_file);
+    std::string field0_str, field1_str;
+    while(  std::getline(depth_file_reader, field0_str, '\t') &&
+            std::getline(depth_file_reader, field1_str))
+    {
+        Tr_hits_map_iterator it = tr_hits.find(field0_str);
+        if(it != tr_hits.end())
+        {
+            it.value()++;
+        }
+        else
+        {
+            tr_hits.insert(std::make_pair(field0_str, 1));
+        }
+    }
+    depth_file_reader.close();
+
+    //typedef tsl::hopscotch_map<uint32_t, uint32_t> Tr_len_map;
+    //typedef tsl::hopscotch_map<std::string, uint32_t>::iterator Tr_len_map_iterator;
+    //Tr_len_map tr_len;
+
+
+    std::ofstream file_writer(out_tr_file);
+    std::string header, read_base;
+
+    std::ifstream read_file_reader(in_tr_file);
+    while(  std::getline(read_file_reader, header) &&
+            std::getline(read_file_reader, read_base))
+    {
+        //tr_len.insert(std::make_pair(header, read_base.size()));
+        std::string seq_name = header.substr(1);
+
+        Tr_hits_map_iterator it = tr_hits.find(seq_name);
+        uint32_t hit_num = 0;
+        if(it != tr_hits.end())
+            hit_num = it->second;
+        else
+            hit_num = 0;
+        if(hit_num >= read_base.size() * pair_fp_thresh)
+        {
+            file_writer << header << std::endl;
+            file_writer << read_base << std::endl;
+        }
+    }
 }
 
 void Multi_graph_handler::reverse_complement(std::string & seq)

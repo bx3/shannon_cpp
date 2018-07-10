@@ -16,6 +16,7 @@
 #include <stdint.h>
 #include <iostream>
 #include <sstream>
+#include <limits>
 #include "encoding.h"
 #include <algorithm>
 #include <inttypes.h>
@@ -153,6 +154,12 @@ public:
             std::cout << "\033[0m" << std::endl << std::endl;
         }
 #else
+        if( jf_stats.max_count > std::numeric_limits<uint32_t>::max())
+        {
+            shc_log_error("kmer contains count higher than 2^32-1, please use APPROX mode\n");
+            exit(0);
+        }
+
         compress_ratio = 1;
         std::cout << "use exact count, compress ratio "
                   << compress_ratio << std::endl;
@@ -185,68 +192,78 @@ public:
         INIT_DICT(kmer_counter, SPARSEHASH_EMPTY_KEY, SPARSEHASH_DELETE_KEY);
         parse_jf_info(setting_.local_files, jf_stats);
         num_kmer = jf_stats.dist_num;
+        if(setting.is_double_stranded)
+        {
+            num_kmer *= 2;
+        }
+        // give map a bit more space
+        num_dict_kmer = static_cast<uint64_t>(
+                          static_cast<double>(num_kmer)/dup_setting.load_factor);
+
 #ifdef USE_APPROX_COUNT
 
         if(jf_stats.max_count <= UINT16_MAX)
         {
             compress_ratio = 1;
-            std::cout << "use exact count " << std::endl;
-            shc_log_info(shc_logname, "**********************\n");
-            shc_log_info(shc_logname, "USE EXACT COUNT UINT16_T\n");
-            shc_log_info(shc_logname, "**********************\n");
+            std::string msg("KMER dictionary can store count 0-65535, uses EXACT COUNT\n\t");
+            msg += "based on Jellyfish stats\n";
+            msg += "\t\tuniq_num  " + std::to_string(jf_stats.uniq_num) + "\n";
+            msg += "\t\tdist_num  " + std::to_string(jf_stats.dist_num) + "\n";
+            msg += "\t\ttotal_num  " + std::to_string(jf_stats.total_num) + "\n";
+            msg += "\t\tmax_count  " + std::to_string(jf_stats.max_count)+ "\n";
+            print_important_notice(msg);
         }
         else
         {
             compress_ratio = (jf_stats.max_count-EXACT_THRESH)/
                 static_cast<double>(UINT16_MAX-EXACT_THRESH);
-            std::cout << "use approx count, compress ratio "
-                      << compress_ratio << ". count below "  << EXACT_THRESH
-                      << " are stored with original count"  << std::endl;
-            shc_log_info(shc_logname, "**********************\n");
-            shc_log_info(shc_logname, "USE APPROXIMATE COUNT UINT16_T, count below are stored with original count%u\n",
-                                      EXACT_THRESH);
-            shc_log_info(shc_logname, "**********************\n");
+
+            std::string msg("KMER dictionary can store count 0-65535, uses APPROXIMATE COUNT\n\t");
+            msg += "based on Jellyfish stats\n";
+            msg += "\t\tuniq_num  " + std::to_string(jf_stats.uniq_num) + "\n";
+            msg += "\t\tdist_num  " + std::to_string(jf_stats.dist_num) + "\n";
+            msg += "\t\ttotal_num  " + std::to_string(jf_stats.total_num) + "\n";
+            msg += "\t\tmax_count  " + std::to_string(jf_stats.max_count) + "\n";
+
+            msg += "compression ratio " + std::to_string(compress_ratio) +
+                   "But count below " +  std::to_string(EXACT_THRESH) +
+                   "are stored with original count\n";
+            print_important_notice(msg);
         }
 
         if(compress_ratio>50)
         {
-          std::cout << "\033[0;33m";
-          std::cout << "BE CAREFUL, "
-                    << "TOO MUCH COMPRESSION MIGHT RESULT IN POOR PERFORMANCE"
-                    << std::endl;
-          std::cout << "\033[0m" << std::endl << std::endl;
+            std::string msg("BE CAREFUL, TOO MUCH COMPRESSION MIGHT RESULT IN POOR PERFORMANCE \n\t");
+            msg += "To change dictionary count storage range\n\t";
+            msg += "Go to src/shc_type.h, comment MARCO USE_APPROX_COUNT\n\t";
+            msg += "And uncomment MARCO USE_EXACT_COUNT, then compile by typing make\n";
+            print_warning_notice(msg);
         }
 #else
+        if( jf_stats.max_count > std::numeric_limits<uint32_t>::max())
+        {
+            shc_log_error("kmer contains count higher than 2^32-1, please use APPROX mode\n");
+            exit(0);
+        }
         compress_ratio = 1;
-        shc_log_info(shc_logname, "**********************\n");
-        shc_log_info(shc_logname, "USE EXACT COUNT UINT32_T\n");
-        shc_log_info(shc_logname, "**********************\n");
-        std::cout << "use exact count, compress ratio "
-                  << compress_ratio << std::endl;
+        std::string msg("KMER dictionary can store count 0-4294967295, uses EXACT COUNT\n\t");
+        msg += "based on Jellyfish stats\n";
+        msg += "\t\tuniq_num  " + std::to_string(jf_stats.uniq_num) + "\n";
+        msg += "\t\tdist_num  " + std::to_string(jf_stats.dist_num) + "\n";
+        msg += "\t\ttotal_num  " + std::to_string(jf_stats.total_num) + "\n";
+        msg += "\t\tmax_count  " + std::to_string(jf_stats.max_count) + "\n";
+        print_important_notice(msg);
 #endif
 
-        if(setting.is_double_stranded)
+        if(static_cast<size_t>(num_dict_kmer) >= static_cast<size_t>(kmer_counter.max_size()))
         {
-            num_kmer *= 2;
+            std::cout << "num of kmer to reserve is " << num_dict_kmer << std::endl;
+            std::cout << "kmer dict can at max hold " << kmer_counter.max_size()
+                      << " kmers" << std::endl;
+            exit(0);
         }
 
-        // give map a bit more space
-        num_dict_kmer = static_cast<uint64_t>(
-                          static_cast<double>(num_kmer)/dup_setting.load_factor);
-
-        std::cout << "num of kmer to reserve is " << num_dict_kmer << std::endl;
-        Block_timer kmer_size_timer;
-        start_timer(&kmer_size_timer);
-        std::cout << "kmer dict can at max hold " << kmer_counter.max_size()
-                  << " kmers" << std::endl;
-        std::cout << "start reserve kmer dict"<< std::endl;
         RESERVE_NUM_KMER(kmer_counter, num_dict_kmer)
-        std::cout << "finish reserve kmer dict"<< std::endl;
-        std::cout << "bucket counts " << (kmer_counter.bucket_count()) << std::endl;
-
-        shc_log_info(shc_logname, "finish reserve kmer dict\n");
-        log_stop_timer(&kmer_size_timer);
-        stop_timer(&kmer_size_timer);
 
         if(dup_setting.is_use_set)
         {
@@ -256,7 +273,6 @@ public:
                 INIT_DICT(rmer_set, IMPOSSIBLE_RMER_NUM-200, IMPOSSIBLE_RMER_NUM-2);
 #endif
             RESERVE_NUM_KMER(rmer_set, num_kmer/8);
-            std::cout << "finish reserve set " << std::endl;
         }
         else
         {
@@ -264,14 +280,12 @@ public:
                       << (num_dict_kmer / 8) << " kmer" << std::endl;
             INIT_DICT(rmer_contig_map, IMPOSSIBLE_RMER_NUM-200, IMPOSSIBLE_RMER_NUM-2);
             RESERVE_NUM_KMER(rmer_contig_map, num_dict_kmer / 8)
-            std::cout << "finish reserve dict " << std::endl;
         }
 
         num_kmer_deleted = 0;
         is_polyA_del = true;
         complex_thresh = 2;
         num_skip_kmer = 0;
-        std::cout << "finish init " << std::endl;
     }
 
     void run_kmer_handler();

@@ -51,6 +51,7 @@ public:
 
     Multi_graph_handler(Shannon_C_setting & setting_): setting(setting_)
     {
+        pair_fp_thresh = 0.9;
         rmer_length = 24;
         if (pthread_mutex_init(&work_lock, NULL) != 0)
         {
@@ -72,13 +73,15 @@ public:
         kmer_length = setting.kmer_length;
         is_compressed = setting.is_compress;
         std::string kmer_path(setting.local_files.output_components_kmer_dir);
-        count_num_component_with_file(kmer_path);
     }
-    void count_num_component_with_file(std::string & kmer_dir);
-    int get_num_components() {return num_comp;}
+    int count_num_component_seq_graph();
+    int count_num_component_sparse_flow();
+
+    int get_num_components_seq_graph() {return count_num_component_seq_graph();}
+    int get_num_components_sparse_flow() {return count_num_component_sparse_flow();}
 
     void run_multi_seq_graph();
-    void run_multi_sparse_flow();
+    void run_multi_sparse_flow(int specific_comp);
 
     void process_multi_seq_graph(int num_process, int num_components);
     void partition_work_to_process(int num_process, std::deque<int> & work_list,
@@ -86,9 +89,14 @@ public:
     void partition_work_to_process_randomize(int num_process, std::deque<Comp_graph> & work_list,
                                 std::vector<std::deque<Comp_graph>> & process_queue);
 
-    void process_sparse_flow_graph(int num_thread, int num_components);
+    void process_sparse_flow_graph(int & num_parallel, int num_components, int specific_comp);
     void collect_process_file(int num_parallel);
     void combine_sf_single_seq_output();
+    void combine_contigs_seq_output();
+
+    void filter_output_seq_by_length();
+
+    void combine_all_reconst_seq_to_output();
 
     bool output_fasta_file_validator(std::string & output_path);
 
@@ -100,11 +108,19 @@ public:
     void find_representatives(std::string in_file, std::string output_file);
     bool duplicate_check_ends(std::vector<std::string> & header_seq_map, uint64_t header, bool rc);
 
+    // use pair end read to further filtering
+    void filter_FP(std::string reconstructed_seq_path);
+    void write_filtered_tr(std::string depth_file, std::string in_tr_file,
+                           std::string out_tr_file, std::string log_file);
+
+
+
     void filter_reconstructed();
     void deallocate_mem();
 
 private:
     void reverse_complement(std::string & seq);
+    void check_if_required_files_exist();
 
     pthread_mutex_t work_lock;
     pthread_mutex_t write_lock;
@@ -118,6 +134,8 @@ private:
     Block_timer timer;
 
     int rmer_length;
+
+    double pair_fp_thresh;
 
 
 };

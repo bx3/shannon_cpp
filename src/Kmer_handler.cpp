@@ -29,6 +29,9 @@ void Kmer_handler::run_kmer_handler()
     }
     log_stop_timer(&kh_timer);
 
+    //std::string first_level_filter_kmers = setting.local_files.output_path + "/first_level_filter_kmers";
+    //dump_loaded_kmers_to_file(first_level_filter_kmers);
+
 #ifdef SHOW_PROGRESS
     std::cout << "finish loading jellyfish kmer to dict, ";
     stop_timer(&kh_timer);
@@ -93,7 +96,7 @@ void Kmer_handler::load_kmer_into_dict()
             log_stop_timer(&read_timer);
             start_timer(&read_timer);
         }
-        num_kmer_loaded++;
+
         //std::cout << "kmer_base " << kmer_base << std::endl;
         //std::cout << "count_s " << count_s << std::endl;
         encode_kmer(kmer_base.c_str(), &byte, kmer_length);
@@ -105,17 +108,18 @@ void Kmer_handler::load_kmer_into_dict()
             shc_log_error("kmer count is too large \n");
             exit(1);
         }
+        num_kmer_loaded++;
 
         kmer_info.count = encoded_count;
         kmer_counter[byte] = kmer_info;
 
-        if(setting.is_double_stranded)
-        {
-            num_kmer_loaded++;
-            encode_reverse_kmer(kmer_base.c_str(), &byte, kmer_length);
-            complement_num(&byte, kmer_length);
-            kmer_counter[byte] = kmer_info;
-        }
+        //if(setting.is_double_stranded)
+        //{
+        //    num_kmer_loaded++;
+        //    encode_reverse_kmer(kmer_base.c_str(), &byte, kmer_length);
+        //    complement_num(&byte, kmer_length);
+        //    kmer_counter[byte] = kmer_info;
+        //}
         //std::cout << kmer_base<< " " << contig <<" "<<count <<" "<< info << std::endl;
         //std::cout << kmer_base<< " " << kmer_counter[byte].contig <<" "
         //          <<kmer_counter[byte].count <<" "<< kmer_counter[byte].info << std::endl;
@@ -190,9 +194,9 @@ void Kmer_handler::dump_loaded_kmers_to_file(std::string & filename)
 
     for (it = kmer_counter.begin(); it != kmer_counter.end(); it++)
     {
-        //decode_kmer(kmer_base, &(it->first), kmer_length);
-        //kmer_base[kmer_length] = '\0';
-        outfile << (it->first) << "\t" << it->second.count
+        decode_kmer(kmer_base, &(it->first), kmer_length);
+        kmer_base[kmer_length] = '\0';
+        outfile << kmer_base << "\t" << it->second.count
                              << std::endl;
     }
     outfile.close();
@@ -287,6 +291,7 @@ void Kmer_handler::build_dict_from_kmer_file_helper(std::string file)
     uint64_t num_kmer_loaded = 0;
 
     std::ifstream fileReader(file);
+    //std::ofstream low_complex_writer(setting.local_files.output_path + "/low_complex_kmer");
 
     Block_timer read_timer;
     start_timer(&read_timer);
@@ -295,7 +300,7 @@ void Kmer_handler::build_dict_from_kmer_file_helper(std::string file)
     {
         if(num_kmer_loaded%KMER_LOAD_PROGRSS_STEP ==0)
         {
-            std::cout << "processed " << num_kmer_loaded << " kmer out of "
+            std::cout << "processed KMER LOADING " << num_kmer_loaded << " kmer out of "
                       << num_kmer <<" kmers, load factor "
                       << (kmer_counter.load_factor()) <<  std::endl;
             shc_log_info(shc_logname, "processed %u kmers out of %u\n",
@@ -305,11 +310,11 @@ void Kmer_handler::build_dict_from_kmer_file_helper(std::string file)
             start_timer(&read_timer);
 
         }
-        num_kmer_loaded++;
 
         if(is_polyA_del && is_low_complexity(line_s))
         {
             //std::cout << " low complex " << line_s << std::endl;
+            //low_complex_writer << line_s << "\t"<< count_s << std::endl;
             continue;
         }
 
@@ -326,6 +331,7 @@ void Kmer_handler::build_dict_from_kmer_file_helper(std::string file)
         encode_kmer(line_s.c_str(), &kmer, kmer_length);
 
         kmer_counter[kmer] = kmer_info;
+        num_kmer_loaded++;
         if(setting.is_double_stranded)
         {
             num_kmer_loaded++;
@@ -335,9 +341,11 @@ void Kmer_handler::build_dict_from_kmer_file_helper(std::string file)
         }
     }
     fileReader.close();
+    //low_complex_writer.close();
 #if defined(USE_DENSE_KMER) || defined(USE_SPARSE_KMER)
     kmer_counter.resize(kmer_counter.size());
 #endif
+    std::cout << num_kmer_loaded << "kmer loaded" << std::endl;
 }
 /**
  * The function reads "kmer count" pair from file, each line denotes a
@@ -433,6 +441,18 @@ void Kmer_handler::dump_and_sort_kmer_descending_count_external()
  */
 void Kmer_handler::sort_kmer_descending_count()
 {
+    if (exist_path(lf->sorted_unfilter_file) )
+    {
+        if(get_filesize(lf->sorted_unfilter_file) > 0 )
+        {
+            std::string msg("Use existing sorted kmer file at path\n\t");
+            msg += lf->sorted_unfilter_file + "\n";
+            msg += "\tdelete this file if kmer.dict has changed.\n";
+            print_important_notice(msg);
+            return;
+        }
+    }
+
     lf->unfilter_file = lf->input_kmer_path;
     sort_kmer_descending_count_external();
 }
@@ -671,14 +691,15 @@ bool Kmer_handler::find_contig_helper(std::string & line_s, uint64_t count)
     if((kmer_curr_proc-kmer_prev_proc) > KMER_PROGRESS_STEP)
     {
         int percentage = (100 * kmer_curr_proc)/init_kmer_size;
-        std::cout << "[" << percentage << "%] " <<  kmer_curr_proc
+        std::cout << "[" << percentage << "%] FIND CONTIGS " <<  kmer_curr_proc
              << " kmer out of " <<  (init_kmer_size)
              << " is processed, ";
         stop_timer(&prog_timer);
+        log_stop_timer(&prog_timer);
+
         start_timer(&prog_timer);
         shc_log_info(shc_logname, "[ %u%] %u kmer out of %u is processed\n",
                 percentage, kmer_curr_proc, (init_kmer_size));
-        log_stop_timer(&prog_timer);
         kmer_prev_proc = kmer_curr_proc;
     }
 
@@ -1385,7 +1406,10 @@ void Kmer_handler::load_sorted_kmer(std::string sorted_kmer_file)
 
 bool Kmer_handler::is_low_complexity(std::string & base)
 {
-    int nA(0), nC(0), nG(0), nT(0);
+    int nA(0);
+    int nC(0);
+    int nG(0);
+    int nT(0);
     for(int i=0; i<kmer_length; i++)
     {
         char letter = base.at(i);
@@ -1401,7 +1425,7 @@ bool Kmer_handler::is_low_complexity(std::string & base)
         {
             nG++;
         }
-        else
+        else if(letter == 'T')
         {
             nT++;
         }

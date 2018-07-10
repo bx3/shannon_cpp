@@ -78,6 +78,8 @@ void stop_timer(struct Block_timer * bt);
 void stop_timer_np(struct Block_timer * bt); //np for no print
 void print_timer(struct Block_timer * bt);
 
+void print_important_notice(std::string msg);
+void print_warning_notice(std::string msg);
 
 
 inline void accurate_start_timer(struct Block_timer * bt)

@@ -19,6 +19,7 @@
 #include <string.h>
 #include <iostream>
 #include <fstream>
+#include <ctime>
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include "log.h"
@@ -50,6 +51,14 @@ int parse_main_command_line(int ac, char** av, Shannon_C_setting & setting);
 uint64_t get_num_read(std::string file);
 
 void eval_reconstructed_seq(Local_files & lf);
+
+std::string get_py_eval_summary(Local_files & lf, std::vector<std::string> & summaries);
+void count_seq_types_num(std::string filename, int & num_single_seq,
+                        int & num_contig_seq, int & num_sf_seq);
+int eval_align_counts(std::string filename, int & num_single_seq,
+                        int & num_contig_seq, int & num_sf_seq,
+                        int & num_single_contribute, int & num_contig_contribute,
+                        int & num_sf_contribute);
 
 #ifdef USE_APPROX_COUNT
 inline kmer_count_t encode_count(uint64_t count, double cr)

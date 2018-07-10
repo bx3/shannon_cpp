@@ -34,6 +34,8 @@
 #include <metis.h>
 #include "json_parser.h"
 #include "File_dumper.h"
+#include "Read_subsampler.h"
+#include "shannon_C_seq_helper.h"
 
 #define ONLY_EDGE_WEIGHT "001"
 #define METIS_NODE_OFFSET 1
@@ -254,7 +256,9 @@ public:
          is_double_stranded(setting_.is_double_stranded),
          fasta_dumper(INIT_SIZE, THRESH, setting_.has_single, setting_.has_pair),
          kmer_dumper(), conn_contig_set(chp->num_contig),
-         is_assign_best(setting_.contig_graph_setup.is_assign_best)
+         is_assign_best(setting_.contig_graph_setup.is_assign_best),
+         read_sampler(setting_.contig_graph_setup.read_sampler_k),
+         compress_ratio(khp->compress_ratio)
     {
         //explorable_contig_set.set_empty_key(chp->num_contig+2);
         //explorable_contig_set.set_deleted_key(chp->num_contig+3);
@@ -277,12 +281,17 @@ public:
 
         num_complex_comp = 0;
 
-        non_partition_size = metis_setup.partition_size * 1; // change to 1 if want to keep the size the same
+        non_partition_size = metis_setup.non_partition_size; // change to 1 if want to keep the size the same
         first_n_graph = 10;
         give_up_num = 20;
+
+        kmer_count_thresh = 1000;
+
+
     };
 
     void run_contig_graph_handler();
+    void dump_filtered_contig();
     void run_contig_graph_partition();
     void remove_read_duplicate(std::string out_dir_path);
     void group_components();
@@ -329,7 +338,8 @@ private:
          std::vector<comp_num_t> & comp_array,  char * seq,  int len);
 
     void update_comp_map(std::map<comp_num_t, int> & comp_map, bool is_forward,
-         std::vector<comp_num_t> & comp_array,  char * seq,  int len);
+         std::vector<comp_num_t> & comp_array,  char * seq,  int len,
+         double & avg_count);
 
     void update_comp_count(std::vector<comp_num_t> & components,
                          std::vector<comp_num_t> & counts, bool is_forward,
@@ -340,7 +350,7 @@ private:
 
     inline comp_num_t assign_single_best_comp(struct Single_dumper & mfs,
         std::map<comp_num_t, int> & comp_count, char * seq_ptr, char * header_ptr,
-                                            int seq_len, bool is_forward);
+                                int seq_len, bool is_forward, double & avg_count);
 
     inline void assign_single_all_comp(struct Single_dumper & mfs,
         std::map<comp_num_t, int> & comp_count, char * seq_ptr, char * header_ptr,
@@ -349,7 +359,8 @@ private:
     inline comp_num_t assign_pair_best_comp(struct Single_dumper & mfs_p1,
         struct Single_dumper & mfs_p2, std::map<comp_num_t, int> & comp_count,
         char * seq_ptr_p1, char * seq_ptr_p2, char * header_ptr_p1,
-        char * header_ptr_p2, int seq_len_p1, int seq_len_p2, bool is_forward);
+        char * header_ptr_p2, int seq_len_p1, int seq_len_p2, bool is_forward,
+        double & avg_count_p1, double & avg_count_p2);
     inline void assign_pair_all_comp(struct Single_dumper & mfs_p1,
         struct Single_dumper & mfs_p2, std::map<comp_num_t, int> & comp_count,
         char * seq_ptr_p1, char * seq_ptr_p2, char * header_ptr_p1,
@@ -380,7 +391,7 @@ private:
 
     void count_component_size();
     void log_comp_content();
-    void log_contigs(std::string file_path);    
+    void log_contigs(std::string file_path);
 
     kmer_len_t k1mer_len;
 
@@ -433,6 +444,18 @@ private:
     idx_t non_partition_size;
     uint64_t first_n_graph;
     int give_up_num;
+
+    struct Read_subsampler read_sampler;
+
+    std::vector<int> comps_num_edges;
+    std::vector<std::vector<uint64_t>> comp_total_kmer_count;
+    std::vector<uint64_t> comp_num_reads;
+    std::vector<uint64_t> comp_num_kmers;
+    int compress_ratio;
+    int kmer_count_thresh;
+
+    int64_t conn_point;
+    uint64_t curr_contig;
 };
 
 #endif	/* CONTIG_GRAPH_HANDLER_H */

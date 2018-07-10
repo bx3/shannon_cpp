@@ -28,6 +28,7 @@
 #include "Collect_reads.h"
 #include <cmath>
 #include "Seq_gragh_type.h"
+#include "Read_subsampler.h"
 //#include "Multi_graph_handler.h"
 
 #define EMPTY_READ_NUM (std::pow(2, sizeof(read_num_t)*8)-1)
@@ -39,6 +40,8 @@
 
 #define PAIR_1 1
 #define PAIR_2 2
+
+#define KNOWN_PATH_VEC_INIT_SIZE 10
 
 #define SEQ_GRAPH_WORK_STEP_UPDATE 5
 
@@ -142,6 +145,17 @@ public:
             return((size_t)np.vd_start); //*POINTER_HASH + (size_t)np.vd_stop
         }
     };
+
+    struct Node_struct_info {
+        Node_struct_info(int in_d_, int out_d_) : in_d(in_d_), out_d(out_d_) {}
+        bool operator < (const Node_struct_info& nsi) const
+        {
+            return std::make_pair(in_d, out_d) < std::make_pair(nsi.in_d, nsi.out_d);
+        }
+        int in_d;
+        int out_d;
+    };
+
     typedef std::map<Node_pair, std::vector<vd_t>,
              equ_node_pair> Node_pair_path_map;
     typedef std::map<Node_pair, std::vector<vd_t>,
@@ -185,7 +199,21 @@ public:
         num_condensed_rm = 0;
         total_num_bridged =0;
 
+        min_read_len = IMPOSSIBLE_READ_LENGTH;
+        if(has_single)
+        {
+            min_read_len = setting.single_read_length;
+        }
+        if(has_pair)
+        {
+            min_read_len = std::min(min_read_len, setting.pair_1_read_length);
+            min_read_len = std::min(min_read_len, setting.pair_2_read_length);
+        }
+
         bridge_nodes_writer.open(setting.local_files.output_path+"/bridge_node.log");
+        graph_writer.open(setting.local_files.output_path+"/graph.log");
+        reads_writer.open(setting.local_files.output_path+"/reads.log");
+        cycle_writer.open(setting.local_files.output_path+"/cycle.log");
     }
 
     // available public function
@@ -205,7 +233,7 @@ public:
     void break_self_loops();
     void break_all_cycles();
     bool acyclic_check();
-    void find_known_path(int curr_hop);
+    int find_known_path(int curr_hop);
     uint64_t resolve_all_pair_reads(int search_hop, std::set<vd_t> & check_vd);
     void output_components(std::string & node_output_path,
                            std::string & edge_output_path,
@@ -221,6 +249,8 @@ public:
 
     int get_num_nodes() {return boost::num_vertices(graph);}
     int get_num_edges() {return boost::num_edges(graph);}
+    int get_num_isolated_nodes();
+    int get_num_xnodes();
     void set_curr_comp(int curr_comp_)
     {
         curr_comp = curr_comp_;
@@ -237,6 +267,11 @@ public:
     void log_node_bfs_info(vd_t vd, bool is_show_color, bool is_shown_depth);
     void log_edge_count();
     void log_term_array(bool is_show_seq);
+    void log_graph_to_file(std::ofstream & writer, int id);
+    void log_all_nodes_reads_to_file(std::ofstream & writer);
+
+    void log_classify_edge_types();
+    void log_classify_node_types(std::ofstream & writer, int id);
 
 
 private:
@@ -326,7 +361,7 @@ private:
 
     void py_break_cycles();
     bool py_find_cycle(std::set<vd_t> & no_cycle, std::deque<vd_t> & traversed);
-    bool py_reachable_cycle(vd_t vd, std::set<vd_t> & no_cycle,
+    void py_reachable_cycle(vd_t vd, std::set<vd_t> & no_cycle,
                 std::vector<vd_t> & traversed, std::deque<vd_t> & cycle);
 
     // output dump
@@ -338,6 +373,8 @@ private:
     std::string edge_to_string(ed_t ed);
     // preprocess
     void pre_process_read();
+
+    void remove_nodes_edges_if_not_cover_by_reads();
 
     // elementary help function
     void refresh_bridging_reads(vd_t vd);
@@ -431,11 +468,16 @@ private:
     uint64_t num_single_seq;
 
     std::ofstream bridge_nodes_writer;
+    std::ofstream graph_writer;
+    std::ofstream reads_writer;
+    std::ofstream cycle_writer;
+    std::ofstream nodes_struct_writer;
     Block_timer resolve_pair_timer;
 
     uint64_t num_edge_added;
+    uint64_t num_assigned_read;
 
-
+    read_length_t min_read_len;
 };
 
 
@@ -477,11 +519,12 @@ struct Seq_graph_works {
             if(num_comp_left%SEQ_GRAPH_WORK_STEP_UPDATE==0)
             {
                 int percentage = (100 * (seq_graph_work.init_total_work-num_comp_left))/seq_graph_work.init_total_work;
-                printf("[ %3d%%] process %4d, \t num left %d/%d\n",
+                printf("[ %3d%%] MB process %4d, \t num left %d/%d\n",
                         percentage, seq_graph_work.process_i, num_comp_left,
                         seq_graph_work.init_total_work);
             }
-
+            std::cout << "process  " << seq_graph_work.process_i << " runs comp "
+                      << comp_i << std::endl;
             seq_graph_ptr->run_it(comp_i, false);
 
             delete seq_graph_ptr;

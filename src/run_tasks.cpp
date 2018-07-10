@@ -2,6 +2,72 @@
 
 Block_timer timer;
 
+void produce_summary_file(Shannon_C_setting * setting, int desiredTest)
+{
+    struct Local_files & lf = setting->local_files;
+    lf.summary_file_path = lf.summary_file_path + "/summary_task_" + std::to_string(desiredTest)+ "_" + lf.start_time;
+    std::ofstream writer(lf.summary_file_path);
+    writer << "run task  " <<  desiredTest << std::endl;
+    writer << "start at  " <<  lf.start_time << std::endl;
+    writer << "finish at " <<  lf.end_time << std::endl;
+    writer << "Notes: " << std::endl;
+    //writer << setting->notes << std::endl;
+    writer << std::endl;
+
+    uint64_t num_output_seq = get_num_seq(lf.reconstructed_seq_path);
+    size_t output_seq_size = std::ceil(get_filesize(lf.reconstructed_seq_path)/1024.0/1024.0);
+    uint64_t num_reference_seq = get_num_seq(lf.reference_seq_path);
+    size_t reference_seq_size = std::ceil(get_filesize(lf.reference_seq_path)/1024.0/1024.0);
+    std::vector<std::string> py_summaries;
+    std::string num_correct_seq = get_py_eval_summary(lf, py_summaries);
+
+    int num_single_seq, num_contig_seq, num_sf_seq;
+    count_seq_types_num(lf.reconstructed_seq_path,
+                    num_single_seq, num_contig_seq, num_sf_seq);
+    int align_num_single_seq, align_num_contig_seq, align_num_sf_seq;
+    int num_single_contribute, num_contig_contribute, num_sf_contribute;
+    int total_align = eval_align_counts(lf.eval_path + "_align" ,
+                align_num_single_seq, align_num_contig_seq, align_num_sf_seq,
+                num_single_contribute, num_contig_contribute,
+                num_sf_contribute);
+    int total_contribute = num_single_contribute+
+                            num_contig_contribute+num_sf_contribute;
+
+
+
+    int one_l = 1;
+    writer << "               " << "aligned" << "\t|\t" << "output" << "\t|\t" << "percentage right" <<std::endl;
+    writer << "total seq      " << total_align << "\t|\t" << num_output_seq
+           << " (" << total_contribute << ")" << "\t|\t"
+           << total_contribute*100/(std::max((uint64_t)1, num_output_seq))<<std::endl;
+    writer << "single seq     " << align_num_single_seq << "\t|\t" << num_single_seq
+           << " (" << num_single_contribute << ")" << "\t|\t"
+           << num_single_contribute*100/(std::max(one_l, num_single_seq)) <<std::endl;
+    writer << "contig seq     " << align_num_contig_seq << "\t|\t" << num_contig_seq
+           << " (" << num_contig_contribute << ")"
+           <<  "\t|\t" << num_contig_contribute*100/(std::max(one_l, num_contig_seq))<<std::endl;
+    writer << "sf seq         " << align_num_sf_seq << "\t|\t" << num_sf_seq
+           << " (" << num_sf_contribute << ")"
+           <<  "\t|\t" << num_sf_contribute*100/(std::max(one_l, num_sf_seq))<<std::endl;
+    writer << "output_seq_size    " << output_seq_size << " MiB" << std::endl;
+    writer << std::endl;
+
+    writer << "num_reference_seq  " << num_reference_seq << std::endl;
+    writer << "reference_seq_size " << reference_seq_size << " MiB" << std::endl;
+    writer << std::endl;
+
+    for(int i=0; i<py_summaries.size();i++ )
+        writer << py_summaries[i] << std::endl;
+
+    std::string setting_str = get_setting_string(*setting);
+    writer << std::endl;
+    writer << setting_str << std::endl;
+    writer.close();
+
+    std::string print_summary_cmd("cat " + lf.summary_file_path);
+    run_command(print_summary_cmd, false);
+}
+
 void set_stack_limit()
 {
     const rlim_t kStackSize = 1024 * 1024 * 1024;   // min stack size = 16 MB
@@ -78,7 +144,7 @@ void run_custom(int argc, char** argv)
     }
 
     int desiredTest = -1;
-    while(desiredTest<0 || desiredTest>20)
+    while(desiredTest<0 || desiredTest>21)
     {
         std::cout << "Select desired application: \n";
         std::cout << "   0) specific test\n";
@@ -102,6 +168,7 @@ void run_custom(int argc, char** argv)
         std::cout << "   18) sort kmer\n";
         std::cout << "   19) test_filter_output\n";
         std::cout << "   20) test load_contig_patition_and_multi_seq_sf\n";
+        std::cout << "   21) test sorted_kmer_contig_and_multi_seq_sf\n";
         std::cin >> desiredTest;
     }
 
@@ -182,24 +249,32 @@ void run_custom(int argc, char** argv)
         case 20:
             test_load_contig_patition_and_multi_seq_sf(&setting);
             break;
+        case 21:
+            test_sorted_kmer_contig_and_multi_seq_sf(&setting);
+            break;
         default:
             break;
     }
+    produce_summary_file(&setting, desiredTest);
     return;
 }
 
-void test_load_contig_patition_and_multi_seq_sf(Shannon_C_setting * setting)
+void test_sorted_kmer_contig_and_multi_seq_sf(Shannon_C_setting * setting)
 {
+    //get_num_seq(setting->local_files.reconstructed_seq_path);
     {
-        test_load_contig_graph(setting);
+        test_sorted_kmer_contig(setting);
     }
     test_multi_seq_sf(setting);
+    return;
 }
 
 void test_filter_output(Shannon_C_setting * setting)
 {
     {
         Multi_graph_handler multi_graph(*setting);
+        multi_graph.combine_all_reconst_seq_to_output();
+        multi_graph.filter_output_seq_by_length();
         multi_graph.filter_reconstructed();
     }
     eval_reconstructed_seq(setting->local_files);
@@ -308,11 +383,13 @@ void test_multi_seq_sf(Shannon_C_setting * setting)
         show_main_timer(&main_timer);
 
         // sparse flow
-        multi_graph.run_multi_sparse_flow();
-        multi_graph.combine_sf_single_seq_output();
+        multi_graph.run_multi_sparse_flow(-1);
         std::cout << "multi sf finish, " << std::endl;
         show_main_timer(&main_timer);
 
+        multi_graph.combine_all_reconst_seq_to_output();
+        multi_graph.filter_output_seq_by_length();
+        //multi_graph.filter_FP(setting->local_files.reconstructed_seq_path);
         multi_graph.filter_reconstructed();
 
         shc_log_info(shc_logname, "\t\t** entire process finish, \n");
@@ -338,7 +415,7 @@ void test_all(Shannon_C_setting * setting)
     Block_timer jellyfish_timer;
     start_timer(&jellyfish_timer);
     run_jellyfish(*setting);
-    std::cout << "finish run jellyfish" << std::endl;
+    std::cout << "Jellyfish task finishes, using time " << std::endl;
     stop_timer(&jellyfish_timer);
     shc_log_info(shc_logname, "finish run jellyfish\n");
     log_stop_timer(&jellyfish_timer);
@@ -415,10 +492,12 @@ void test_all(Shannon_C_setting * setting)
         show_main_timer(&main_timer);
 
         // sparse flow
-        multi_graph.run_multi_sparse_flow();
+        multi_graph.run_multi_sparse_flow(-1);
 
-        multi_graph.combine_sf_single_seq_output();
 
+        multi_graph.combine_all_reconst_seq_to_output();
+        multi_graph.filter_output_seq_by_length();
+        //multi_graph.filter_FP(setting->local_files.reconstructed_seq_path);
         multi_graph.filter_reconstructed();
 
         shc_log_info(shc_logname, "\t\t** entire process finish, \n");
@@ -428,16 +507,96 @@ void test_all(Shannon_C_setting * setting)
     eval_reconstructed_seq(setting->local_files);
 }
 
-
-
-void test_specific(Shannon_C_setting * setting)
+void test_load_contig_patition_and_multi_seq_sf(Shannon_C_setting * setting)
 {
-    //get_num_seq(setting->local_files.reconstructed_seq_path);
     {
-        test_sorted_kmer_contig(setting);
+        test_load_contig_graph(setting);
     }
     test_multi_seq_sf(setting);
-    return;
+}
+
+/*
+uint64_t get_num_sam_line(std::string in_file)
+{
+    FILE *cmd;
+    char result[1024];
+    std::string grep_cmd("wc -l ");
+    grep_cmd += in_file;
+    cmd = popen(grep_cmd.c_str(), "r");
+    if (cmd == NULL) {
+        perror("popen");
+        exit(EXIT_FAILURE);
+    }
+    while (fgets(result, sizeof(result), cmd)) {
+        ;//printf("%s", result);
+    }
+    pclose(cmd);
+    uint64_t num_seq = atoi(result);
+    //std::cout << num_seq << std::endl;
+    return num_seq;
+}
+*/
+void test_specific(Shannon_C_setting * setting)
+{
+    //Multi_graph_handler multi_graph(*setting);
+    /*
+    std::string samfile_path = "/data1/bowen/Shannon_D_seq/output_Vip_Chat_entire/ana/out.sam"; //"/data1/bowen/Shannon_D_seq/output_L4_Arf5_entire/hista_out/out.sam";
+    std::cout << "sam path " << samfile_path << std::endl;
+    double gr_thresh = 0.9;
+
+    GR_filter gr_filter;
+    gr_filter.parse_sam_get_matches(samfile_path);
+
+    std::string gr_reconstructed_seq_path =
+        setting->local_files.reconstructed_seq_path + "_gr_before_filter";
+    std::string cmd("mv " + setting->local_files.reconstructed_seq_path+ " "
+                          + gr_reconstructed_seq_path );
+    run_command(cmd, true);
+
+    std::ifstream reader(gr_reconstructed_seq_path);
+    std::ofstream writer(setting->local_files.reconstructed_seq_path);
+
+    std::string name, read_base, header;
+
+    while(  std::getline(reader, header) &&
+            std::getline(reader, read_base))
+    {
+        name = header.substr(1);
+        double num_match = gr_filter.get_num_match(name);
+        double ratio = num_match / read_base.size();
+        shc_log_info(shc_logname, "%s has len %d, num_match %d ratio %f\n", name.c_str(),
+                                    read_base.size(), ratio, (uint32_t)num_match);
+        if(ratio > gr_thresh)
+        {
+            writer << header << std::endl;
+            writer << read_base << std::endl;
+        }
+        else if(ratio > 1)
+        {
+            shc_log_error("ratio greater than 1\n");
+            exit(0);
+        }
+        else if(ratio < 0 )
+        {
+            shc_log_error("ratio smaller than 0\n");
+            exit(0);
+        }
+
+    }
+    reader.close();
+    writer.close();
+
+    eval_reconstructed_seq(setting->local_files);
+    */
+
+
+
+
+
+
+    //Multi_graph_handler multi_graph(*setting);
+    //multi_graph.filter_FP(setting->local_files.reconstructed_seq_path);
+
 
     /*
     Duplicate_setting & dup = setting->dup_setting;
@@ -515,11 +674,16 @@ void test_specific(Shannon_C_setting * setting)
 void test_multithread_sparse_flow(Shannon_C_setting * setting)
 {
     {
+        int comp_i = -1;
+        std::cout << "enter desired component to test, -1 for all component" << std::endl;
+        std:: cin >> comp_i;
+
         Multi_graph_handler multi_graph(*setting);
-        multi_graph.run_multi_sparse_flow();
+        multi_graph.run_multi_sparse_flow(comp_i);
 
-        multi_graph.combine_sf_single_seq_output();
-
+        multi_graph.combine_all_reconst_seq_to_output();
+        multi_graph.filter_output_seq_by_length();
+        //multi_graph.filter_FP(setting->local_files.reconstructed_seq_path);
         multi_graph.filter_reconstructed();
     }
     eval_reconstructed_seq(setting->local_files);

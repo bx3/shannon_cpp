@@ -10,6 +10,30 @@ void start_timer(struct Block_timer * bt)
     bt->mem_start = get_proc_mem_value();
 }
 
+void print_important_notice(std::string msg)
+{
+    std::cout << "\033[0;33m";
+    std::cout << "\n** [IMPORTANT MESSAGE] " << std::endl
+              << "** " + msg
+              << "** [IMPORTANT MESSAGE ENDS]";
+    std::cout << "\033[0m" << std::endl << std::endl;
+    shc_log_info(shc_logname, "\n** [IMPORTANT MESSAGE]\n");
+    shc_log_info(shc_logname, "\n** %s", msg.c_str());
+    shc_log_info(shc_logname, "** [IMPORTANT MESSAGE ENDS]\n");
+}
+
+void print_warning_notice(std::string msg)
+{
+    std::cout << "\033[0;31m";
+    std::cout << "\n** [IMPORTANT MESSAGE] " << std::endl
+              << "** " + msg
+              << "** [IMPORTANT MESSAGE ENDS]";
+    std::cout << "\033[0m" << std::endl << std::endl;
+    shc_log_info(shc_logname, "\n** [IMPORTANT MESSAGE]\n");
+    shc_log_info(shc_logname, "\n** %s", msg.c_str());
+    shc_log_info(shc_logname, "** [IMPORTANT MESSAGE ENDS]\n");
+}
+
 void print_timer(struct Block_timer * bt)
 {
     std::cout << "\033[0;33m";
@@ -169,6 +193,8 @@ void shc_log_write(shc_log_level level, const char *caller, const char *format, 
         va_end(args);
     }
 }
+
+
 
 /**
  * this function is used with MARCO to write data in a certain file specified by the

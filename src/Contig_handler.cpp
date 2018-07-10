@@ -22,7 +22,7 @@ void Contig_handler::dump_all_contig(std::string & filename)
     int j = 0;
     for(int i=0; i<num_contig; i++)
     {
-        outfile << ">\t"<< (j++) << "\t" << (int)mean_count[i] << std::endl;
+        outfile << ">Contig_"<< (j++) << "\t" << (int)mean_count[i] << std::endl;
         // -1 since exclusive at the end
         //shc_log_info(shc_logname, "delimitor.at(i) : %d\n",delimitor.at(i));
         //shc_log_info(shc_logname, "delimitor.at(i+1) : %d\n",delimitor.at(i+1));
