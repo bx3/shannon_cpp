@@ -51,6 +51,10 @@ int parse_main_command_line(int ac, char** av, Shannon_C_setting & setting);
 uint64_t get_num_read(std::string file);
 
 void eval_reconstructed_seq(Local_files & lf);
+void eval_reconstructed_seq(std::string reference_seq_path,
+                            std::string reconstructed_seq_path,
+                            std::string eval_dir_path,
+                            std::string eval_path);
 
 std::string get_py_eval_summary(Local_files & lf, std::vector<std::string> & summaries);
 void count_seq_types_num(std::string filename, int & num_single_seq,
@@ -59,6 +63,9 @@ int eval_align_counts(std::string filename, int & num_single_seq,
                         int & num_contig_seq, int & num_sf_seq,
                         int & num_single_contribute, int & num_contig_contribute,
                         int & num_sf_contribute);
+
+int get_kmer_length_from_kmer_file(std::string kmer_path);
+void produce_summary_file(struct Local_files & lf);
 
 #ifdef USE_APPROX_COUNT
 inline kmer_count_t encode_count(uint64_t count, double cr)
@@ -96,6 +103,71 @@ inline uint64_t get_count(uint64_t encoded_count, double cr)
     return encoded_count;
 }
 #endif
+
+
+// code found at
+// https://codereview.stackexchange.com/questions/186535/progress-bar-in-c
+// with very little change
+class Progress_bar
+{
+    static const auto overhead = sizeof " [100%]";
+
+    std::ostream& os;
+    const std::size_t bar_width;
+    std::string message;
+    const std::string full_bar;
+    struct Block_timer bt;
+
+ public:
+    Progress_bar(std::ostream& os, std::size_t line_width,
+                 std::string message_, const char symbol = '.')
+        : os{os},
+          bar_width{line_width - overhead},
+          message{std::move(message_)},
+          full_bar{std::string(bar_width, symbol) + std::string(bar_width, ' ')}
+    {
+        if (message.size()+1 >= bar_width || message.find('\n') != message.npos) {
+            os << message << '\n';
+            message.clear();
+        } else {
+            message += ' ';
+        }
+        clock_gettime(CLOCK_MONOTONIC, &bt.nano_start);
+        write(0.0);
+    }
+
+    // not copyable
+    Progress_bar(const Progress_bar&) = delete;
+    Progress_bar& operator=(const Progress_bar&) = delete;
+
+    ~Progress_bar()
+    {
+        write(1.0);
+        os << '\n';
+    }
+
+    void write(double fraction)
+    {
+        // clamp fraction to valid range [0,1]
+        if (fraction < 0)
+        fraction = 0;
+        else if (fraction > 1)
+        fraction = 1;
+
+        auto width = bar_width - message.size();
+        auto offset = bar_width - static_cast<unsigned>(width * fraction);
+
+        clock_gettime(CLOCK_MONOTONIC,&bt.nano_stamp);
+        bt.nTime = (bt.nano_stamp.tv_sec - bt.nano_start.tv_sec);
+
+        os << '\r' << message;
+        os.write(full_bar.data() + offset, width);
+        os << " [" << std::setw(3) << static_cast<int>(100*fraction) << "%] "
+            <<bt.nTime << "sec"<< std::flush;
+        std::cout.flush();
+    }
+
+};
 
 
 #endif	/* SHANNON_C_SEQ_HELPER_H */

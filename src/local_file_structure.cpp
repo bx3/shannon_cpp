@@ -1,17 +1,34 @@
 #include "local_file_structure.h"
 
+bool convert_to_abs_and_check_exist(std::string & path)
+{
+    if(!is_abs_path(path))
+        convert_relative_path_to_abs(path);
+    if(!exist_path(path))
+    {
+        std::cout << "\033[0;33m";
+        std::cout << "ERROR: path not exist"  << std::endl;
+        std::cout << path  << std::endl;
+        std::cout << "\033[0m";
+        return false;
+    }
+    return true;
+}
+
 void convert_relative_path_to_abs(std::string rel_path, std::string & abs_path)
 {
-    boost::filesystem::path rel_p(rel_path);
-    boost::filesystem::path abs_p = boost::filesystem::canonical(rel_p);
-    abs_path = abs_p.string();
+    char resolved_path[PATH_MAX];
+    realpath(rel_path.c_str(), resolved_path);
+    std::string abs_out_path(resolved_path);
+    abs_path = abs_out_path;
 }
 
 void convert_relative_path_to_abs(std::string & a_path)
 {
-    boost::filesystem::path rel_p(a_path);
-    boost::filesystem::path abs_p = boost::filesystem::canonical(rel_p);
-    a_path = abs_p.string();
+    char resolved_path[PATH_MAX];
+    realpath(a_path.c_str(), resolved_path);
+    std::string abs_out_path(resolved_path);
+    a_path = abs_out_path;
 }
 
 bool is_abs_path(std::string & a_path)
@@ -54,9 +71,23 @@ bool exist_path(std::string a_path)
     return boost::filesystem::exists(a_path_boost);
 }
 
-void add_or_overwrite_directory(std::string & dir)
+void add_or_overwrite_directory(std::string & dir, std::string & output_dir)
 {
-    std::cout << "add or overwrite dir " << dir << std::endl;
+    if(!is_abs_path(dir))
+        convert_relative_path_to_abs(dir);
+    if(!is_abs_path(output_dir))
+        convert_relative_path_to_abs(output_dir);
+    std::cout << "add or clean dir " << dir << std::endl;
+    int output_path_length = output_dir.size();
+    std::string dir_prefix = dir.substr(0, output_path_length);
+    if( dir.size()<=output_path_length || dir_prefix != output_dir)
+    {
+        std::cout << "cannot overwrite or add, since new dir is not a subdir of output dir" << std::endl;
+        std::cout << "new dir:    " << dir << std::endl;
+        std::cout << "output dir: " << output_dir << std::endl;
+        exit(0);
+    }
+
     boost::filesystem::path dir_boost_path(dir);
     if(boost::filesystem::exists(dir))
         empty_directory(dir_boost_path);
@@ -75,7 +106,8 @@ void add_directory_if_not_exist(std::string & dir)
     }
     else
     {
-        std::cout << "dir already exists" << std::endl;
+        std::cout << "dir already exists, use the existing one : "
+                  << dir << std::endl << std::endl;
     }
 
 }
@@ -196,39 +228,17 @@ size_t estimate_num_kmer(const std::string & filename, uint8_t kmer_length)
 }
 
 
-void print_local_file_system(Local_files *local_files)
+void print_and_log_local_file_system(Local_files *local_files)
 {
     std::cout << "\033[1;32m";  //34 blue, 31 red, 35 purple
-    std::cout << "current work dir is      : " << local_files->base_path << std::endl;
+    std::cout << "Input files               *********** " << std::endl;
 
-    std::cout << "Input                     *********** " << std::endl;
-    std::cout << "If has single read       : " << ((local_files->has_single)?"Yes":"No") << std::endl;
-    std::cout << "reference path is        : " << (local_files->reference_seq_path) << std::endl;
-
-    std::cout << "single kmer input from   : " << local_files->input_kmer_path << std::endl;
-    if(local_files->has_single)
-    {
-        std::cout << "single read input from   : " << local_files->input_read_path << std::endl;
-    }
-
-    if(local_files->has_pair)
-    {
-        std::cout << "read pair1 input from    : " << local_files->input_read_path_1 << std::endl;
-        std::cout << "read pair2 input from    : " << local_files->input_read_path_2 << std::endl;
-    }
 
     std::cout << "Output                    *********** " << std::endl;
-    std::cout << "kmer output save to        : " << local_files->output_kmer_path << std::endl;
-    std::cout << "contig output saved to     : " << local_files->output_contig_path << std::endl;
-    std::cout << "METIS components under dir : " << local_files->output_comp_path << std::endl;
-    std::cout << "MB node/edge/path under    : " << local_files->output_seq_graph_path << std::endl;
-    std::cout << "SF reconstructed seq under : " << local_files->reconstructed_seq_path << std::endl;
+    std::cout << "output save to           : " << local_files->output_path << std::endl;
 
     std::cout << "\033[0m" << std::endl;
-}
 
-void log_local_file_system(Local_files *local_files)
-{
     shc_log_info(shc_logname, "current work dir is      : %s\n", local_files->base_path.c_str());
     shc_log_info(shc_logname, "\n");
     shc_log_info(shc_logname, "Input                     *********** \n");
@@ -237,16 +247,7 @@ void log_local_file_system(Local_files *local_files)
     shc_log_info(shc_logname, "reference path           : %s\n", local_files->reference_seq_path.c_str());
 
     shc_log_info(shc_logname, "single kmer input from   : %s\n", local_files->input_kmer_path.c_str());
-    if(local_files->has_single)
-    {
-        shc_log_info(shc_logname, "single read input from   : %s\n", local_files->input_read_path.c_str());
-    }
 
-    if(local_files->has_pair)
-    {
-        shc_log_info(shc_logname, "read pair1 input from    : %s\n", local_files->input_read_path_1.c_str());
-        shc_log_info(shc_logname, "read pair2 input from    : %s\n", local_files->input_read_path_2.c_str());
-    }
 
     shc_log_info(shc_logname, "Output                    *********** \n");
     shc_log_info(shc_logname, "kmer output save to        : %s\n", local_files->output_kmer_path.c_str());
@@ -257,6 +258,7 @@ void log_local_file_system(Local_files *local_files)
 
     shc_log_info(shc_logname, "\n");
 }
+
 
 uint64_t get_num_seq(std::string in_file)
 {
@@ -356,7 +358,7 @@ std::string get_current_calender_time()
     }
     day_time.push_back('s');
     std::string out_str = "date_" + tokens[4]+ '_' +  tokens[1] + '_' +  tokens[2] + '_' +tokens[3] ;
-    std::cout << "data " << out_str << std::endl;
+    std::cout << "current date " << out_str << std::endl << std::endl;
 
     return out_str;
 }

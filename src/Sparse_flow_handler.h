@@ -131,8 +131,9 @@ public:
     }
 
     //used for multi-thread
-    void * run_sparse_flow_handler_helper(Comp_graph comp_graph,
-                    pthread_mutex_t * write_lock_ptr, std::string output_path);
+    void * run_sparse_flow_handler_helper( Comp_graph comp_graph,
+            std::string node_path, std::string edge_path, std::string path_path,
+            pthread_mutex_t * write_lock_ptr, std::string output_path);
 
     // to be implemented
     void process_all_graph(int comp_i);
@@ -324,7 +325,22 @@ struct Sparse_flow_works {
                         sparse_flow_work.init_total_work);
             }
 
-            sparse_flow_ptr->run_sparse_flow_handler_helper(comp_graph,
+            int comp_id = comp_graph.comp_i;
+            int graph_id = comp_graph.graph_i;
+            // prepare files for process
+            Local_files & lf = sparse_flow_work.setting.local_files;
+            std::string node_path(lf.output_seq_graph_path +
+                                         lf.node_prefix + std::to_string(comp_id) +
+                                         "/node" + std::to_string(graph_id));
+            std::string edge_path(lf.output_seq_graph_path +
+                                         lf.edge_prefix + std::to_string(comp_id) +
+                                         "/edge" + std::to_string(graph_id));
+            std::string path_path(lf.output_seq_graph_path +
+                                         lf.path_prefix + std::to_string(comp_id) +
+                                         "/path" + std::to_string(graph_id));
+
+            sparse_flow_ptr->run_sparse_flow_handler_helper( comp_graph,
+                node_path, edge_path, path_path,
                 sparse_flow_work.write_lock_ptr, sparse_flow_work.output_path);
         }
 

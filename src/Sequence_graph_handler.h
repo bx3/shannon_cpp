@@ -64,6 +64,13 @@ struct Work_info {
     pthread_mutex_t * work_lock_ptr;
 };
 
+struct Special_seq_input {
+    std::string kmer_path;
+    std::string read_path_single_prefix;
+    std::string read_path_p1_prefix;
+    std::string read_path_p2_prefix;
+};
+
 
 class Sequence_graph_handler {
     friend class Kmer_handler;
@@ -170,8 +177,9 @@ public:
         has_single = setting_.has_single;
         has_pair = setting_.has_pair;
         kmer_length = setting_.kmer_length;
-        max_hop_pair = setting_.multi_graph_setup.max_hop_pair;
-        max_hop_path = setting_.multi_graph_setup.max_hop_path;
+        max_hop_pair = setting_.seq_graph_setup.max_hop_pair;
+        max_hop_path = setting_.seq_graph_setup.max_hop_path;
+        special_input = false;
 
 
         glob_node_id = NODE_ID_NORMAL_START;
@@ -210,10 +218,10 @@ public:
             min_read_len = std::min(min_read_len, setting.pair_2_read_length);
         }
 
-        bridge_nodes_writer.open(setting.local_files.output_path+"/bridge_node.log");
-        graph_writer.open(setting.local_files.output_path+"/graph.log");
-        reads_writer.open(setting.local_files.output_path+"/reads.log");
-        cycle_writer.open(setting.local_files.output_path+"/cycle.log");
+        //bridge_nodes_writer.open(setting.local_files.output_path+"/bridge_node.log");
+        //graph_writer.open(setting.local_files.output_path+"/graph.log");
+        //reads_writer.open(setting.local_files.output_path+"/reads.log");
+        //cycle_writer.open(setting.local_files.output_path+"/cycle.log");
     }
 
     // available public function
@@ -279,6 +287,8 @@ private:
     //load reads
     void load_all_single_read(std::string& read_path, Kmer_Node_map & kmer_node_map);
     void load_all_paired_read(Kmer_Node_map & kmer_node_map);
+    void load_all_paired_read_no_concat(std::string read_path_p1,
+                    std::string read_path_p2, Kmer_Node_map & kmer_node_map);
     vd_t update_edge_count_with_read(std::string & base, Kmer_Node_map & kmer_node_map);
     vd_t traverse_read_is_all_kmer_node_valid(std::string & base,
                               Kmer_Node_map & kmer_node_map, uint8_t node_type);
@@ -373,6 +383,7 @@ private:
     std::string edge_to_string(ed_t ed);
     // preprocess
     void pre_process_read();
+    
 
     void remove_nodes_edges_if_not_cover_by_reads();
 
@@ -448,6 +459,7 @@ private:
     float hamming_frac;
 
     bool is_multi_thread;
+    bool special_input;
 
     int working_component;
 

@@ -1,5 +1,71 @@
 #include "shannon_C_seq_helper.h"
 
+void produce_summary_file(struct Local_files & lf)
+{
+    lf.summary_file_path = lf.output_path + "/summary.log";
+    std::ofstream writer(lf.summary_file_path);
+
+    writer << "start at  " <<  lf.start_time << std::endl;
+    writer << "finish at " <<  lf.end_time << std::endl;
+    writer << "Notes: " << std::endl;
+    //writer << setting->notes << std::endl;
+    writer << std::endl;
+
+    uint64_t num_output_seq = get_num_seq(lf.reconstructed_seq_path);
+    size_t output_seq_size = std::ceil(get_filesize(lf.reconstructed_seq_path)/1024.0/1024.0);
+    uint64_t num_reference_seq = get_num_seq(lf.reference_seq_path);
+    size_t reference_seq_size = std::ceil(get_filesize(lf.reference_seq_path)/1024.0/1024.0);
+    std::vector<std::string> py_summaries;
+    std::string num_correct_seq = get_py_eval_summary(lf, py_summaries);
+
+    int num_single_seq, num_contig_seq, num_sf_seq;
+    count_seq_types_num(lf.reconstructed_seq_path,
+                    num_single_seq, num_contig_seq, num_sf_seq);
+    int align_num_single_seq, align_num_contig_seq, align_num_sf_seq;
+    int num_single_contribute, num_contig_contribute, num_sf_contribute;
+    int total_align = eval_align_counts(lf.eval_path + "_align" ,
+                align_num_single_seq, align_num_contig_seq, align_num_sf_seq,
+                num_single_contribute, num_contig_contribute,
+                num_sf_contribute);
+    int total_contribute = num_single_contribute+
+                            num_contig_contribute+num_sf_contribute;
+
+
+
+    int one_l = 1;
+    writer << "               " << "aligned" << "\t|\t" << "output" << "\t|\t" << "percentage right" <<std::endl;
+    writer << "total seq      " << total_align << "\t|\t" << num_output_seq
+           << " (" << total_contribute << ")" << "\t|\t"
+           << total_contribute*100/(std::max((uint64_t)1, num_output_seq))<<std::endl;
+    writer << "single seq     " << align_num_single_seq << "\t|\t" << num_single_seq
+           << " (" << num_single_contribute << ")" << "\t|\t"
+           << num_single_contribute*100/(std::max(one_l, num_single_seq)) <<std::endl;
+    writer << "contig seq     " << align_num_contig_seq << "\t|\t" << num_contig_seq
+           << " (" << num_contig_contribute << ")"
+           <<  "\t|\t" << num_contig_contribute*100/(std::max(one_l, num_contig_seq))<<std::endl;
+    writer << "sf seq         " << align_num_sf_seq << "\t|\t" << num_sf_seq
+           << " (" << num_sf_contribute << ")"
+           <<  "\t|\t" << num_sf_contribute*100/(std::max(one_l, num_sf_seq))<<std::endl;
+    writer << "output_seq_size    " << output_seq_size << " MiB" << std::endl;
+    writer << std::endl;
+
+    writer << "num_reference_seq  " << num_reference_seq << std::endl;
+    writer << "reference_seq_size " << reference_seq_size << " MiB" << std::endl;
+    writer << std::endl;
+
+    for(int i=0; i<py_summaries.size();i++ )
+        writer << py_summaries[i] << std::endl;
+
+    //std::string setting_str = get_setting_string(*setting);
+    //writer << std::endl;
+    //writer << setting_str << std::endl;
+    writer.close();
+
+    std::string print_summary_cmd("cat " + lf.summary_file_path);
+    run_command(print_summary_cmd, false);
+}
+
+
 void eval_reconstructed_seq(Local_files & lf)
 {
     if(system(NULL))
@@ -34,6 +100,52 @@ void eval_reconstructed_seq(Local_files & lf)
         run_command(rm_local_eval_file_cmd.c_str(), true);
         std::string rm_local_cp_eval_nospace_file_cmd = "rm " + local_cp_eval_file + "_nospace";
         run_command(rm_local_cp_eval_nospace_file_cmd.c_str(), true);
+        produce_summary_file(lf);
+    }
+    else
+    {
+        std::cout << "reference not provided, no evaluation" << std::endl;
+    }
+}
+
+
+void eval_reconstructed_seq(std::string reference_seq_path,
+                            std::string reconstructed_seq_path,
+                            std::string eval_dir_path,
+                            std::string eval_path)
+{
+    if(system(NULL))
+        ;
+    else
+        exit(EXIT_FAILURE);
+
+    if(reference_seq_path.empty())
+    {
+        std::cout << "no reference available" << std::endl;
+        return;
+    }
+
+    if(!reference_seq_path.empty() && exist_path(reference_seq_path))
+    {
+        std::string curr_path = "./";
+        convert_relative_path_to_abs(curr_path);
+
+        std::string local_cp_eval_file = eval_dir_path + "/reference.fasta";
+        std::string local_cp_eval_file_cmd =
+            "cp " + reference_seq_path + " " + local_cp_eval_file;
+        run_command(local_cp_eval_file_cmd.c_str(), true);
+
+        std::string cmd = "python " + curr_path + "/analysis/compare_trans.py " +
+                          local_cp_eval_file + " " +
+                          reconstructed_seq_path + " " +
+                          eval_path;
+        std::cout << cmd << std::endl;
+        system(cmd.c_str());
+
+        std::string rm_local_eval_file_cmd = "rm " + local_cp_eval_file;
+        run_command(rm_local_eval_file_cmd.c_str(), true);
+        std::string rm_local_cp_eval_nospace_file_cmd = "rm " + local_cp_eval_file + "_nospace";
+        run_command(rm_local_cp_eval_nospace_file_cmd.c_str(), true);
     }
     else
     {
@@ -57,7 +169,7 @@ void count_seq_types_num(std::string filename, int & num_single_seq,
             char start_letter = line[1];
             if(start_letter=='s')
                 num_single_seq++;
-            else if(start_letter == 'C')
+            else if(start_letter == 'C' || start_letter == 'S') // S for contigs from python Shannon
                 num_contig_seq++;
             else if(start_letter =='c')
                 num_sf_seq ++;
@@ -193,131 +305,6 @@ modify_setting_with_command(Local_files & lf, boost::program_options::variables_
     lf.reset_paths();
 }
 
-int parse_main_command_line(int ac, char** av, Shannon_C_setting & setting)
-{
-    namespace po = boost::program_options;
-    try {
-        std::string config_path;
-        int kmer_length;
-        bool has_single = false;;
-        bool has_pair = false;
-        po::options_description desc("Allowed options");
-        desc.add_options()
-            ("help", "produce help message")
-            ("config,j", po::value<std::string>(),
-                  "json config file as default")
-            ("kmer_length,k", po::value<int>()->default_value(25),
-                  "specify kmer length.")
-            ("kmer_path,m", po::value<std::string>(),
-                        "specify kmer path from jellyfish")
-            ("jf_path,f", po::value<std::string>(),
-                                    "specify jellyfish jf path")
-            ("SE_read_path,s", po::value<std::string>(),
-                        "specify single ended read path ")
-            ("PE_read_path,p", po::value< std::vector<std::string> >()->multitoken(),
-                                    "specify paired ended read path ")
-            ("output_path,o", po::value<std::string>(),
-                                    "output dir path")
-            ("reference,r", po::value<std::string>(),
-                                            "reference dir path")
-            ("double_stranded,d", "reference dir path")
-            ("single_read_length,l", po::value<int>(),
-                                            "single read length")
-            ("pair_read_length,i", po::value<std::vector<int> >()->multitoken(),
-                                            "pair read length")
-            ("use_set,u", "use set to filter kmer")
-            ("num_parallel,t", po::value<int>(), "number of threads for multi-graphs")
-            ("load_factor,z", po::value<double>(), "load factor for kmer map")
-        ;
-
-        po::positional_options_description p;
-        p.add("s", -1);
-
-        po::variables_map vm;
-        po::store(po::command_line_parser(ac, av).
-                  options(desc).positional(p).run(), vm);
-        po::notify(vm);
-
-        if (vm.count("help")) {
-            std::cout << "Usage: options_description [options]\n";
-            std::cout << desc;
-            return 1;
-        }
-
-        if (vm.count("config"))
-        {
-            std::string setting_file_name = vm["config"].as< std::string >();
-            boost::filesystem::path base_path = boost::filesystem::current_path();
-            std::string base_path_str(base_path.c_str());
-            //("/shannon_C_setting.txt");
-            std::string setting_path = base_path_str + "/" + setting_file_name;
-
-            if(!boost::filesystem::exists(setting_path))
-            {
-                shc_log_error("setting file: No such file: %s\n",
-                                                setting_path.c_str());
-                exit(1);
-            }
-            parser_setting_file(setting_path, setting);
-        }
-        else
-        {
-            std::cerr << "ERROR: a config file is required, use -j" << std::endl;
-            return 1;
-        }
-
-        if (vm.count("double_stranded"))
-        {
-            setting.is_double_stranded = true;
-        }
-        else
-        {
-            setting.is_double_stranded = false;
-        }
-
-        if (vm.count("single_read_length"))
-        {
-            setting.has_single = true;
-            setting.single_read_length = vm["single_read_length"].as<int>();
-        }
-
-        if (vm.count("pair_read_length"))
-        {
-            setting.has_pair = true;
-            std::vector<int>  pair_lenght =
-                    vm["pair_read_length"].as<std::vector<int> >();
-            if(pair_lenght.size()!=2)
-            {
-                std::cerr << "pair read length error " << std::endl;
-            }
-            setting.pair_1_read_length = pair_lenght.at(0);
-            setting.pair_2_read_length = pair_lenght.at(1);
-        }
-
-        if(vm.count("use_set"))
-        {
-            setting.dup_setting.is_use_set = true;
-        }
-        if(vm.count("num_parallel"))
-        {
-            setting.multi_graph_setup.num_parallel =
-                          vm["num_parallel"].as<int>();
-        }
-        if(vm.count("load_factor"))
-        {
-            setting.dup_setting.load_factor = vm["load_factor"].as<double>();
-        }
-
-        modify_setting_with_command(setting.local_files, vm);
-
-        return 0;
-    }
-    catch(std::exception& e)
-    {
-        std::cout << e.what() << "\n";
-        return 1;
-    }
-}
 
 void parse_jf_info(Local_files & lf, JF_stats & jf_stats)
 {
@@ -488,6 +475,23 @@ void run_jellyfish(Shannon_C_setting & setting)
             print_important_notice(msg);
         }
     }
+}
+
+int get_kmer_length_from_kmer_file(std::string kmer_path)
+{
+    std::ifstream file_reader(kmer_path.c_str());
+    std::string count_str, kmer_base;
+    int kmer_length = -1;
+
+    while(  std::getline(file_reader, kmer_base, '\t') &&
+            std::getline(file_reader, count_str)   )
+    {
+        kmer_length = kmer_base.size();
+        break;
+    }
+    assert(kmer_length > 0 && kmer_length <=32);
+    return kmer_length;
+
 }
 
 /*

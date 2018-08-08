@@ -71,6 +71,7 @@
 //typedef std::pair<uint64_t, kmer_count_t> Kmer_Occurence_Pair;
 
 #define KMER_LOAD_PROGRSS_STEP 5000000
+#define COUT_BUFFER_FLUSH_SLEEP 100000
 //#define LOG_KMER
 
 struct Kmer_Occurence_Pair {
@@ -127,31 +128,38 @@ public:
         if(jf_stats.max_count <= UINT16_MAX)
         {
             compress_ratio = 1;
-            std::cout << "use exact count " << std::endl;
-            shc_log_info(shc_logname, "**********************\n");
-            shc_log_info(shc_logname, "USE EXACT COUNT UINT16_T\n");
-            shc_log_info(shc_logname, "**********************\n");
+            std::string msg("LOADING: KMER dictionary can store count 0-65535, uses EXACT COUNT\n\t");
+            msg += "based on Jellyfish stats\n";
+            msg += "\t\tuniq_num  " + std::to_string(jf_stats.uniq_num) + "\n";
+            msg += "\t\tdist_num  " + std::to_string(jf_stats.dist_num) + "\n";
+            msg += "\t\ttotal_num  " + std::to_string(jf_stats.total_num) + "\n";
+            msg += "\t\tmax_count  " + std::to_string(jf_stats.max_count)+ "\n";
+            print_important_notice(msg);
         }
         else
         {
             compress_ratio = (jf_stats.max_count-EXACT_THRESH)/
-                                static_cast<double>(UINT16_MAX-EXACT_THRESH);
-            std::cout << "use approx count, compress ratio "
-                      << compress_ratio << ". count below "  << EXACT_THRESH
-                      << " are stored with original count" << std::endl;
-            shc_log_info(shc_logname, "**********************\n");
-            shc_log_info(shc_logname, "USE APPROXIMATE COUNT UINT16_T, count below are stored with original count%u\n",
-                                      EXACT_THRESH);
-            shc_log_info(shc_logname, "**********************\n");
+                              static_cast<double>(UINT16_MAX-EXACT_THRESH);
+
+            std::string msg("LOADING: KMER dictionary can store count 0-65535, uses APPROXIMATE COUNT\n\t");
+            msg += "based on Jellyfish stats\n";
+            msg += "\t\tuniq_num  " + std::to_string(jf_stats.uniq_num) + "\n";
+            msg += "\t\tdist_num  " + std::to_string(jf_stats.dist_num) + "\n";
+            msg += "\t\ttotal_num  " + std::to_string(jf_stats.total_num) + "\n";
+            msg += "\t\tmax_count  " + std::to_string(jf_stats.max_count) + "\n";
+
+            msg += "compression ratio " + std::to_string(compress_ratio) +
+                   "But count below " +  std::to_string(EXACT_THRESH) +
+                   "are stored with original count\n";
+            print_important_notice(msg);
         }
 
         if(compress_ratio>50)
         {
-            std::cout << "\033[0;33m";
-            std::cout << "BE CAREFUL, "
-                      << "TOO MUCH COMPRESSION MIGHT RESULT IN POOR PERFORMANCE"
-                      << std::endl;
-            std::cout << "\033[0m" << std::endl << std::endl;
+            std::string msg("BE CAREFUL, TOO MUCH COMPRESSION MIGHT RESULT IN POOR PERFORMANCE \n\t");
+            msg += "To change dictionary count storage range\n\t";
+            msg += "Go to src/shc_type.h, comment MARCO USE_APPROX_COUNT\n\t";
+            msg += "And uncomment MARCO USE_EXACT_COUNT, then compile by typing make\n";
         }
 #else
         if( jf_stats.max_count > std::numeric_limits<uint32_t>::max())
@@ -161,11 +169,13 @@ public:
         }
 
         compress_ratio = 1;
-        std::cout << "use exact count, compress ratio "
-                  << compress_ratio << std::endl;
-        shc_log_info(shc_logname, "**********************\n");
-        shc_log_info(shc_logname, "USE EXACT COUNT UINT32_T\n");
-        shc_log_info(shc_logname, "**********************\n");
+        std::string msg("LOADING: KMER dictionary can store count 0-4294967295, uses EXACT COUNT\n\t");
+        msg += "based on Jellyfish stats\n";
+        msg += "\t\tuniq_num  " + std::to_string(jf_stats.uniq_num) + "\n";
+        msg += "\t\tdist_num  " + std::to_string(jf_stats.dist_num) + "\n";
+        msg += "\t\ttotal_num  " + std::to_string(jf_stats.total_num) + "\n";
+        msg += "\t\tmax_count  " + std::to_string(jf_stats.max_count) + "\n";
+        print_important_notice(msg);
 #endif
 
 #if defined(USE_DENSE_KMER) || defined(USE_SPARSE_KMER)
@@ -205,7 +215,7 @@ public:
         if(jf_stats.max_count <= UINT16_MAX)
         {
             compress_ratio = 1;
-            std::string msg("KMER dictionary can store count 0-65535, uses EXACT COUNT\n\t");
+            std::string msg("LOADING: KMER dictionary can store count 0-65535, uses EXACT COUNT\n\t");
             msg += "based on Jellyfish stats\n";
             msg += "\t\tuniq_num  " + std::to_string(jf_stats.uniq_num) + "\n";
             msg += "\t\tdist_num  " + std::to_string(jf_stats.dist_num) + "\n";
@@ -218,7 +228,7 @@ public:
             compress_ratio = (jf_stats.max_count-EXACT_THRESH)/
                 static_cast<double>(UINT16_MAX-EXACT_THRESH);
 
-            std::string msg("KMER dictionary can store count 0-65535, uses APPROXIMATE COUNT\n\t");
+            std::string msg("LOADING: KMER dictionary can store count 0-65535, uses APPROXIMATE COUNT\n\t");
             msg += "based on Jellyfish stats\n";
             msg += "\t\tuniq_num  " + std::to_string(jf_stats.uniq_num) + "\n";
             msg += "\t\tdist_num  " + std::to_string(jf_stats.dist_num) + "\n";
@@ -246,7 +256,7 @@ public:
             exit(0);
         }
         compress_ratio = 1;
-        std::string msg("KMER dictionary can store count 0-4294967295, uses EXACT COUNT\n\t");
+        std::string msg("LOADING: KMER dictionary can store count 0-4294967295, uses EXACT COUNT\n\t");
         msg += "based on Jellyfish stats\n";
         msg += "\t\tuniq_num  " + std::to_string(jf_stats.uniq_num) + "\n";
         msg += "\t\tdist_num  " + std::to_string(jf_stats.dist_num) + "\n";

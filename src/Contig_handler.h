@@ -18,6 +18,7 @@
 #include "log.h"
 #include "shc_google_sparsehash.h"
 #include "encoding.h"
+#include "shannon_C_seq_helper.h"
 
 #define NOTHING_TO_KEEP 0
 #define NOTHING_TO_REMOVE 0

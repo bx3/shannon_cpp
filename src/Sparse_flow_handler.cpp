@@ -7,23 +7,12 @@ template<class T1, class T2> double dot_product(T1 & v1, T2 & v2)
     return std::inner_product(v1.begin(), v1.end(), v2.begin(), 0);
 }
 
-void * Sparse_flow_handler::run_sparse_flow_handler_helper(
-        Comp_graph comp_graph, pthread_mutex_t * write_lock_ptr, std::string output_path)
+void * Sparse_flow_handler::run_sparse_flow_handler_helper( Comp_graph comp_graph,
+            std::string node_path, std::string edge_path, std::string path_path,
+            pthread_mutex_t * write_lock_ptr, std::string output_path)
 {
     comp_id = comp_graph.comp_i;
     graph_id = comp_graph.graph_i;
-    // prepare files for process
-    Local_files & lf = setting.local_files;
-    std::string node_path(lf.output_seq_graph_path +
-                                 lf.node_prefix + std::to_string(comp_id) +
-                                 "/node" + std::to_string(graph_id));
-    std::string edge_path(lf.output_seq_graph_path +
-                                 lf.edge_prefix + std::to_string(comp_id) +
-                                 "/edge" + std::to_string(graph_id));
-    std::string path_path(lf.output_seq_graph_path +
-                                 lf.path_prefix + std::to_string(comp_id) +
-                                 "/path" + std::to_string(graph_id));
-
     if(!load_graph(node_path, edge_path))
     {
         clear();
@@ -871,11 +860,11 @@ sparse_flow_on_one_node(vd_t vd, std::vector<double> & min_flow,
         //shc_log_info(shc_logname, "flow size %d\n", flow.size());
         std::vector<double> flow_sol(flow); // a copy
 
-        truncate_flow_value(num_in, num_out, flow, flow_sol,
-                                                in_counts, out_counts);
-
-        //old_truncate_flow_value(num_in, num_out, flow, flow_sol,
+        //truncate_flow_value(num_in, num_out, flow, flow_sol,
         //                                        in_counts, out_counts);
+
+        old_truncate_flow_value(num_in, num_out, flow, flow_sol,
+                                                in_counts, out_counts);
 #ifdef LOG_LP_SUMMARY
         shc_log_info(shc_logname, "after trunc solution summary\n");
         for(int k=0; k<flow.size(); k++)

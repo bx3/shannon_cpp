@@ -63,17 +63,18 @@ public:
             shc_log_error("unable to initialize mutex\n");
             exit(1);
         }
-        std::cout << setting.local_files.single_node_dir << std::endl;
-        boost::filesystem::path dir_boost_path(setting.local_files.single_node_dir);
-        if(boost::filesystem::exists(setting.local_files.single_node_dir))
-            empty_directory(dir_boost_path);
-        else
-            add_directory(dir_boost_path);
-
-        kmer_length = setting.kmer_length;
-        is_compressed = setting.is_compress;
-        std::string kmer_path(setting.local_files.output_components_kmer_dir);
+        if(!setting.local_files.single_node_dir.empty())
+        {
+            //std::cout <<"single_node_dir " << setting.local_files.single_node_dir << std::endl;
+            boost::filesystem::path dir_boost_path(setting.local_files.single_node_dir);
+            if(boost::filesystem::exists(setting.local_files.single_node_dir))
+                empty_directory(dir_boost_path);
+            else
+                add_directory(dir_boost_path);
+        }
     }
+
+
     int count_num_component_seq_graph();
     int count_num_component_sparse_flow();
 
@@ -128,8 +129,6 @@ private:
     Rmer_contig_map rmer_contig_map;
 
     int num_comp;
-    uint8_t kmer_length;
-    bool is_compressed;
     Shannon_C_setting & setting;
     Block_timer timer;
 

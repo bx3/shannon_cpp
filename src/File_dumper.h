@@ -23,6 +23,8 @@
 #define SRC_SIZE (2147483648)
 //2147483648 536870912 104857600 500M  2G 100M
 
+//#define LOG_FILER_DUMPER
+
 typedef std::pair<int, uint64_t> comp_size_t;
 struct File_size_sorter {
     bool operator()(const comp_size_t& cs1, const comp_size_t& cs2) const {
@@ -50,7 +52,9 @@ struct Src_man {
         total_num_char = total_num_char_;
         mmap_sz = mmap_sz_;
         page_size = sysconf(_SC_PAGE_SIZE);
+#ifdef LOG_FILER_DUMPER
         std::cout << "page size is " << page_size << std::endl;
+#endif
     }
 
     void reset(void * src_, uint64_t mmap_sz_, char * header_ptr_)
@@ -210,7 +214,9 @@ struct Single_dumper {
         if ((src_man.fdin = open (input_read_path.c_str(), O_RDONLY)) < 0)
         {printf("can't open for reading"); exit(1);}
         if (fstat (src_man.fdin, &statbuf) < 0) {printf ("fstat error"); exit(1); }
+#ifdef LOG_FILER_DUMPER
         std::cout << "statbuf.st_size is " << statbuf.st_size << std::endl;
+#endif
         size_t mmap_size = 0;
         if(SRC_SIZE < statbuf.st_size)
             mmap_size = SRC_SIZE;
@@ -233,7 +239,9 @@ struct Single_dumper {
 
     void re_mmap_src_file()
     {
+#ifdef LOG_FILER_DUMPER
         std::cout << "remap src file" << std::endl;
+#endif
         shc_log_info(shc_logname, "remap src file\n");
 
         if(munmap(src_man.src, src_man.mmap_sz) == -1){printf("munmap fail\n"); exit(1);}
@@ -493,7 +501,9 @@ struct Single_dumper {
         stop_timer(&l_timer);
         log_stop_timer(&l_timer);
         */
+#ifdef LOG_FILER_DUMPER
         std::cout << "start finalize mem read files" << std::endl;
+#endif
         shc_log_info(shc_logname, "start finalize mem read files\n");
         start_timer(&l_timer);
         for(std::set<int>::iterator it=mem_comps.begin();
@@ -533,7 +543,9 @@ struct Single_dumper {
                 exit(1);
             }
         }
+#ifdef LOG_FILER_DUMPER
         std::cout << "finish finalize mem read files" << std::endl;
+#endif
         stop_timer(&l_timer);
         log_stop_timer(&l_timer);
         deallocate_mem();
@@ -579,7 +591,9 @@ struct FASTA_dumper {
             int num_disk_comps = 0;
             if(num_component > num_allowed_comp)
             {
+#ifdef LOG_FILER_DUMPER
                 std::cout << num_allowed_comp << " files are opened for mmap dump reads" << std::endl;
+#endif
                 num_disk_comps = num_allowed_comp;
                 std::vector<comp_size_t> comp_size_pair_array;
                 for(int i=0; i<component_size.size(); i++)
@@ -606,7 +620,9 @@ struct FASTA_dumper {
             }
             else
             {
+#ifdef LOG_FILER_DUMPER
                 std::cout << "all files are opened for mmap dump reads" << std::endl;
+#endif
                 num_disk_comps = num_component;
                 for(int i=0; i<num_component; i++)
                 {
@@ -620,7 +636,9 @@ struct FASTA_dumper {
             int num_disk_comps = 0;
             if(num_component > num_allowed_comp)
             {
+#ifdef LOG_FILER_DUMPER
                 std::cout << num_allowed_comp*2 << " files are opened for mmap dump reads" << std::endl;
+#endif
                 num_disk_comps = num_allowed_comp;
                 std::vector<comp_size_t> comp_size_pair_array;
                 for(int i=0; i<component_size.size(); i++)
@@ -647,7 +665,9 @@ struct FASTA_dumper {
             }
             else
             {
+#ifdef LOG_FILER_DUMPER
                 std::cout << "all files are opened for mmap dump reads" << std::endl;
+#endif
                 shc_log_info(shc_logname, "all pair files in disk\n");
                 num_disk_comps = num_component;
                 for(int i=0; i<num_component; i++)
@@ -685,33 +705,43 @@ struct FASTA_dumper {
         Block_timer dump_timer;
         if(has_single)
         {
+#ifdef LOG_FILER_DUMPER
             std::cout << "Start single read dump" << std::endl;
+#endif
             shc_log_info(shc_logname, "Start single read dump\n");
             start_timer(&dump_timer);
             single_dumper.finalize_dump_files();
+#ifdef LOG_FILER_DUMPER
             std::cout << "finish dump single file" << std::endl;
             stop_timer(&dump_timer);
+#endif            
             log_stop_timer(&dump_timer);
         }
         if(has_pair)
         {
+#ifdef LOG_FILER_DUMPER
             std::cout << "Start pair1 read dump" << std::endl;
+#endif
             shc_log_info(shc_logname, "Start pair1 read dump\n");
             start_timer(&dump_timer);
             pair1_dumper.finalize_dump_files();
+#ifdef LOG_FILER_DUMPER
             std::cout << "finish pair1 file" << std::endl;
             stop_timer(&dump_timer);
+#endif
             log_stop_timer(&dump_timer);
 
+#ifdef LOG_FILER_DUMPER
             std::cout << "Start pair2 read dump" << std::endl;
+#endif
             shc_log_info(shc_logname, "Start pair2 read dump\n");
             start_timer(&dump_timer);
             pair2_dumper.finalize_dump_files();
+#ifdef LOG_FILER_DUMPER
             std::cout << "finish pair2 file" << std::endl;
             stop_timer(&dump_timer);
+#endif
             log_stop_timer(&dump_timer);
-
-
         }
         shc_log_info(shc_logname, "Finish finalize_dump_files\n");
     }

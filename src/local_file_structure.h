@@ -18,6 +18,7 @@
 #include <fstream>
 #include <chrono>
 #include <ctime>
+#include <linux/limits.h>
 
 #include "log.h"
 #include <stdio.h>
@@ -26,14 +27,13 @@
 
 struct Local_files;
 
-void add_or_overwrite_directory(std::string & dir);
+void add_or_overwrite_directory(std::string & dir, std::string & output_dir);
 void add_directory_if_not_exist(std::string & dir);
 void add_directory(boost::filesystem::path & dir_path);
 void empty_directory(boost::filesystem::path & dir_path);
 void remove_directory(boost::filesystem::path & dir_path);
 void remove_file(const boost::filesystem::path & file_path);
-void print_local_file_system(Local_files *lf);
-void log_local_file_system(Local_files *lf);
+void print_and_log_local_file_system(Local_files *lf);
 bool exist_path(std::string a_path);
 bool is_file_empty(std::string a_path);
 void overwirte_a_file(std::string file_path);
@@ -47,6 +47,7 @@ void copy_file(std::string file_path, std::string copy_file_path);
 
 void convert_relative_path_to_abs(std::string rel_path, std::string & abs_path);
 void convert_relative_path_to_abs(std::string & path);
+bool convert_to_abs_and_check_exist(std::string & path);
 bool is_abs_path(std::string & a_path);
 
 uint64_t get_num_seq(std::string in_file);
@@ -86,7 +87,7 @@ struct Local_files {    //"/test_data"
     void reset_paths()
     {
         start_time = get_current_calender_time();
-        if(!input_kmer_path.empty())
+        if(!input_read_path.empty())
             has_single = true;
         else
             has_single = false;
@@ -97,6 +98,7 @@ struct Local_files {    //"/test_data"
             has_pair = false;
 
         log_filename_path = output_path + "/log_shannonC";
+        //std::cout << "log_filename_path " << log_filename_path << std::endl;
 
         memcpy(shc_logname, log_filename_path.c_str(),
                                         log_filename_path.size());
@@ -106,6 +108,7 @@ struct Local_files {    //"/test_data"
         output_kmer_path = output_path + "/kmer";
         deleted_contig_path = output_path + "/deleted_kmer";
         deleted_contig_path = output_path + "/deleted_kmer";
+        summary_file_path = output_path + "/summary";
 
         filtered_contig = output_path + "/contig_filtered.fasta";
 
@@ -140,16 +143,21 @@ struct Local_files {    //"/test_data"
 
         single_node_dir = output_seq_graph_path + "/Single_nodes";
 
-        node_structs_info_path = output_path + "/nodes_struct_files";
+        timing_path = output_path + "/Shannon.timing";
+        overwirte_a_file(timing_path);
 
+        //std::cout << "output_path " << output_path << std::endl;
+        //std::cout << "output_seq_graph_path " << output_seq_graph_path << std::endl;
 
         // prepare dir and files
         boost::filesystem::path output_path_boost(output_path);
         if( !boost::filesystem::exists(output_path_boost) )
             add_directory(output_path_boost);
+
         boost::filesystem::path output_seq_graph_path_boost(output_seq_graph_path);
         if( !boost::filesystem::exists(output_seq_graph_path_boost) )
             add_directory(output_seq_graph_path_boost);
+
         boost::filesystem::path output_seq_graph_result_path_boost(output_seq_graph_result_path);
         //std::cout << "output_seq_graph_result_path " << output_seq_graph_result_path << std::endl;
         if( !boost::filesystem::exists(output_seq_graph_result_path_boost) )
@@ -158,11 +166,6 @@ struct Local_files {    //"/test_data"
         boost::filesystem::path eval_dir_path_boost(eval_dir_path);
         if( !boost::filesystem::exists(eval_dir_path_boost) )
             add_directory(eval_dir_path_boost);
-
-
-        boost::filesystem::path node_structs_info_path_boost(node_structs_info_path);
-        if( !boost::filesystem::exists(node_structs_info_path_boost) )
-            add_directory(node_structs_info_path_boost);
 
         boost::filesystem::path summary_file_path_boost(summary_file_path);
         if( !boost::filesystem::exists(summary_file_path_boost) )
@@ -217,7 +220,9 @@ struct Local_files {    //"/test_data"
 
         single_node_dir = output_seq_graph_path + "/Single_nodes";
 
-        node_structs_info_path = output_path + "/nodes_struct_files";
+        timing_path = output_path + "/Shannon.timing";
+        overwirte_a_file(timing_path);
+
 
         // prepare dir and files
         boost::filesystem::path output_path_boost(output_path);
@@ -233,10 +238,6 @@ struct Local_files {    //"/test_data"
         if( !boost::filesystem::exists(eval_dir_path_boost) )
             add_directory(eval_dir_path_boost);
 
-        boost::filesystem::path node_structs_info_path_boost(node_structs_info_path);
-        if( !boost::filesystem::exists(node_structs_info_path_boost) )
-            add_directory(node_structs_info_path_boost);
-
         boost::filesystem::path summary_file_path_boost(summary_file_path);
         if( !boost::filesystem::exists(summary_file_path_boost) )
             add_directory(summary_file_path_boost);
@@ -244,6 +245,11 @@ struct Local_files {    //"/test_data"
         add_directory_if_not_exist(algo_input);
 
         //std::cout << "finish add output path" << std::endl;
+    }
+
+    void update_output_file_tree(std::string output_root_path)
+    {
+
     }
 
     // dir path
@@ -296,7 +302,8 @@ struct Local_files {    //"/test_data"
     std::string eval_dir_path;
     std::string filtered_contig;
     std::string unfiltered_length_reconst_seq;
-    std::string node_structs_info_path;
+
+    std::string timing_path;
 
     std::string start_time;
     std::string end_time;

@@ -2,72 +2,6 @@
 
 Block_timer timer;
 
-void produce_summary_file(Shannon_C_setting * setting, int desiredTest)
-{
-    struct Local_files & lf = setting->local_files;
-    lf.summary_file_path = lf.summary_file_path + "/summary_task_" + std::to_string(desiredTest)+ "_" + lf.start_time;
-    std::ofstream writer(lf.summary_file_path);
-    writer << "run task  " <<  desiredTest << std::endl;
-    writer << "start at  " <<  lf.start_time << std::endl;
-    writer << "finish at " <<  lf.end_time << std::endl;
-    writer << "Notes: " << std::endl;
-    //writer << setting->notes << std::endl;
-    writer << std::endl;
-
-    uint64_t num_output_seq = get_num_seq(lf.reconstructed_seq_path);
-    size_t output_seq_size = std::ceil(get_filesize(lf.reconstructed_seq_path)/1024.0/1024.0);
-    uint64_t num_reference_seq = get_num_seq(lf.reference_seq_path);
-    size_t reference_seq_size = std::ceil(get_filesize(lf.reference_seq_path)/1024.0/1024.0);
-    std::vector<std::string> py_summaries;
-    std::string num_correct_seq = get_py_eval_summary(lf, py_summaries);
-
-    int num_single_seq, num_contig_seq, num_sf_seq;
-    count_seq_types_num(lf.reconstructed_seq_path,
-                    num_single_seq, num_contig_seq, num_sf_seq);
-    int align_num_single_seq, align_num_contig_seq, align_num_sf_seq;
-    int num_single_contribute, num_contig_contribute, num_sf_contribute;
-    int total_align = eval_align_counts(lf.eval_path + "_align" ,
-                align_num_single_seq, align_num_contig_seq, align_num_sf_seq,
-                num_single_contribute, num_contig_contribute,
-                num_sf_contribute);
-    int total_contribute = num_single_contribute+
-                            num_contig_contribute+num_sf_contribute;
-
-
-
-    int one_l = 1;
-    writer << "               " << "aligned" << "\t|\t" << "output" << "\t|\t" << "percentage right" <<std::endl;
-    writer << "total seq      " << total_align << "\t|\t" << num_output_seq
-           << " (" << total_contribute << ")" << "\t|\t"
-           << total_contribute*100/(std::max((uint64_t)1, num_output_seq))<<std::endl;
-    writer << "single seq     " << align_num_single_seq << "\t|\t" << num_single_seq
-           << " (" << num_single_contribute << ")" << "\t|\t"
-           << num_single_contribute*100/(std::max(one_l, num_single_seq)) <<std::endl;
-    writer << "contig seq     " << align_num_contig_seq << "\t|\t" << num_contig_seq
-           << " (" << num_contig_contribute << ")"
-           <<  "\t|\t" << num_contig_contribute*100/(std::max(one_l, num_contig_seq))<<std::endl;
-    writer << "sf seq         " << align_num_sf_seq << "\t|\t" << num_sf_seq
-           << " (" << num_sf_contribute << ")"
-           <<  "\t|\t" << num_sf_contribute*100/(std::max(one_l, num_sf_seq))<<std::endl;
-    writer << "output_seq_size    " << output_seq_size << " MiB" << std::endl;
-    writer << std::endl;
-
-    writer << "num_reference_seq  " << num_reference_seq << std::endl;
-    writer << "reference_seq_size " << reference_seq_size << " MiB" << std::endl;
-    writer << std::endl;
-
-    for(int i=0; i<py_summaries.size();i++ )
-        writer << py_summaries[i] << std::endl;
-
-    std::string setting_str = get_setting_string(*setting);
-    writer << std::endl;
-    writer << setting_str << std::endl;
-    writer.close();
-
-    std::string print_summary_cmd("cat " + lf.summary_file_path);
-    run_command(print_summary_cmd, false);
-}
-
 void set_stack_limit()
 {
     const rlim_t kStackSize = 1024 * 1024 * 1024;   // min stack size = 16 MB
@@ -123,26 +57,8 @@ void run_entire(int argc, char** argv)
 
 }
 
-void run_custom(int argc, char** argv)
+void run_custom(int argc, char** argv, std::string setting_path)
 {
-    if(argc != 3)
-    {
-        shc_log_error("usage: ./Shannon_C_seq custom setting_file_name\n");
-        exit(1);
-    }
-
-    std::string setting_file_name(argv[2]);
-    boost::filesystem::path base_path = boost::filesystem::current_path();
-    std::string base_path_str(base_path.c_str());
-    //("/shannon_C_setting.txt");
-    std::string setting_path = base_path_str + "/" + setting_file_name;
-    std::cout << "setting_path " << setting_path << std::endl;
-    if(!boost::filesystem::exists(setting_path))
-    {
-        shc_log_error("No such file: %s\n", setting_path.c_str());
-        exit(1);
-    }
-
     int desiredTest = -1;
     while(desiredTest<0 || desiredTest>21)
     {
@@ -177,12 +93,20 @@ void run_custom(int argc, char** argv)
     memcpy(shc_logname, setting.local_files.log_filename_path.c_str(),
                                         setting.local_files.log_filename_path.size());
 
-    print_setting(setting);
-    log_setting(setting);
+    info_log_info(setting.local_files.timing_path.c_str(), "Command line Inputs\n");
+    std::string cmd;
+    for(int i=0; i<argc; i++)
+    {
+        std::string sub_cmd = argv[i];
+        cmd += sub_cmd + " ";
+    }
+    info_log_info(setting.local_files.timing_path.c_str(), "%s\n\n", cmd.c_str());
+    info_log_info(setting.local_files.timing_path.c_str(), "Desired test: %d\n\n", desiredTest);
+
+    print_and_log_all_setting(setting);
 
     std::string log_suffix = "test" + desiredTest;
     setting.local_files.log_filename_path += log_suffix;
-
 
     shc_log_info(shc_logname, "Shannon C is starting\n");
     switch(desiredTest){
@@ -255,7 +179,7 @@ void run_custom(int argc, char** argv)
         default:
             break;
     }
-    produce_summary_file(&setting, desiredTest);
+
     return;
 }
 
@@ -318,19 +242,20 @@ void test_assigning_reads_and_kmers(Shannon_C_setting * setting)
     graph_handler.load_data_and_partition_reads();
     Block_timer timer;
     start_timer(&timer);
-    add_or_overwrite_directory(lf->output_components_read_dir);
+    add_or_overwrite_directory(lf->output_components_read_dir, lf->output_path);
     if(setting->has_single)
         graph_handler.assign_reads_to_components_mmap(setting->local_files.input_read_path);
     if(setting->has_pair)
     {
-        std::cout << "process pair end " << std::endl;
+        //std::cout << "process pair end " << std::endl;
         graph_handler.assign_paired_read_to_components_mmap(
                             setting->local_files.input_read_path_1,
                             setting->local_files.input_read_path_2);
     }
 
-    std::cout << "finish assign_reads_to_components with mmap" << std::endl;
-    stop_timer(&timer);
+    //std::cout << "finish assign_reads_to_components with mmap" << std::endl;
+    //stop_timer(&timer);
+    add_or_overwrite_directory(lf->output_components_kmer_dir, lf->output_path);
     graph_handler.assign_kmer_to_components();
 }
 
@@ -431,23 +356,23 @@ void test_all(Shannon_C_setting * setting)
 
         kmer_handler.run_kmer_handler();
 
-        std::cout << "start dump filtered kmer" << std::endl;
+        //std::cout << "start dump filtered kmer" << std::endl;
         Block_timer kmer_dump_timer;
         start_timer(&kmer_dump_timer);
         kmer_handler.dump_kmers_with_info_to_file(lf->output_kmer_path);
         shc_log_info(shc_logname, "finish dump filtered kmer\n");
         log_stop_timer(&kmer_dump_timer);
-        std::cout << "finish dump filtered kmer" << std::endl;
-        stop_timer(&kmer_dump_timer);
+        //std::cout << "finish dump filtered kmer" << std::endl;
+        //stop_timer(&kmer_dump_timer);
 
-        std::cout << "start dump contig" << std::endl;
+        //std::cout << "start dump contig" << std::endl;
         Block_timer contig_dump_timer;
         start_timer(&contig_dump_timer);
         contig_handler.dump_all_contig(lf->output_contig_path);
         shc_log_info(shc_logname, "finish dump contig\n");
         log_stop_timer(&contig_dump_timer);
-        std::cout << "finish dump contig" << std::endl;
-        stop_timer(&contig_dump_timer);
+        //std::cout << "finish dump contig" << std::endl;
+        //stop_timer(&contig_dump_timer);
         //kmer_handler.clear_kmer_map();
     }
     // reload everything just to free memory
@@ -741,8 +666,6 @@ void test_seq_graph(Shannon_C_setting * setting)
     std:: cin >> comp_i;
     Sequence_graph_handler seq_graph_handler(*setting);
 
-    pthread_mutex_t write_lock_ptr = PTHREAD_MUTEX_INITIALIZER;
-
     seq_graph_handler.run_it(comp_i, true);
     /*
     Sequence_graph_handler seq_graph_handler(*setting);
@@ -914,7 +837,7 @@ void test_pair_read_contig_graph(Shannon_C_setting * setting)
 void test_load_dump(Shannon_C_setting * setting)
 {
     Local_files * lf = &setting->local_files;
-    print_local_file_system(lf);
+    print_and_log_local_file_system(lf);
     std::string kmer_back_file((lf->output_kmer_path) + "_re");
     std::string contig_back_file((lf->output_contig_path) + "_re");
     Kmer_handler kmer_handler(lf);
@@ -964,6 +887,9 @@ void test_Contig_graph(Shannon_C_setting * setting)
 {
     Block_timer main_timer;
     start_timer(&main_timer);
+
+    run_jellyfish(*setting);
+
     Duplicate_setting & dup = setting->dup_setting;
     Local_files * lf = &setting->local_files;
 
@@ -974,23 +900,23 @@ void test_Contig_graph(Shannon_C_setting * setting)
 
         kmer_handler.run_kmer_handler();
 
-        std::cout << "start dump filtered kmer" << std::endl;
+        //std::cout << "start dump filtered kmer" << std::endl;
         Block_timer kmer_dump_timer;
         start_timer(&kmer_dump_timer);
         kmer_handler.dump_kmers_with_info_to_file(lf->output_kmer_path);
         shc_log_info(shc_logname, "finish dump filtered kmer\n");
         log_stop_timer(&kmer_dump_timer);
-        std::cout << "finish dump filtered kmer" << std::endl;
-        stop_timer(&kmer_dump_timer);
+        //std::cout << "finish dump filtered kmer" << std::endl;
+        //stop_timer(&kmer_dump_timer);
 
-        std::cout << "start dump contig" << std::endl;
+        //std::cout << "start dump contig" << std::endl;
         Block_timer contig_dump_timer;
         start_timer(&contig_dump_timer);
         contig_handler.dump_all_contig(lf->output_contig_path);
         shc_log_info(shc_logname, "finish dump contig\n");
         log_stop_timer(&contig_dump_timer);
-        std::cout << "finish dump contig" << std::endl;
-        stop_timer(&contig_dump_timer);
+        //std::cout << "finish dump contig" << std::endl;
+        //stop_timer(&contig_dump_timer);
     }
     // Getting graph be partitioned
 

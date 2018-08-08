@@ -18,7 +18,16 @@
 #include "log.h"
 
 struct Duplicate_setting {
-    Duplicate_setting() {}
+    Duplicate_setting()
+    {
+        rmer_length = 15;
+        load_factor = 0.8;
+        num_sort_thread = 1;
+        threshold = 0.5;
+        min_count = 3;
+        min_len = 75;
+        is_use_set = false;
+    }
     Duplicate_setting(uint8_t rmer_length_, double threshold_,
            kmer_count_t min_count_, size_t min_len_, bool is_use_set_,
            double load_factor_, int num_sort_thread_):
@@ -50,7 +59,12 @@ struct Duplicate_setting {
 };
 
 struct Contig_graph_setup {
-    Contig_graph_setup () {}
+    Contig_graph_setup ()
+    {
+        num_test = 3;
+        is_assign_best = true;
+        read_sampler_k = 0;
+    }
     Contig_graph_setup(int num_test_, bool is_assign_best_, int read_sampler_k_) :
                        num_test(num_test_), is_assign_best(is_assign_best_),
                        read_sampler_k(read_sampler_k_) {}
@@ -67,7 +81,17 @@ struct Contig_graph_setup {
 };
 
 struct Metis_setup {
-    Metis_setup() {}
+    Metis_setup()
+    {
+        is_multiple_partition = true;
+        partition_size = 500;
+        non_partition_size = 500;
+        penalty = 5;
+        overload = 2;
+        inMem = 0;
+        ncon = 1;
+        memset(options, 0, METIS_NOPTIONS);
+    }
     Metis_setup(bool imp, idx_t partition_size_, real_t overload_, idx_t penalty_,
                 idx_t non_partition_size_):
             is_multiple_partition(imp), partition_size(partition_size_),
@@ -148,49 +172,54 @@ struct Output_setup {
     bool kmer_to_component;
 };
 
-struct Multi_graph_setup {
-    Multi_graph_setup () {}
-    Multi_graph_setup(int num_parallel_, int max_hop_pair_,
+struct Seq_graph_setup {
+    Seq_graph_setup ()
+    {
+        max_hop_pair = 0;
+        max_hop_path = 30;
+        mate_pair_len = 300;
+    }
+    Seq_graph_setup(int max_hop_pair_,
                       int max_hop_path_,
                       int mate_pair_len_) :
-                    num_parallel(num_parallel_), max_hop_pair(max_hop_pair_),
+                    max_hop_pair(max_hop_pair_),
                     max_hop_path(max_hop_path_),
                     mate_pair_len(mate_pair_len_) {}
 
-    void set_para(int num_parallel_, int max_hop_pair_,
+    void set_para(int max_hop_pair_,
                   int max_hop_path_,
                   int mate_pair_len_)
     {
-        num_parallel = num_parallel_;
         max_hop_pair = max_hop_pair_;
         max_hop_path = max_hop_path_;
         mate_pair_len = mate_pair_len_;
     }
 
-    int num_parallel;
     int max_hop_pair;
     int max_hop_path;
     int mate_pair_len;
 };
 
 struct Sparse_flow_setup {
-    Sparse_flow_setup () {multiple_test=1;sf_num_parallel=1;}
-    Sparse_flow_setup (int multiple_test_, int sf_num_parallel_):
-            multiple_test(multiple_test_), sf_num_parallel(sf_num_parallel_) {}
-    void set_para(int multiple_test_, int sf_num_parallel_)
+    Sparse_flow_setup ()
+    {
+        multiple_test = 8;
+    }
+    Sparse_flow_setup (int multiple_test_):
+            multiple_test(multiple_test_) {}
+    void set_para(int multiple_test_)
     {
         multiple_test = multiple_test_;
-        sf_num_parallel = sf_num_parallel_;
     }
     int multiple_test;
-    int sf_num_parallel;
 };
 
 struct Shannon_C_setting {
     Shannon_C_setting () :
             kmer_length(0), single_read_length(0), pair_1_read_length(0),
             pair_2_read_length(0), has_single(false), has_pair(false),
-            is_double_stranded(true), is_compress(false) {}
+            is_double_stranded(true), is_compress(false), num_parallel(1),
+            take_single_node_seq(true), take_contig_seq(true){}
 
     bool has_single;
     uint8_t kmer_length;
@@ -203,8 +232,12 @@ struct Shannon_C_setting {
     bool is_double_stranded;
     bool is_compress;
 
-    bool filter_single;
-    bool filter_paired;
+    //bool filter_single;
+    //bool filter_paired;
+    bool take_single_node_seq;
+    bool take_contig_seq;
+
+    int num_parallel;
 
     int output_seq_min_len;
 
@@ -217,13 +250,36 @@ struct Shannon_C_setting {
 
     Output_setup output_setup;
 
-    Multi_graph_setup multi_graph_setup;
+    Seq_graph_setup seq_graph_setup;
 
     Sparse_flow_setup sparse_flow_setup;
 };
 
+
+
 std::string get_setting_string(Shannon_C_setting & setting);
 void parser_setting_file(std::string & file_path, Shannon_C_setting & setting);
+void print_and_log_all_setting(Shannon_C_setting & setting);
 void print_setting(Shannon_C_setting & setting);
 void log_setting(Shannon_C_setting & setting);
+void print_and_log_general_setting(Shannon_C_setting & setting);
+void print_and_log_partition_setting(Shannon_C_setting & setting);
+void print_and_log_multi_graph_setting(Shannon_C_setting & setting);
+void print_and_log_mb_setting(Shannon_C_setting & setting);
+void print_and_log_sf_setting(Shannon_C_setting & setting);
+void print_and_log_general_setting(Shannon_C_setting & setting);
+void print_and_log_partition_setting(Shannon_C_setting & setting);
+void print_and_log_general_setting(Shannon_C_setting & setting);
+void print_and_log_multi_graph_setting(Shannon_C_setting & setting);
+void print_and_log_mb_setting(Shannon_C_setting & setting);
+void print_and_log_sf_setting(Shannon_C_setting & setting);
+void print_and_log_kmer_strand_setting(Shannon_C_setting & setting);
+void print_and_log_input_path_setting(Shannon_C_setting & setting);
+void print_and_log_read_length_setting(Shannon_C_setting & setting);
+void print_and_log_kmer_strand_setting(Shannon_C_setting & setting);
+void print_and_log_output_setting(Shannon_C_setting & setting);
+
+
+
+
 #endif	/* JSON_PARSER_H */

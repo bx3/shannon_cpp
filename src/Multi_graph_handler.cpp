@@ -24,7 +24,7 @@ int Multi_graph_handler::count_num_component_seq_graph()
     int kmer_counter = count_num_files(kmer_path);
     //assert(read_counter==kmer_counter);
     num_comp = kmer_counter;
-    std::cout << "number of component for seq graph is " << num_comp << std::endl;
+    std::cout << "number of component for multi-bridge is " << num_comp << std::endl;
     return num_comp;
 }
 
@@ -92,10 +92,9 @@ void Multi_graph_handler::run_multi_seq_graph()
     struct Block_timer msq_timer;
 
     start_timer(&msq_timer);
-    std::cout << "start multibridge" << std::endl;
     check_if_required_files_exist();
 
-    int num_parallel = setting.multi_graph_setup.num_parallel;
+    int num_parallel = setting.num_parallel;
     int num_comp_for_seq = get_num_components_seq_graph();
     if(num_parallel > num_comp_for_seq)
         num_parallel = num_comp_for_seq;
@@ -161,31 +160,51 @@ void Multi_graph_handler::combine_sf_single_seq_output()
 
 void Multi_graph_handler::combine_all_reconst_seq_to_output()
 {
-    std::string seq_out_single(setting.local_files.reconstructed_single_path);
-    if(!boost::filesystem::exists(seq_out_single))
-    {
-        std::cerr << "multibridge output single nodes file [reconstructed_seq.fasta_single] does not exist\n";
-        exit(0);
-    }
+    std::string single_seq = " ";
+    std::string contig_seq = " ";
+    //must have sparse flow output, even it is empty
     if(!boost::filesystem::exists(setting.local_files.reconstructed_sf_path))
     {
         std::cerr << "sparse flow output file [reconstructed_seq.fasta_sf] does not exist\n";
         exit(0);
     }
-    if(!boost::filesystem::exists(setting.local_files.filtered_contig))
+
+    // just leave
+    if(!setting.take_single_node_seq && !setting.take_contig_seq)
     {
-        std::cerr << "filtered contig output file [contig_filtered.fasta] does not exist\n";
-        exit(0);
+        std::string msg("Only take sparse flow output as final output");
+        print_important_notice(msg);
+        std::string cmd("cp " + setting.local_files.reconstructed_sf_path + " " +
+                         setting.local_files.reconstructed_seq_path);
+        run_command(cmd, true);
+        return;
     }
 
+    if(setting.take_single_node_seq)
+    {
+        single_seq = setting.local_files.reconstructed_single_path;
+        if(!boost::filesystem::exists(single_seq))
+        {
+            std::cerr << "multibridge output single nodes file [reconstructed_seq.fasta_single] does not exist\n";
+            exit(0);
+        }
+    }
+    if(setting.take_contig_seq)
+    {
+        contig_seq = setting.local_files.filtered_contig;
+        if(!boost::filesystem::exists(setting.local_files.filtered_contig))
+        {
+            std::cerr << "filtered contig output file [contig_filtered.fasta] does not exist\n";
+            exit(0);
+        }
+    }
 
-    std::string cmd("cat  " + seq_out_single+ " " +
+    std::string cmd("cat  " + single_seq + " " +
                      setting.local_files.reconstructed_sf_path + " " +
-                     setting.local_files.filtered_contig);
+                     contig_seq);
     cmd += " > ";
     cmd += setting.local_files.reconstructed_seq_path;
     run_command(cmd, true);
-
 }
 
 // specific comp set to be -1 for all comp
@@ -195,7 +214,7 @@ void Multi_graph_handler::run_multi_sparse_flow(int specific_comp)
     start_timer(&msf_timer);
     std::cout << "start multi-thread sparse flow" << std::endl;
 
-    int num_parallel = setting.sparse_flow_setup.sf_num_parallel;
+    int num_parallel = setting.num_parallel;
     int num_comp_parse_flow = get_num_components_sparse_flow();
     process_sparse_flow_graph(num_parallel, num_comp_parse_flow, specific_comp);
     //exit(0);
@@ -660,12 +679,12 @@ find_representatives(std::string in_file, std::string output_file)
     std::ifstream file_reader(in_file);
     uint64_t num_seq;
 
-    if(exist_path(setting.local_files.reconstructed_seq_path+ "_unfiltered"))
-        num_seq = get_num_seq(setting.local_files.reconstructed_seq_path+ "_unfiltered");
+    if(exist_path(in_file))
+        num_seq = get_num_seq(in_file);
     else
         num_seq = get_num_seq(setting.local_files.reconstructed_seq_path);
 
-    int ave_read_length = 0;
+    int ave_read_length = 100;
     if(setting.has_single && !setting.has_pair)
         ave_read_length = setting.single_read_length;
     else if(!setting.has_single && setting.has_pair)
@@ -693,24 +712,31 @@ find_representatives(std::string in_file, std::string output_file)
         }
         else
         {
-            seqs.push_back(line);
-            for(uint64_t i=0; i<line.size()-rmer_length+1; i++)
+            if(line.size() > setting.output_seq_min_len)
             {
-                encode_kmer(&line.at(i), &byte, rmer_length);
-                Seq_info seq_info(contig_num, i);
-                Rmer_contig_map_iterator it = rmer_contig_map.find(byte);
-                if(it != rmer_contig_map.end())
+                seqs.push_back(line);
+                for(uint64_t i=0; i<line.size()-rmer_length+1; i++)
                 {
-                    (it.value()).push_back(seq_info);
+                    encode_kmer(&line.at(i), &byte, rmer_length);
+                    Seq_info seq_info(contig_num, i);
+                    Rmer_contig_map_iterator it = rmer_contig_map.find(byte);
+                    if(it != rmer_contig_map.end())
+                    {
+                        (it.value()).push_back(seq_info);
+                    }
+                    else
+                    {
+                        std::vector<Seq_info> vec_seq(1, seq_info);
+                        vec_seq.reserve(VEC_INIT_SIZE);
+                        rmer_contig_map.insert(std::make_pair(byte, vec_seq));
+                    }
                 }
-                else
-                {
-                    std::vector<Seq_info> vec_seq(1, seq_info);
-                    vec_seq.reserve(VEC_INIT_SIZE);
-                    rmer_contig_map.insert(std::make_pair(byte, vec_seq));
-                }
+                contig_num++;
             }
-            contig_num++;
+            else
+            {
+                headers.pop_back();
+            }
         }
     }
     file_reader.close();
@@ -863,6 +889,7 @@ duplicate_check_ends(std::vector<std::string> & seqs, uint64_t header, bool rc)
 //Flags is '-q --fr' for fastq and forward-reverse
 void Multi_graph_handler::filter_FP(std::string reconstructed_seq_path)
 {
+    /*
     if(setting.has_pair && setting.filter_paired)
     {
         shc_log_info(shc_logname, "start filter_FP\n");
@@ -910,14 +937,14 @@ void Multi_graph_handler::filter_FP(std::string reconstructed_seq_path)
 
         write_filtered_tr(output_sam_depth, reconstructed_seq_path,
                           filter_FP_output, filter_FP_log);
-        /*
-        std::string save_org_cmd("mv " + reconstructed_seq_path + " " +
-                                 fp_dir + "/reconstructed_org.fasta");
-        run_command(save_org_cmd, true);
-        std::string rename_new_seq_cmd("mv " + filter_FP_output + " " +
+
+        //std::string save_org_cmd("mv " + reconstructed_seq_path + " " +
+        //                         fp_dir + "/reconstructed_org.fasta");
+        //run_command(save_org_cmd, true);
+        //std::string rename_new_seq_cmd("mv " + filter_FP_output + " " +
                                        reconstructed_seq_path);
-        run_command(rename_new_seq_cmd, true);
-        */
+        //run_command(rename_new_seq_cmd, true);
+
         exit(0);
 
     }
@@ -927,6 +954,7 @@ void Multi_graph_handler::filter_FP(std::string reconstructed_seq_path)
                   << "in config file set to false. So skip filter false positive "
                   << "with Hisat" << std::endl;
     }
+    */
 }
 
 void Multi_graph_handler::

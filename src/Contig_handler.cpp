@@ -10,7 +10,6 @@ void Contig_handler::dump_all_contig(std::string & filename)
                                            filename.c_str());
     int reminder_bases_num = 0;
     std::ofstream outfile (filename.c_str());
-    std::cout <<"number of contig is " <<num_contig << std::endl;
     char four_base[4];
     //first line is about the size of contig
     if(is_use_compress)
@@ -20,37 +19,55 @@ void Contig_handler::dump_all_contig(std::string & filename)
 
     outfile << contig_list.size() << std::endl;
     int j = 0;
-    for(int i=0; i<num_contig; i++)
-    {
-        outfile << ">Contig_"<< (j++) << "\t" << (int)mean_count[i] << std::endl;
-        // -1 since exclusive at the end
-        //shc_log_info(shc_logname, "delimitor.at(i) : %d\n",delimitor.at(i));
-        //shc_log_info(shc_logname, "delimitor.at(i+1) : %d\n",delimitor.at(i+1));
 
-        for(int j=delimitor.at(i); j<delimitor.at(i+1); j++)
+    {
+        std::string message = "Dumping " + std::to_string(num_contig)
+                               +  " contig into file\n";
+        Progress_bar progress{std::cout, 70u, message};
+        uint64_t progress_step = num_contig/100;
+
+        uint64_t num_contig_processed = 0;
+
+        for(int i=0; i<num_contig; i++)
         {
-            if(is_use_compress)
+            outfile << ">Contig_"<< (j++) << "\t" << (int)mean_count[i] << std::endl;
+            // -1 since exclusive at the end
+            //shc_log_info(shc_logname, "delimitor.at(i) : %d\n",delimitor.at(i));
+            //shc_log_info(shc_logname, "delimitor.at(i+1) : %d\n",delimitor.at(i+1));
+
+            for(int j=delimitor.at(i); j<delimitor.at(i+1); j++)
             {
-                if(contig_len_list[i]%FOUR_BASE==0 || j<delimitor.at(i+1)-1)
+                if(is_use_compress)
                 {
-                    decode(contig_list.at(j), FOUR_BASE, four_base);
-                    for(int k=0; k<FOUR_BASE; k++)
-                        outfile << four_base[k];
-                }
-                else
-                {
-                    reminder_bases_num = contig_len_list[i]%FOUR_BASE;
-                    decode(contig_list.at(j), reminder_bases_num, four_base);
-                    for(int k=0; k<reminder_bases_num; k++)
-                        outfile << four_base[k];
-                }
-           }
-           else
-           {
-                outfile << contig_list[j];
-           }
+                    if(contig_len_list[i]%FOUR_BASE==0 || j<delimitor.at(i+1)-1)
+                    {
+                        decode(contig_list.at(j), FOUR_BASE, four_base);
+                        for(int k=0; k<FOUR_BASE; k++)
+                            outfile << four_base[k];
+                    }
+                    else
+                    {
+                        reminder_bases_num = contig_len_list[i]%FOUR_BASE;
+                        decode(contig_list.at(j), reminder_bases_num, four_base);
+                        for(int k=0; k<reminder_bases_num; k++)
+                            outfile << four_base[k];
+                    }
+               }
+               else
+               {
+                    outfile << contig_list[j];
+               }
+            }
+            outfile << std::endl;
+
+            num_contig_processed++;
+            if(num_contig_processed%progress_step ==0)
+            {
+                double percentage = static_cast<double>(num_contig_processed) /
+                                    static_cast<double>(num_contig);
+                progress.write(percentage);
+            }
         }
-        outfile << std::endl;
     }
     shc_log_info(shc_logname, "Finish Dumping all contigs into file\n");
     outfile.close();
@@ -115,10 +132,9 @@ void Contig_handler::load_contig_file(std::string & filename)
     //print_contig_length();
     //print_contig(0);
 
-#ifdef SHOW_PROGRESS
-    std::cout << "Finish contig loading, ";
-    stop_timer(&ch_timer);
-#endif
+    //std::cout << "Finish contig loading, ";
+    //stop_timer(&ch_timer);
+
     fileReader.close();
     shc_log_info(shc_logname, "Finish reading contig %u from the file\n",
                                                 num_contig);

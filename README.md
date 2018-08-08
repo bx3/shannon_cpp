@@ -1,10 +1,6 @@
 # Shannon C++ RNA sequencing
 
-This is a **C++** implementatin for the work **ShannonRNA: an Information-Optimal de Novo RNA-Seq Assembler**.  
-
-A **python** implementation can be found at *http://sreeramkannan.github.io/Shannon/*, which served as a foundation for the current **C++** implementation.  
-
-However, this C++ version significantly improves both time and memory efficiency, roughly 10x, so you would prefer using this one.
+This is a **C++** implementatin for the work **ShannonRNA: an Information-Optimal de Novo RNA-Seq Assembler**.  A **python** implementation can be found at *http://sreeramkannan.github.io/Shannon/*, which served as a foundation for the current **C++** implementation. However, this C++ version significantly improves both time and memory efficiency, roughly 10x, so you would prefer using this one.
 
 ## Content
 - [Prerequisites](#prerequisites)
@@ -23,10 +19,9 @@ However, this C++ version significantly improves both time and memory efficiency
 ### Prerequisites
 
 * ubuntu 15.10 or higher
-* C++ 11
+* g++
 
 ### Installing
-
 * Install METIS
 	* sudo apt-get install libmetis-dev
 	* OR follow instructions from [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/download) .
@@ -36,7 +31,7 @@ However, this C++ version significantly improves both time and memory efficiency
 	* follow instrctions from [JellyFish](http://www.cbcb.umd.edu/software/jellyfish/) 
 * Install boost library (May be the most painful part if you have an old one on system, cmake might not link properly)
 	* follow instruction from [boost](http://www.boost.org/doc/libs/1_66_0/more/getting_started/unix-variants.html)
-	* ~~sudo apt-get install libboost-all-dev~~, since it would install an older, which would not compile
+	* ~~sudo apt-get install libboost-all-dev~~, since it would install an older version, which would not compile
 	* remember to install the non-header part of boost. This implementation needs
 		* Boost.ProgramOptions
 		* Boost.Filesystem 
@@ -48,30 +43,145 @@ However, this C++ version significantly improves both time and memory efficiency
 	* follow instructions from [google sparsehash](https://github.com/sparsehash/sparsehash)
 * hopscotch -- https://github.com/Tessil/hopscotch-map (already included in the repo, no action needed)
 * Download sparsepp -- https://github.com/greg7mdp/sparsepp
-	* download from link above, extract and place the whole files in the CMakeLists.txt directory
+	* download from link above, extract and place the whole files in the directory where CMakeLists.txt resides
 
-* After all, type in the directory of CMakeLists.txt file
-	1. cmake .
-	2. make
+* After all, go to CMakelist.txt directory and type
+```
+    cmake .
+    make
+```
 	
+## Input requirement
+* For noisy input reads, Rcorrector is recommanded prior to Shannon processing
+    https://github.com/mourisl/Rcorrector
+* Input can take a single-ended FASTA file or a pair-ended FASTA file or BOTH.
+* all reads needs to be single-lined fasta file (multiline not supported)
+```
+Should look like this
+>ABC
+AGTGCGGCTTTCGTATTTGCTGCTCGTGTTTACTCTCACAAACTTGACCTGCACGCCAAAGAGATGCTTCTTGTGGAACTCGACA
+>ABC2
+AGTGCGGCTTTCGTATTTGCTGCTCGTGTTTACTCTCACAAACTTGACCTGCACGCCAAAGAGATGCTTCTTGTGGAACTCGACA
+...
+```
+```
+Instead of
+>ABC
+AGTGCGGCTTTCGTATTTGCTGCTCGTGTTTACTCTC
+ACAAACTTGACCTGCACGCCAAAGAGATGCTTCTTGT
+GGAACTCGACA
+>ABC2
+AGTGCGGCTTTCGTATTTGCTGCTCGTGTTTACTCTC
+ACAAACTTGACCTGCACGCCAAAGAGATGCTTCTTGT
+GGAACTCGACA
+...
+```
+* Some useful command for converting fastq to fasta at https://gif.biotech.iastate.edu/converting-fastq-fasta
+
 
 ## Getting Started
-* Example, there is a single ended read (at dir single_read_path) with read length 100, save it to ouput_path to 
-* Try to run command with absolute paths
-* **./Shannon_RNASeq_Cpp shannon -l default_setting -k 25 -l 100 -s single_read_path -o output_path**
+* Download and install according to Installing section above. After installation, compile and run executable **Shannon_D_RNA_seq** with following options
+```
+Usage: Shannon_D_RNA_seq <CMD> arguments
 
-## Input requirement
-* Input either single-ended or pair-ended need to be FASTA format.
-* useful SED command: sed -n '1~4s/^@/>/p;2~4p' in.fastq > out.fasta
-* all reads needs to be formatted as following:
-* header-info \n
-* seq \n
-* Hence there should be only two lines for a single record
+shannon             run entire Shannon procedures
+partition           run component partitions algorithm
+multi-graph         run multibridge or sparse-flow or both on all components 
+multi-bridge        run multibridge algorithm for one component
+sparse-flow         run sparse-flow algorithm for one component
+find-rep            Reduce redundant reconstructed transcripts after sparse-flow
+ref-align           Align to reference file, and generate an evaulation file
+custom              use json configuration file
+
+Usage: Shannon_D_RNA_seq <CMD> --help to see options
+```
+### CMD<shannon>
+Shannon performs denovo transcriptome assembly by first partitioning reads into components, which can be individually run with CMD<partition>. Shannon then builds a de-bruijn graph for each component and runs CMD<multi-bridge> and CMD<sparse-flow> on that graph. To process all components at the same time, CMD<multi-graph> spawns multiple processes to facilitate parallel computing. At this step, Shannon has obtained reconstructed transcriptome and it uses CMD<find-rep> to remove redundancy. After all, CMD<ref-align> is optional, and allows comparison to the *ground true* result with BLAT. 
+The Input to CMD<shannon> takes a large number of raw reads (or Rcorrected reads), and Shannon runs those subcommands and store both intermidiate results and final output at output directory.
+
+For a single-ended fasta read file at **path_to_single_ended_read**, with accepted 101 bases per read, Shannon processes and gives output at **output_path** 
+```
+./Shannon_RNASeq_Cpp shannon -l 101 -s path_to_single_ended_read -o output_path
+```
+
+For pair-ended fasta read file at **path_to_pair_ended_read_1** and **path_to_pair_ended_read_2**, with corresponding accepted **76** and **76** bases per read, Shannon processes and gives output at **output_path**
+```
+./Shannon_RNASeq_Cpp shannon -i 76 76 -p path_to_pair_ended_read_1 path_to_pair_ended_read_2 -o output_path
+```
+
+### CMD<partition>
+Given a large noisy fasta-reads, CMD<partition> performs error correction, and partitions the reads into multiple components. Each component contains two files, a kmer file which holds all error-corrected kmer and read files which selectively include original input reads for that component depending on the partition algorithm. 
+
+```
+./Shannon_RNASeq_Cpp partition -l read_length -s path_to_pair_ended_read_1 -o output_path
+```
+For all components, kmer files are stored together at **output_path/components_kmer**, read files are stored together at **output_path/components_reads**. 
+
+### CMD<multi-bridge>
+Given one component (for example component 2) with kmer-reads pair as its input, it builds a de-bruijn graph using the kmer file. CMD<multi-bridge> then condenses and pre-processes the graph by removing bubbles and suspicuous low abundance leaf nodes. After that it runs multi-bridge algorithm with the graph and the read files, which effectively reduces the number of xnodes within the graph if not all of them. 
+
+```
+./Shannon_RNASeq_Cpp multi-bridge -f path_to_kmer_file -l read_length -s path_to_read_file -o output_path 
+```
+Shannon uses three files for storing a connected graph:
+```
+node0   contains node in topological sorted order, where each node has a numerical ID
+edge0   contains numerical ID pair to indicate a directed edge       
+path0   a list of numerical ID to indicate that a read overlap such path       
+where 0 is a tree component index
+```
+Here an index is introduced, since multi-bridge might break the graph into a forest. So for 10 tree components, 30 files are needed for storing the graph. Therefore For each graph component, three directories are used for storing such graph
+```
+output_path/comp_graph/Graph_edges_2/node(0,1,...,n)          
+output_path/comp_graph/Graph_nodes_2/edge(0,1,...,n)                    
+output_path/comp_graph/Graph_paths_2/path(0,1,...,n)          
+where 2 is a graph component index
+```
+
+### CMD<sparse-flow>
+CMD<sparse-flow> takes node,edge,path files as its inputs (for example node0,edge0,path0 ), then build a de-bruijn graph to run sparse flow algorithm. It generates reconstructed transcriptome.
+
+```
+./Shannon_RNASeq_Cpp sparse-flow --node_path path_to_node --edge_path path_to_edge --path_path path_to_path --output_path output_fasta_path
+```
+
+### CMD<multi-graph>
+CMD<multi-graph> processes multiple components at the same time, use **-t** to specify the number of process where each process contains two threads, hence **-t 2** would allow 4 components running at the same time. Three modes are allowd
+```
+multi-bridge    run multi-bridge algorithm on multiple components
+sparse-flow     run sparse-flow algorithm on all output graphs from multi-bridge
+both            run multi-bridge and then sparse-flow on multiple components
+```
+The inputs to **multi-bridge** MODE are kmer-read inputs pair where kmer files for all components are stored together under **kmers_dir**, and all reads stored under **reads_dir**.
+
+```
+./Shannon_RNASeq_Cpp multi-graph multi-bridge -l single_read_length -c kmers_dir -r reads_dir -o output_path -t 1
+```
+The **sparse-flow** MODE, where **graph_dirs** holds all graphs
+```
+./Shannon_RNASeq_Cpp multi-graph sparse-flow -h graph_dirs -o output_path -t 1
+```
+The input to **both** mode is the same as **multi-bridge** MODE
+```
+./Shannon_RNASeq_Cpp multi-graph both -l single_read_length -c kmers_dir -r reads_dir -o output_path -t 1
+```
+
+### CMD<find-rep>
+CMD<find-rep> reduces number of redundant outputs by checking for any two reconstructed contigs, if they has the similar length and both have the same starting r-mer and ending r-mer, where r is set to be 24.
+```
+./Shannon_RNASeq_Cpp find-rep --input path_to_input_fasta_file --output output_fasta_path
+```
+### CMD<ref-align>
+CMD<ref-align> uses BLAT(https://genome.ucsc.edu/FAQ/FAQblat) to do the read alignment. It takes reconstructed transcriptome as its target, and for each reference transcript, it searches for the best match. To qualify for an alignment, the match length must be 90% of the reference length.
+
+```
+./Shannon_RNASeq_Cpp ref-align --input path_to_reconstructed_transcriptome --output_dir output_dir --ref path_to_reference_transcriptome
+```
 
 ## Output file structure
 
 ./  
-* algo_input (when only fasta file is provided, this folder becomes jellyfish output)
+* algo_input (when only fasta file is provided, this directory takes jellyfish output)
 	* kmer.dict
 	* kmer.jf
 * kmer_unfiltered_sorted
@@ -208,3 +318,4 @@ To address the memory issue, two several are defined
 Shannon is distributed under a GPL 3.0 license.
 
 ## Acknowledgments
+

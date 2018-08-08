@@ -22,7 +22,7 @@ void Kmer_handler::run_kmer_handler()
 #endif
 
     start_timer(&kh_timer);
-    std::cout << "start loading jellyfish kmer from input path to dict" << std::endl;
+
     if(build_dict_from_kmer_file() != 0)
     {
         shc_log_error("Error reading kmers\n");
@@ -32,19 +32,10 @@ void Kmer_handler::run_kmer_handler()
     //std::string first_level_filter_kmers = setting.local_files.output_path + "/first_level_filter_kmers";
     //dump_loaded_kmers_to_file(first_level_filter_kmers);
 
-#ifdef SHOW_PROGRESS
-    std::cout << "finish loading jellyfish kmer to dict, ";
-    stop_timer(&kh_timer);
-#endif
-
     start_timer(&kh_timer);
-    std::cout << "start finding contig" << std::endl;
     find_contig();
     log_stop_timer(&kh_timer);
-#ifdef SHOW_PROGRESS
-    std::cout << "Finish find contig, ";
-    stop_timer(&kh_timer);
-#endif
+
 }
 
 void Kmer_handler::load_kmer_into_dict()
@@ -79,52 +70,59 @@ void Kmer_handler::load_kmer_into_dict()
     std::cout << "load_kmer_into_dict reserve " << (num_dict_kmer*1.5)
               << " kmers" << std::endl;
 
-    std::cout << "KMER_LOAD_PROGRSS_STEP " << KMER_LOAD_PROGRSS_STEP << std::endl;
-
-    start_timer(&kh_timer);
-    while(  std::getline(fileReader, kmer_base, '\t') &&
-            std::getline(fileReader, count_s))
     {
-        if(num_kmer_loaded%KMER_LOAD_PROGRSS_STEP ==0)
+        std::string message = "Loading " + std::to_string(num_dict_kmer)
+                            + " kmers into dict\n";
+        Progress_bar progress{std::cout, 70u, message};
+        uint64_t progress_step = num_dict_kmer/100;
+
+        start_timer(&kh_timer);
+        while(  std::getline(fileReader, kmer_base, '\t') &&
+                std::getline(fileReader, count_s))
         {
-            std::cout << "loaded " << num_kmer_loaded << " kmer out of "
-                      << num_kmer <<" kmers, load factor "
-                      << (kmer_counter.load_factor()) <<  std::endl;
-            shc_log_info(shc_logname, "loaded %u kmers out of %u\n",
-                                    num_kmer_loaded, num_dict_kmer);
-            stop_timer(&read_timer);
-            log_stop_timer(&read_timer);
-            start_timer(&read_timer);
+            if(num_kmer_loaded%progress_step ==0)
+            {
+                double percentage = static_cast<double>(num_kmer_loaded) /
+                                    static_cast<double>(num_dict_kmer);
+                progress.write(percentage);
+                shc_log_info(shc_logname, "loaded %u kmers out of %u\n",
+                                        num_kmer_loaded, num_dict_kmer);
+                log_stop_timer(&read_timer);
+                start_timer(&read_timer);
+            }
+
+            //std::cout << "kmer_base " << kmer_base << std::endl;
+            //std::cout << "count_s " << count_s << std::endl;
+            encode_kmer(kmer_base.c_str(), &byte, kmer_length);
+            count = boost::lexical_cast<uint64_t>(count_s);
+            encoded_count = encode_count(count, compress_ratio);
+
+            if(encoded_count > KMER_MAX_COUNT)
+            {
+                shc_log_error("kmer count is too large \n");
+                exit(1);
+            }
+            num_kmer_loaded++;
+
+            kmer_info.count = encoded_count;
+            kmer_counter[byte] = kmer_info;
+
+            //if(setting.is_double_stranded)
+            //{
+            //    num_kmer_loaded++;
+            //    encode_reverse_kmer(kmer_base.c_str(), &byte, kmer_length);
+            //    complement_num(&byte, kmer_length);
+            //    kmer_counter[byte] = kmer_info;
+            //}
+            //std::cout << kmer_base<< " " << contig <<" "<<count <<" "<< info << std::endl;
+            //std::cout << kmer_base<< " " << kmer_counter[byte].contig <<" "
+            //          <<kmer_counter[byte].count <<" "<< kmer_counter[byte].info << std::endl;
         }
-
-        //std::cout << "kmer_base " << kmer_base << std::endl;
-        //std::cout << "count_s " << count_s << std::endl;
-        encode_kmer(kmer_base.c_str(), &byte, kmer_length);
-        count = boost::lexical_cast<uint64_t>(count_s);
-        encoded_count = encode_count(count, compress_ratio);
-
-        if(encoded_count > KMER_MAX_COUNT)
-        {
-            shc_log_error("kmer count is too large \n");
-            exit(1);
-        }
-        num_kmer_loaded++;
-
-        kmer_info.count = encoded_count;
-        kmer_counter[byte] = kmer_info;
-
-        //if(setting.is_double_stranded)
-        //{
-        //    num_kmer_loaded++;
-        //    encode_reverse_kmer(kmer_base.c_str(), &byte, kmer_length);
-        //    complement_num(&byte, kmer_length);
-        //    kmer_counter[byte] = kmer_info;
-        //}
-        //std::cout << kmer_base<< " " << contig <<" "<<count <<" "<< info << std::endl;
-        //std::cout << kmer_base<< " " << kmer_counter[byte].contig <<" "
-        //          <<kmer_counter[byte].count <<" "<< kmer_counter[byte].info << std::endl;
     }
-    std::cout << num_kmer_loaded << " kmer loaded" << std::endl;
+    std::cout.flush();
+    usleep(COUT_BUFFER_FLUSH_SLEEP);
+    std::cout << std::endl;
+    usleep(COUT_BUFFER_FLUSH_SLEEP);
     init_kmer_size = kmer_counter.size();
 #ifdef SHOW_PROGRESS
     std::cout << "Finish kmer without info loading, ";
@@ -153,30 +151,43 @@ void Kmer_handler::dump_kmers_with_info_to_file(std::string & filename)
 
     Block_timer dump_timer;
     start_timer(&dump_timer);
-    uint64_t num_kmer_processed = 0;
-    for (it = kmer_counter.begin(); it != kmer_counter.end(); it++)
-    {
-        if(it->second.used)
-        {
-            decode_kmer(kmer_base, &(it->first), kmer_length);
-            kmer_base[kmer_length] = '\0';
-            outfile << kmer_base << "\t" << it->second.contig
-                                 << "\t" << get_count(it->second.count, compress_ratio)
-                                 << "\t" << (uint16_t)(it->second.info)  << std::endl;
-        }
 
-        if(num_kmer_processed%KMER_LOAD_PROGRSS_STEP ==0)
+    {
+        std::string message = "Dumping " + std::to_string(kmer_counter.size())
+                               +  " kmer with info into file\n";
+        Progress_bar progress{std::cout, 70u, message};
+        uint64_t progress_step = kmer_counter.size()/100;
+
+        uint64_t num_kmer_processed = 0;
+        for (it = kmer_counter.begin(); it != kmer_counter.end(); it++)
         {
-            std::cout << "DUMP: processed " << num_kmer_processed << " kmer out of "
-                      << kmer_counter.size() <<  std::endl;
-            shc_log_info(shc_logname, "processed %u kmers out of %u\n",
-                                    num_kmer_processed, kmer_counter.size());
-            stop_timer(&dump_timer);
-            log_stop_timer(&dump_timer);
-            start_timer(&dump_timer);
+            if(it->second.used)
+            {
+                decode_kmer(kmer_base, &(it->first), kmer_length);
+                kmer_base[kmer_length] = '\0';
+                outfile << kmer_base << "\t" << it->second.contig
+                                     << "\t" << get_count(it->second.count, compress_ratio)
+                                     << "\t" << (uint16_t)(it->second.info)  << std::endl;
+            }
+
+            if(num_kmer_processed%progress_step ==0)
+            {
+                double percentage = static_cast<double>(num_kmer_processed) /
+                                    static_cast<double>(kmer_counter.size());
+                progress.write(percentage);
+
+                shc_log_info(shc_logname, "processed %u kmers out of %u\n",
+                                        num_kmer_processed, kmer_counter.size());
+                log_stop_timer(&dump_timer);
+                start_timer(&dump_timer);
+            }
+            num_kmer_processed++;
         }
-        num_kmer_processed++;
     }
+    std::cout.flush();
+    usleep(COUT_BUFFER_FLUSH_SLEEP);
+    std::cout << std::endl;
+    usleep(COUT_BUFFER_FLUSH_SLEEP);
     outfile.close();
     shc_log_info(shc_logname, "Finish\n");
 }
@@ -228,52 +239,61 @@ void Kmer_handler::load_kmers_with_info_from_file(std::string & filename)
     RESERVE_NUM_KMER(kmer_counter, kmer_counter_size*1.5)
 
 
-    std::cout << "reserve " << (kmer_counter_size*1.5)
-              << " kmers" << std::endl;
+    std::cout << "reserve " << (kmer_counter_size*1.5) << " kmers" << std::endl;
 
-    start_timer(&kh_timer);
-    while(  std::getline(fileReader, kmer_base, '\t') &&
-            std::getline(fileReader, contig_s, '\t') &&
-            std::getline(fileReader, count_s, '\t') &&
-            std::getline(fileReader, info_s))
     {
-        num_kmer_loaded++;
-        if(num_kmer_loaded%KMER_LOAD_PROGRSS_STEP ==0)
+        std::string message = "Loading " + std::to_string(kmer_counter_size) +  " kmer with info into dict\n";
+        Progress_bar progress{std::cout, 70u, message};
+        uint64_t progress_step = kmer_counter_size/100;
+
+        start_timer(&kh_timer);
+        while(  std::getline(fileReader, kmer_base, '\t') &&
+                std::getline(fileReader, contig_s, '\t') &&
+                std::getline(fileReader, count_s, '\t') &&
+                std::getline(fileReader, info_s))
         {
-            std::cout << "loaded " << num_kmer_loaded << " kmer out of "
-                      << kmer_counter_size <<" kmers, load factor "
-                      << (kmer_counter.load_factor()) <<  std::endl;
-            shc_log_info(shc_logname, "loaded %u kmers out of %u\n",
-                                  num_kmer_loaded, kmer_counter_size);
-            stop_timer(&read_timer);
-            log_stop_timer(&read_timer);
-            start_timer(&read_timer);
+            num_kmer_loaded++;
+            if(num_kmer_loaded%progress_step ==0)
+            {
+                double percentage = static_cast<double>(num_kmer_loaded) /
+                                    static_cast<double>(kmer_counter_size);
+                progress.write(percentage);
+
+                shc_log_info(shc_logname, "loaded %u kmers out of %u\n",
+                                      num_kmer_loaded, kmer_counter_size);
+                log_stop_timer(&read_timer);
+                start_timer(&read_timer);
+            }
+
+            count = boost::lexical_cast<uint64_t>(count_s);
+            encoded_count = encode_count(count, compress_ratio);
+            if(encoded_count > KMER_MAX_COUNT)
+            {
+                shc_log_error("kmer count is too large \n");
+                exit(1);
+            }
+
+            contig = boost::lexical_cast<contig_num_t>(contig_s);
+            info = std::stoi(info_s);        // lexical_cast gives error
+
+            encode_kmer(kmer_base.c_str(), &byte, kmer_length);
+            kmer_info.contig = contig;
+            kmer_info.info = info;
+            kmer_info.count = encoded_count;
+            kmer_counter[byte] = kmer_info;
+            //std::cout << kmer_base<< " " << contig <<" "<<count <<" "<< info << std::endl;
+            //std::cout << kmer_base<< " " << kmer_counter[byte].contig <<" "
+            //          <<kmer_counter[byte].count <<" "<< kmer_counter[byte].info << std::endl;
         }
-
-        count = boost::lexical_cast<uint64_t>(count_s);
-        encoded_count = encode_count(count, compress_ratio);
-        if(encoded_count > KMER_MAX_COUNT)
-        {
-            shc_log_error("kmer count is too large \n");
-            exit(1);
-        }
-
-        contig = boost::lexical_cast<contig_num_t>(contig_s);
-        info = std::stoi(info_s);        // lexical_cast gives error
-
-        encode_kmer(kmer_base.c_str(), &byte, kmer_length);
-        kmer_info.contig = contig;
-        kmer_info.info = info;
-        kmer_info.count = encoded_count;
-        kmer_counter[byte] = kmer_info;
-        //std::cout << kmer_base<< " " << contig <<" "<<count <<" "<< info << std::endl;
-        //std::cout << kmer_base<< " " << kmer_counter[byte].contig <<" "
-        //          <<kmer_counter[byte].count <<" "<< kmer_counter[byte].info << std::endl;
     }
-#ifdef SHOW_PROGRESS
-    std::cout << "Finish kmer with info loading, ";
-    stop_timer(&kh_timer);
-#endif
+    std::cout.flush();
+    usleep(COUT_BUFFER_FLUSH_SLEEP);
+    std::cout << std::endl;
+    usleep(COUT_BUFFER_FLUSH_SLEEP);
+
+//    std::cout << "Finish kmer with info loading, ";
+//    stop_timer(&kh_timer);
+
 
     fileReader.close();
     shc_log_info(shc_logname, "kmer_length %u\n", kmer_length);
@@ -292,60 +312,73 @@ void Kmer_handler::build_dict_from_kmer_file_helper(std::string file)
 
     std::ifstream fileReader(file);
     //std::ofstream low_complex_writer(setting.local_files.output_path + "/low_complex_kmer");
+    //std::cout << "Sorted kmer path " << lf->sorted_unfilter_file << std::endl;
+    //shc_log_info(shc_logname, "load sorted kmer path %s\n", lf->sorted_unfilter_file.c_str());
+
 
     Block_timer read_timer;
     start_timer(&read_timer);
-    while (std::getline(fileReader, line_s, '\t') &&
-       std::getline(fileReader, count_s) )
+
     {
-        if(num_kmer_loaded%KMER_LOAD_PROGRSS_STEP ==0)
+        std::string message = "Loading " + std::to_string(num_kmer) + " kmer into dict, discarding polyA kmer\n";
+        Progress_bar progress{std::cout, 70u, message};
+        uint64_t progress_step = num_kmer/100;
+
+        while (std::getline(fileReader, line_s, '\t') &&
+           std::getline(fileReader, count_s) )
         {
-            std::cout << "processed KMER LOADING " << num_kmer_loaded << " kmer out of "
-                      << num_kmer <<" kmers, load factor "
-                      << (kmer_counter.load_factor()) <<  std::endl;
-            shc_log_info(shc_logname, "processed %u kmers out of %u\n",
-                                    num_kmer_loaded, num_dict_kmer);
-            stop_timer(&read_timer);
-            log_stop_timer(&read_timer);
-            start_timer(&read_timer);
+            if(num_kmer_loaded%progress_step ==0)
+            {
+                double percentage = static_cast<double>(num_kmer_loaded) /
+                                    static_cast<double>(num_kmer);
+                progress.write(percentage);
 
-        }
+                shc_log_info(shc_logname, "processed %u kmers out of %u\n",
+                                        num_kmer_loaded, num_dict_kmer);
+                log_stop_timer(&read_timer);
+                start_timer(&read_timer);
 
-        if(is_polyA_del && is_low_complexity(line_s))
-        {
-            //std::cout << " low complex " << line_s << std::endl;
-            //low_complex_writer << line_s << "\t"<< count_s << std::endl;
-            continue;
-        }
+            }
 
-        count = boost::lexical_cast<uint64_t>(count_s);
-        encoded_count = encode_count(count, compress_ratio);
+            if(is_polyA_del && is_low_complexity(line_s))
+            {
+                //std::cout << " low complex " << line_s << std::endl;
+                //low_complex_writer << line_s << "\t"<< count_s << std::endl;
+                continue;
+            }
 
-        kmer_info.count = encoded_count;
-        if (encoded_count > MAX_COUNT)
-        {
-            std::cout << "MAX_COUNT is  " << MAX_COUNT << std::endl;
-            shc_log_error("kmer_count_t unable to hold count %d\n", encoded_count);
-            exit(1);
-        }
-        encode_kmer(line_s.c_str(), &kmer, kmer_length);
+            count = boost::lexical_cast<uint64_t>(count_s);
+            encoded_count = encode_count(count, compress_ratio);
 
-        kmer_counter[kmer] = kmer_info;
-        num_kmer_loaded++;
-        if(setting.is_double_stranded)
-        {
-            num_kmer_loaded++;
-            encode_reverse_kmer(line_s.c_str(), &kmer, kmer_length);
-            complement_num(&kmer, kmer_length);
+            kmer_info.count = encoded_count;
+            if (encoded_count > MAX_COUNT)
+            {
+                std::cout << "MAX_COUNT is  " << MAX_COUNT << std::endl;
+                shc_log_error("kmer_count_t unable to hold count %d\n", encoded_count);
+                exit(1);
+            }
+            encode_kmer(line_s.c_str(), &kmer, kmer_length);
+
             kmer_counter[kmer] = kmer_info;
+            num_kmer_loaded++;
+            if(setting.is_double_stranded)
+            {
+                num_kmer_loaded++;
+                encode_reverse_kmer(line_s.c_str(), &kmer, kmer_length);
+                complement_num(&kmer, kmer_length);
+                kmer_counter[kmer] = kmer_info;
+            }
         }
     }
+    std::cout.flush();
+    usleep(COUT_BUFFER_FLUSH_SLEEP);
+    std::cout << std::endl;
+
     fileReader.close();
     //low_complex_writer.close();
 #if defined(USE_DENSE_KMER) || defined(USE_SPARSE_KMER)
     kmer_counter.resize(kmer_counter.size());
 #endif
-    std::cout << num_kmer_loaded << "kmer loaded" << std::endl;
 }
 /**
  * The function reads "kmer count" pair from file, each line denotes a
@@ -362,8 +395,6 @@ int Kmer_handler::build_dict_from_kmer_file ()
     build_dict_from_kmer_file_helper(lf->input_kmer_path);
     shc_log_info(shc_logname, "finish kmer load %u\n", kmer_counter.size());
 
-    std::cout << "build kmer dict finish " << std::endl;
-    stop_timer(&local_timer);
     init_kmer_size = kmer_counter.size();
     return 0;
 }
@@ -688,21 +719,6 @@ bool Kmer_handler::find_contig_helper(std::string & line_s, uint64_t count)
     //std::cout << "line_s " << line_s << std::endl;
     //std::cout << "count_s " << count_s << std::endl;
 
-    if((kmer_curr_proc-kmer_prev_proc) > KMER_PROGRESS_STEP)
-    {
-        int percentage = (100 * kmer_curr_proc)/init_kmer_size;
-        std::cout << "[" << percentage << "%] FIND CONTIGS " <<  kmer_curr_proc
-             << " kmer out of " <<  (init_kmer_size)
-             << " is processed, ";
-        stop_timer(&prog_timer);
-        log_stop_timer(&prog_timer);
-
-        start_timer(&prog_timer);
-        shc_log_info(shc_logname, "[ %u%] %u kmer out of %u is processed\n",
-                percentage, kmer_curr_proc, (init_kmer_size));
-        kmer_prev_proc = kmer_curr_proc;
-    }
-
     // start a new contig
 
     Kmer_counter_map_iterator root_iter = kmer_counter.find(root_byte);
@@ -811,34 +827,57 @@ contig_num_t Kmer_handler::find_contig_external()
     ch->contig_list.reserve(kmer_counter.size()/3);
 
     std::ifstream fileReader(lf->sorted_unfilter_file);
-    std::cout << "load sorted kmer path " << lf->sorted_unfilter_file << std::endl;
-    shc_log_info(shc_logname, "load sorted kmer path %s\n", lf->sorted_unfilter_file.c_str());
 
     std::string line_s, count_s;
 
     //int i = 0;
     start_timer(&prog_timer);
 
-    while (std::getline(fileReader, line_s, '\t') &&
-       std::getline(fileReader, count_s) )
     {
-        //std::cout << line_s << std::endl;
-        //std::cout << count_s << std::endl;
-        if(is_polyA_del && is_low_complexity(line_s))
-        {
-            continue;
-        }
+        std::string message = "Connecting "+std::to_string(init_kmer_size) + " kmer into contig\n";
+        Progress_bar progress{std::cout, 70u, message};
+        uint64_t progress_step = init_kmer_size/100;
 
-        uint64_t count = boost::lexical_cast<uint64_t>(count_s);
-        if(!find_contig_helper(line_s, count))
-            break;
-        if(setting.is_double_stranded)
+        while (std::getline(fileReader, line_s, '\t') &&
+           std::getline(fileReader, count_s) )
         {
-            std::reverse(line_s.begin(), line_s.end());
-            find_contig_helper(line_s, count);
+            //std::cout << line_s << std::endl;
+            //std::cout << count_s << std::endl;
+            if(is_polyA_del && is_low_complexity(line_s))
+            {
+                continue;
+            }
+
+            uint64_t count = boost::lexical_cast<uint64_t>(count_s);
+            if(!find_contig_helper(line_s, count))
+                break;
+            if(setting.is_double_stranded)
+            {
+                std::reverse(line_s.begin(), line_s.end());
+                find_contig_helper(line_s, count);
+            }
+
+            if((kmer_curr_proc-kmer_prev_proc) > progress_step)
+            {
+                int percentage = (100 * kmer_curr_proc)/init_kmer_size;
+
+                progress.write(static_cast<double>(kmer_curr_proc) /
+                               static_cast<double>(init_kmer_size));
+
+                log_stop_timer(&prog_timer);
+
+                start_timer(&prog_timer);
+                shc_log_info(shc_logname, "[ %u%] %u kmer out of %u is processed\n",
+                        percentage, kmer_curr_proc, (init_kmer_size));
+                kmer_prev_proc = kmer_curr_proc;
+            }
         }
     }
     fileReader.close();
+    std::cout.flush();
+    usleep(COUT_BUFFER_FLUSH_SLEEP);
+    std::cout << std::endl;
+    usleep(COUT_BUFFER_FLUSH_SLEEP);
 
     if(dup_setting.is_use_set)
     {
@@ -870,6 +909,7 @@ contig_num_t Kmer_handler::find_contig_external()
     shc_log_info(shc_logname, "kmer size is %llu\n", kmer_counter.size());
     shc_log_info(shc_logname, "Finish finding contig, %ld contigs, %d kmer_get deleted\n",
                                                    ch->num_contig, num_kmer_deleted);
+     
     return ch->num_contig;
 }
 
@@ -1308,7 +1348,6 @@ uint8_t Kmer_handler::get_kmer_length_from_file(const std::string& filename)
        std::getline(file_reader, temp, '\t') &&
        std::getline(file_reader, temp))
     {
-        std::cout << "file base has length " << std::dec << kmer_base.size() << std::endl;
         file_reader.close();
         return kmer_base.size();
     }

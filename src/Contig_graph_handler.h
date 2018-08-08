@@ -119,8 +119,8 @@ class Contig_graph_handler
         Explorable_contig_set(contig_num_t num_contig_) :
             total_num_contig(num_contig_), explorable_contig(num_contig_, true)
         {
-            std::cout << "num_contig " << num_contig_ << std::endl;
-            shc_log_info(shc_logname, "num_contig %u\n", total_num_contig);
+            //std::cout << "num_contig " << num_contig_ << std::endl;
+            //shc_log_info(shc_logname, "num_contig %u\n", total_num_contig);
             explore_start = 0;
             num_explored_contig = 0;
         }

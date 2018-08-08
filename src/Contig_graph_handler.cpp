@@ -40,24 +40,24 @@ void Contig_graph_handler::run_contig_graph_handler()
     // partition contig
     struct Block_timer cgh_main_timer;
     start_timer(&cgh_main_timer);
-    std::cout << "start group contig " <<  std::endl;
+
     group_components();
 
-    shc_log_info(shc_logname, "log complex comp num edges\n");
-    for(int i=0; i<comps_num_edges.size();i++ )
-    {
-        shc_log_info(shc_logname, "comp %d has %d edges\n", i, comps_num_edges[i]);
-    }
+    //shc_log_info(shc_logname, "log complex comp num edges\n");
+    //for(int i=0; i<comps_num_edges.size();i++ )
+    //{
+    //    shc_log_info(shc_logname, "comp %d has %d edges\n", i, comps_num_edges[i]);
+    //}
 
     shc_log_info(shc_logname, "finish group contig\n");
     log_stop_timer(&cgh_main_timer);
-#ifdef SHOW_PROGRESS
-    std::cout << "finish group contig, ";
-    stop_timer(&cgh_main_timer);
-#endif
+
+    //std::cout << "finish group contig, ";
+    //stop_timer(&cgh_main_timer);
+
     dump_component_array(setting.local_files.output_comp_path);
 
-    add_or_overwrite_directory(lf.output_components_read_dir);
+    add_or_overwrite_directory(lf.output_components_read_dir, lf.output_path);
 
 
     dump_filtered_contig();
@@ -75,20 +75,16 @@ void Contig_graph_handler::run_contig_graph_handler()
     if(setting.has_single)
     {
         start_timer(&cgh_main_timer);
-        std::cout << "start assigning single read " << std::endl;
         //assign_reads_to_components(setting.local_files.input_read_path);
         assign_reads_to_components_mmap(setting.local_files.input_read_path);
         shc_log_info(shc_logname, "finish assigning single read\n");
         log_stop_timer(&cgh_main_timer);
 #ifdef SHOW_PROGRESS
-        std::cout << "assigning single read, ";
-        stop_timer(&cgh_main_timer);
 #endif
     }
     if(setting.has_pair)
     {
         start_timer(&cgh_timer);
-        std::cout << "start assigning paired read " << std::endl;
         assign_paired_read_to_components_mmap(
                             setting.local_files.input_read_path_1,
                             setting.local_files.input_read_path_2);
@@ -98,23 +94,17 @@ void Contig_graph_handler::run_contig_graph_handler()
         shc_log_info(shc_logname, "finish assigning paired read\n");
         log_stop_timer(&cgh_timer);
 #ifdef SHOW_PROGRESS
-        std::cout << "assigning paired read, ";
-        stop_timer(&cgh_timer);
 #endif
     }
     fasta_dumper.finalize_dump_files();
 
     // dumping kmers
     start_timer(&cgh_timer);
-    std::cout << "start assigning kmer" << std::endl;
-
     kmer_dumper.setup_dump_files(component_size);
     assign_kmer_to_components();
     shc_log_info(shc_logname, "finish assigning kmer\n");
     log_stop_timer(&cgh_timer);
 #ifdef SHOW_PROGRESS
-    std::cout << "finish assigning kmer, ";
-    stop_timer(&cgh_timer);
 #endif
 
     //for(uint64_t i=0; i<curr_component_num ; i++)
@@ -283,76 +273,83 @@ void Contig_graph_handler::group_components()
     uint64_t num_conn = 0;
 
     start_timer(&cgh_timer);
-    while(!explorable_contig_set.is_explore_all())
+
     {
+        std::string message = "Building contig graph using " + std::to_string(ch->num_contig)
+                            + " contigs\n";
+        Progress_bar progress{std::cout, 70u, message};
+        uint64_t progress_step = ch->num_contig/100;
+
+        while(!explorable_contig_set.is_explore_all())
+        {
 #ifdef LOG_CONTIG_GRAPH
-        shc_log_info(shc_logname, "\t\t\t\t\t#processing component %u\n",
-                                                            curr_component_num);
+            shc_log_info(shc_logname, "\t\t\t\t\t#processing component %u\n",
+                                                                curr_component_num);
 #endif
 #ifdef SHOW_PROGRESS
-        if((contig_curr_proc-contig_prev_proc) > CONTIG_PROGRESS_STEP)
-        {
-            int percentage = (100 * contig_curr_proc)/(ch->num_contig);
-            std::cout << "[" << percentage << "%] " <<  contig_curr_proc
-                 << " contig out of " <<   ch->num_contig
-                 << " is processed, contig len processed " << total_length
-                 << ", total_query " << total_query
-                 << ", num graph " << num_graph
-                 << ", num non graph " << num_non_graph
-                 << ", conn_size "  << conn_size
-                 << ", total_bit_set_query " << total_bit_set_query
-                 << ", total_update " << total_update
-                 << std::endl;
+            if((contig_curr_proc-contig_prev_proc) > progress_step)
+            {
+                int percentage = (100 * contig_curr_proc)/(ch->num_contig);
+                progress.write(static_cast<double>(contig_curr_proc) /
+                                    static_cast<double>(ch->num_contig));
+                //std::cout << "[" << percentage << "%] " <<  contig_curr_proc
+                     //<< " contig out of " <<   ch->num_contig
+                     //<< " is processed, contig len processed " << total_length
+                     //<< ", total_query " << total_query
+                     //<< ", num graph " << num_graph
+                     //<< ", num non graph " << num_non_graph
+                     //<< ", conn_size "  << conn_size
+                     //<< ", total_bit_set_query " << total_bit_set_query
+                     //<< ", total_update " << total_update
+                     //<< std::endl;
 
-            shc_log_info(shc_logname, "[ %d %], %d  contig out of %d "
-                        "is processed, contig len processed %d, total_query %d, "
-                        "num graph %u, num non graph %u, num conn_size %u, "
-                        "total_bit_set_query %u, total_update %u \n",
-                        percentage, contig_curr_proc, ch->num_contig, total_length,
-                        total_query, num_graph, num_non_graph, conn_size,
-                        total_bit_set_query, total_update);
-            conn_size = 0;
-            num_graph = 0;
-            num_non_graph = 0;
-            total_bit_set_query = 0;
-            contig_prev_proc = contig_curr_proc;
-            total_update = 0;
-            stop_timer(&progress_timer);
-            log_stop_timer(&progress_timer);
-            start_timer(&progress_timer);
-            total_query=0;
-            total_length = 0;
-            get_set_timer.time_us = 0;
-        }
+                shc_log_info(shc_logname, "[ %d %], %d  contig out of %d "
+                            "is processed, contig len processed %d, total_query %d, "
+                            "num graph %u, num non graph %u, num conn_size %u, "
+                            "total_bit_set_query %u, total_update %u \n",
+                            percentage, contig_curr_proc, ch->num_contig, total_length,
+                            total_query, num_graph, num_non_graph, conn_size,
+                            total_bit_set_query, total_update);
+                conn_size = 0;
+                num_graph = 0;
+                num_non_graph = 0;
+                total_bit_set_query = 0;
+                contig_prev_proc = contig_curr_proc;
+                total_update = 0;
+
+                log_stop_timer(&progress_timer);
+                start_timer(&progress_timer);
+                total_query=0;
+                total_length = 0;
+                get_set_timer.time_us = 0;
+            }
 #endif
-        //accurate_start_timer(&get_set_timer);
-        contig_num_t root_contig = explorable_contig_set.get_set_next_explorable_contig();
-        //accurate_accumulate_timer(&get_set_timer);
-        contig_stack.clear();
-        contig_stack.push_back(root_contig);
-
-        if(assign_comp_without_graph()) //
-        {
-            num_graph++;
+            //accurate_start_timer(&get_set_timer);
+            contig_num_t root_contig = explorable_contig_set.get_set_next_explorable_contig();
+            //accurate_accumulate_timer(&get_set_timer);
             contig_stack.clear();
             contig_stack.push_back(root_contig);
-            assign_comp_with_graph();
-            std::cout << "assigne comp with graph" << std::endl;
+
+            if(assign_comp_without_graph()) //
+            {
+                num_graph++;
+                contig_stack.clear();
+                contig_stack.push_back(root_contig);
+                assign_comp_with_graph();
+            }
+            else
+            {
+                num_non_graph++;
+            }
+            num_conn ++;
+            contig_curr_proc = explorable_contig_set.num_explored_contig;
         }
-        else
-        {
-            num_non_graph++;
-        }
-        num_conn ++;
-        contig_curr_proc = explorable_contig_set.num_explored_contig;
     }
 
     count_component_size();
 
-#ifdef SHOW_PROGRESS
-    std::cout << "Finish finding " << curr_component_num << " component, ";
-    stop_timer(&cgh_timer);
-#endif
+    //std::cout << "Finish finding " << curr_component_num << " component, ";
+    //stop_timer(&cgh_timer);
     shc_log_info(shc_logname, "Finish constructing contig graph\n");
 }
 
@@ -519,7 +516,7 @@ void Contig_graph_handler::break_and_keep_component(graph_t & graph)
                           static_cast<float>(metis_setup.partition_size)));    //note
         //std::cout << "num vertices " << num_vertices << std::endl;
         //std::cout << "partition size " << metis_setup.partition_size << std::endl;
-        std::cout << "partition to " << partition << std::endl;
+
         shc_log_info(shc_logname, "partition to %d\n", partition);
 
         metis_setup.num_partition = std::min(static_cast<idx_t>(100), partition);
@@ -1130,16 +1127,16 @@ void Contig_graph_handler::assign_paired_read_to_components_mmap(
     dumper_p2.setup_all_mmap_dst_files(file_prefix, file_p2_suffix ,
                 curr_component_num);
 
-    std::cout << "dst file setup time takes " << std::endl;
-    stop_timer(&p_timer);
+    //std::cout << "dst file setup time takes " << std::endl;
+    //stop_timer(&p_timer);
     shc_log_info(shc_logname, "dst file setup time takes \n");
     log_stop_timer(&p_timer);
 
     start_timer(&p_timer);
     dumper_p1.setup_init_mmap_src_file(read_1_path); //mmap_src_file(read_1_path);
     dumper_p2.setup_init_mmap_src_file(read_2_path); //mmap_src_file
-    std::cout << "src file setup time takes " << std::endl;
-    stop_timer(&p_timer);
+    //std::cout << "src file setup time takes " << std::endl;
+    //stop_timer(&p_timer);
     shc_log_info(shc_logname, "src file setup time takes \n");
     log_stop_timer(&p_timer);
 
@@ -1157,32 +1154,38 @@ void Contig_graph_handler::assign_paired_read_to_components_mmap(
     Block_timer all_time;
     start_timer(&read_prog_timer);
     start_timer(&all_time);
-    while(dumper_p1.get_src_line(header_ptr_p1, seq_ptr_p1, seq_len_p1) &&
-          dumper_p2.get_src_line(header_ptr_p2, seq_ptr_p2, seq_len_p2))
+
     {
-        assign_pair_read_to_file_mmap(dumper_p1, dumper_p2,
-                                      header_ptr_p1, header_ptr_p2,
-                                      seq_ptr_p1,    seq_ptr_p2,
-                                      seq_len_p1,    seq_len_p2);
-        num_read++;
-        if((num_read -last_num) > READ_PROGRESS_STEP)
+        std::string message = "Assign pair-reads to components\n";
+        Progress_bar progress{std::cout, 70u, message};
+        uint64_t progress_step = num_pair_read_file/100;
+
+        while(dumper_p1.get_src_line(header_ptr_p1, seq_ptr_p1, seq_len_p1) &&
+              dumper_p2.get_src_line(header_ptr_p2, seq_ptr_p2, seq_len_p2))
         {
-            int percentage = (100 * num_read)/num_pair_read_file;
-            std::cout << "[" << percentage << "%] " <<  num_read
-                 << " reads out of " <<  (num_pair_read_file)
-                 << " is processed, ";
-            stop_timer(&read_prog_timer);
-            shc_log_info(shc_logname, "[ %u%] %u read out of %u is processed\n",
-                    percentage, num_read, (num_pair_read_file));
-            log_stop_timer(&read_prog_timer);
-            start_timer(&read_prog_timer);
-            last_num = num_read;
+            assign_pair_read_to_file_mmap(dumper_p1, dumper_p2,
+                                          header_ptr_p1, header_ptr_p2,
+                                          seq_ptr_p1,    seq_ptr_p2,
+                                          seq_len_p1,    seq_len_p2);
+            num_read++;
+            if((num_read -last_num) > progress_step)
+            {
+                int percentage = (100 * num_read)/num_pair_read_file;
+                progress.write(static_cast<double>(num_read) /
+                               static_cast<double>(num_pair_read_file));
+
+                shc_log_info(shc_logname, "[ %u%] %u read out of %u is processed\n",
+                        percentage, num_read, (num_pair_read_file));
+                log_stop_timer(&read_prog_timer);
+                start_timer(&read_prog_timer);
+                last_num = num_read;
+            }
         }
     }
 
     shc_log_info(shc_logname, "finish dump pair read\n");
-    std::cout << "finish dump pair read" << std::endl;
-    stop_timer(&all_time);
+    //std::cout << "finish dump pair read" << std::endl;
+    //stop_timer(&all_time);
     log_stop_timer(&all_time);
 }
 
@@ -1686,8 +1689,8 @@ assign_reads_to_components(std::string input_read_path)
 
     std::vector<std::shared_ptr<std::ofstream> >().swap(files);
     shc_log_info(shc_logname, "Finish assigning read to component\n");
-    std::cout << "finish dump reads " ;
-    stop_timer(&cgh_timer);
+    //std::cout << "finish dump reads " ;
+    //stop_timer(&cgh_timer);
 }
 
 void Contig_graph_handler::
@@ -1711,8 +1714,8 @@ assign_reads_to_components_mmap(std::string input_read_path)
 
     uint64_t last_num = 0;
 
-    printf("statbuf.st_size %ld\n", dumper.statbuf.st_size);
-    shc_log_info(shc_logname, "statbuf.st_size %ld\n", dumper.statbuf.st_size);
+    //printf("statbuf.st_size %ld\n", dumper.statbuf.st_size);
+    //shc_log_info(shc_logname, "statbuf.st_size %ld\n", dumper.statbuf.st_size);
     uint64_t num_line = 0;
     uint64_t num_read = 0;
     char * header_ptr;
@@ -1720,22 +1723,30 @@ assign_reads_to_components_mmap(std::string input_read_path)
     int seq_len;
     Block_timer read_prog_timer;
     start_timer(&read_prog_timer);
-    while(dumper.get_src_line(header_ptr, seq_ptr, seq_len))
+
     {
-        assign_single_read_to_file_mmap(dumper ,header_ptr, seq_ptr, seq_len);
-        num_read++;
-        if((num_read-last_num) > READ_PROGRESS_STEP)
+        std::string message = "Assign "+ std::to_string(num_single_read_file)
+                            + " single-ended read to components\n";
+        Progress_bar progress{std::cout, 70u, message};
+        uint64_t progress_step = num_single_read_file/100;
+
+
+        while(dumper.get_src_line(header_ptr, seq_ptr, seq_len))
         {
-            int percentage = (100 * num_read)/num_single_read_file;
-            std::cout << "[" << percentage << "%] ASSIGN READS TO COMP " <<  num_read
-                 << " reads out of " <<  (num_single_read_file)
-                 << " is processed, ";
-            stop_timer(&read_prog_timer);
-            shc_log_info(shc_logname, "[ %u%] %u read out of %u is processed\n",
-                    percentage, num_read, (num_single_read_file));
-            log_stop_timer(&read_prog_timer);
-            start_timer(&read_prog_timer);
-            last_num = num_read;
+            assign_single_read_to_file_mmap(dumper ,header_ptr, seq_ptr, seq_len);
+            num_read++;
+            if((num_read-last_num) > progress_step)
+            {
+                int percentage = (100 * num_read)/num_single_read_file;
+                progress.write(static_cast<double>(num_read) /
+                               static_cast<double>(num_single_read_file));
+
+                shc_log_info(shc_logname, "[ %u%] %u read out of %u is processed\n",
+                        percentage, num_read, (num_single_read_file));
+                log_stop_timer(&read_prog_timer);
+                start_timer(&read_prog_timer);
+                last_num = num_read;
+            }
         }
     }
 }
@@ -1752,7 +1763,7 @@ void Contig_graph_handler::assign_kmer_to_components()
     char bases[33];
     bases[kmer_length] = '\0';
 
-    add_or_overwrite_directory(lf.output_components_kmer_dir);
+    add_or_overwrite_directory(lf.output_components_kmer_dir, lf.output_path);
     //create files
     kmer_dumper.setup_disk_dumper(lf.output_components_kmer_dir, lf.comp_kmer_prefix);
 
@@ -1762,40 +1773,44 @@ void Contig_graph_handler::assign_kmer_to_components()
     Block_timer kmer_prog_timer;
     start_timer(&kmer_prog_timer);
     Kmer_counter_map_iterator it;
-    for(it=kh->kmer_counter.begin(); it!=kh->kmer_counter.end(); it++)
+
     {
-        decode_kmer(bases, &(it->first), kmer_length);
+        std::string message = "Assign " + std::to_string(num_total_kmer)
+                            + " kmer to components\n";
+        Progress_bar progress{std::cout, 70u, message};
+        uint64_t progress_step = num_total_kmer/100;
 
-        kmer_dumper.dump_kmer(component_array[it->second.contig], bases, it->second.count);
-        //comp_num_kmers[component_array[it->second.contig]] ++;
-
-        if(metis_setup.is_multiple_partition &&
-        component_array_aux[it->second.contig] < curr_component_num)
+        for(it=kh->kmer_counter.begin(); it!=kh->kmer_counter.end(); it++)
         {
-            kmer_dumper.dump_kmer(component_array_aux[it->second.contig], bases, it->second.count);
-            //comp_num_kmers[component_array_aux[it->second.contig]] ++;
-        }
+            decode_kmer(bases, &(it->first), kmer_length);
 
-        if((num_dumped_kmer -last_num_dumped) > KMER_PROGRESS_STEP)
-        {
-            int percentage = (100 * num_dumped_kmer)/num_total_kmer;
-            std::cout << "[" << percentage << "%] ASSIGN KMER TO COMP " <<  num_dumped_kmer
-                 << " kmers out of " <<  (num_total_kmer)
-                 << " is processed, ";
-            stop_timer(&kmer_prog_timer);
-            shc_log_info(shc_logname, "[ %u%] %u read out of %u is processed\n",
-                    percentage, num_dumped_kmer, (num_total_kmer));
-            log_stop_timer(&kmer_prog_timer);
-            start_timer(&kmer_prog_timer);
-            last_num_dumped = num_dumped_kmer;
+            kmer_dumper.dump_kmer(component_array[it->second.contig], bases, it->second.count);
+            //comp_num_kmers[component_array[it->second.contig]] ++;
+
+            if(metis_setup.is_multiple_partition &&
+            component_array_aux[it->second.contig] < curr_component_num)
+            {
+                kmer_dumper.dump_kmer(component_array_aux[it->second.contig], bases, it->second.count);
+                //comp_num_kmers[component_array_aux[it->second.contig]] ++;
+            }
+
+            if((num_dumped_kmer -last_num_dumped) > progress_step)
+            {
+                int percentage = (100 * num_dumped_kmer)/num_total_kmer;
+                progress.write(static_cast<double>(num_dumped_kmer) /
+                               static_cast<double>(num_total_kmer));
+                shc_log_info(shc_logname, "[ %u%] %u read out of %u is processed\n",
+                        percentage, num_dumped_kmer, (num_total_kmer));
+                log_stop_timer(&kmer_prog_timer);
+                start_timer(&kmer_prog_timer);
+                last_num_dumped = num_dumped_kmer;
+            }
+            num_dumped_kmer++;
         }
-        num_dumped_kmer++;
     }
 
     kmer_dumper.write_mem_to_disk();
     shc_log_info(shc_logname, "Finish assigning kmer to component\n");
-    std::cout << "finish dumping kmer ";
-    stop_timer(&cgh_timer);
 }
 
 void Contig_graph_handler::load_data_and_partition_reads()
