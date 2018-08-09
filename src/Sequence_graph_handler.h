@@ -383,7 +383,7 @@ private:
     std::string edge_to_string(ed_t ed);
     // preprocess
     void pre_process_read();
-    
+
 
     void remove_nodes_edges_if_not_cover_by_reads();
 
@@ -535,8 +535,8 @@ struct Seq_graph_works {
                         percentage, seq_graph_work.process_i, num_comp_left,
                         seq_graph_work.init_total_work);
             }
-            std::cout << "process  " << seq_graph_work.process_i << " runs comp "
-                      << comp_i << std::endl;
+            //std::cout << "process  " << seq_graph_work.process_i << " runs comp "
+            //          << comp_i << std::endl;
             seq_graph_ptr->run_it(comp_i, false);
 
             delete seq_graph_ptr;

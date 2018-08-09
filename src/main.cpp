@@ -57,7 +57,7 @@ void parse_sparse_flow_optional(
 void parse_output_options(
         boost::program_options::variables_map & vm, Shannon_C_setting  & setting);
 
-void print_partition_setting(Shannon_C_setting  & setting);
+
 
 int main(int argc, char** argv) {
     bool show_command_help_message = false;
@@ -93,6 +93,7 @@ int main(int argc, char** argv) {
         else if(subcommand == "shannon")
         {
             command_line_for_shannon(argc, argv, setting);
+
             test_all(&setting);
         }
         else if(subcommand == "partition")
@@ -322,6 +323,8 @@ void command_line_for_find_rep(int argc, char** argv, Shannon_C_setting & settin
             ("help", "produce help message")
             ("output_seq_min_len,e", po::value<int>()->default_value(200),
                         "minimal reconstructed output length")
+            ("rmer_length", po::value<int>()->default_value(24),
+                        "rmer size used to check duplicates")
             ("input", po::value<std::string>()->required(),
                         "input path")
             ("output", po::value<std::string>()->required(),
@@ -342,6 +345,7 @@ void command_line_for_find_rep(int argc, char** argv, Shannon_C_setting & settin
 
         po::notify(vm);
         setting.output_seq_min_len = vm["output_seq_min_len"].as<int>();
+        setting.rmer_length = vm["rmer_length"].as<int>();
         setting.is_double_stranded = vm["double_strand"].as<bool>();
         input_path = vm["input"].as<std::string>();
         if(!convert_to_abs_and_check_exist(input_path))
@@ -352,6 +356,8 @@ void command_line_for_find_rep(int argc, char** argv, Shannon_C_setting & settin
             convert_relative_path_to_abs(output_path);
         if(exist_path(output_path))
             overwirte_a_file(output_path);
+
+        print_and_log_find_rep_setting(setting);
     }
     catch(std::exception& e)
     {
@@ -796,6 +802,8 @@ void command_line_for_shannon(int argc, char** argv, Shannon_C_setting  & settin
         desc.add_options()
             ("reference,r", po::value<std::string>(),
                                      "Reference path for the output to compare with")
+            ("rmer_length", po::value<int>()->default_value(24),
+                     "rmer size used to check duplicates")
         ;
         add_multi_graph_options(desc);
         add_multi_bridge_options(desc);
@@ -818,6 +826,7 @@ void command_line_for_shannon(int argc, char** argv, Shannon_C_setting  & settin
         parse_read_len_and_path(vm, setting);
         parse_partition_option(vm, setting);
 
+        setting.rmer_length = vm["rmer_length"].as<int>();
         setting.num_parallel = vm["num_process"].as<int>();
         setting.seq_graph_setup.max_hop_path = vm["max_hop_for_known_path"].as<int>();
         setting.sparse_flow_setup.multiple_test = vm["multiple_test"].as<int>();
@@ -832,6 +841,15 @@ void command_line_for_shannon(int argc, char** argv, Shannon_C_setting  & settin
         print_and_log_multi_graph_setting(setting);
         print_and_log_mb_setting(setting);
         print_and_log_sf_setting(setting);
+
+        info_log_info(setting.local_files.timing_path.c_str(), "Command line Inputs\n");
+        std::string cmd;
+        for(int i=0; i<argc; i++)
+        {
+            std::string sub_cmd = argv[i];
+            cmd += sub_cmd + " ";
+        }
+        info_log_info(setting.local_files.timing_path.c_str(), "%s\n\n", cmd.c_str());        
 
         return;
     }

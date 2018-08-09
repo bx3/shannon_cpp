@@ -30,7 +30,7 @@ struct Local_files;
 void add_or_overwrite_directory(std::string & dir, std::string & output_dir);
 void add_directory_if_not_exist(std::string & dir);
 void add_directory(boost::filesystem::path & dir_path);
-void empty_directory(boost::filesystem::path & dir_path);
+void empty_directory(boost::filesystem::path & dir_path, std::string output_dir);
 void remove_directory(boost::filesystem::path & dir_path);
 void remove_file(const boost::filesystem::path & file_path);
 void print_and_log_local_file_system(Local_files *lf);
@@ -167,9 +167,9 @@ struct Local_files {    //"/test_data"
         if( !boost::filesystem::exists(eval_dir_path_boost) )
             add_directory(eval_dir_path_boost);
 
-        boost::filesystem::path summary_file_path_boost(summary_file_path);
-        if( !boost::filesystem::exists(summary_file_path_boost) )
-            add_directory(summary_file_path_boost);
+        //boost::filesystem::path summary_file_path_boost(summary_file_path);
+        //if( !boost::filesystem::exists(summary_file_path_boost) )
+        //    add_directory(summary_file_path_boost);
 
         add_directory_if_not_exist(algo_input);
     }
@@ -238,9 +238,9 @@ struct Local_files {    //"/test_data"
         if( !boost::filesystem::exists(eval_dir_path_boost) )
             add_directory(eval_dir_path_boost);
 
-        boost::filesystem::path summary_file_path_boost(summary_file_path);
-        if( !boost::filesystem::exists(summary_file_path_boost) )
-            add_directory(summary_file_path_boost);
+        //boost::filesystem::path summary_file_path_boost(summary_file_path);
+        //if( !boost::filesystem::exists(summary_file_path_boost) )
+        //    add_directory(summary_file_path_boost);
 
         add_directory_if_not_exist(algo_input);
 

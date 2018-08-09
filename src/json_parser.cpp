@@ -31,7 +31,7 @@ void parser_setting_file(std::string & file_path, Shannon_C_setting & setting)
     int output_seq_min_len = pt.get<int>("output_seq_min_len");
     bool take_single_node_seq = pt.get<bool>("take_single_node_seq");
     bool take_contig_seq = pt.get<bool>("take_contig_seq");
-    int num_parallel = pt.get<int>("num_parallel");
+    //int num_parallel = pt.get<int>("num_parallel");
 
     setting.kmer_length = kmer_length;
     setting.has_single = has_single;
@@ -46,7 +46,12 @@ void parser_setting_file(std::string & file_path, Shannon_C_setting & setting)
     setting.output_seq_min_len = output_seq_min_len;
     setting.take_single_node_seq = take_single_node_seq;
     setting.take_contig_seq = take_contig_seq;
-    setting.num_parallel = num_parallel;
+
+    ptree multi_graph_setup = pt.get_child("multi_graph_setup");
+    setting.num_parallel = multi_graph_setup.get<int>("num_parallel");
+
+    ptree find_rep = pt.get_child("find_rep");
+    setting.rmer_length = find_rep.get<int>("rmer_length");
 
     // file system
     ptree file_structure = pt.get_child("file_structure");
@@ -126,227 +131,4 @@ void parser_setting_file(std::string & file_path, Shannon_C_setting & setting)
     int multiple_test = sparse_flow_setup.get<int>("multiple_test");
     setting.sparse_flow_setup.set_para(multiple_test);
     shc_log_info(shc_logname, "parsed json info\n");
-}
-
-
-void print_and_log_all_setting(Shannon_C_setting & setting)
-{
-    print_and_log_general_setting(setting);
-    print_and_log_partition_setting(setting);
-    print_and_log_local_file_system(&setting.local_files);
-    print_and_log_multi_graph_setting(setting);
-    print_and_log_mb_setting(setting);
-    print_and_log_sf_setting(setting);
-}
-
-void print_and_log_shannon_cmd_setting(Shannon_C_setting & setting)
-{
-    print_and_log_all_setting(setting);
-}
-
-void print_and_log_partition_cmd_setting(Shannon_C_setting & setting)
-{
-    print_and_log_general_setting(setting);
-    print_and_log_partition_setting(setting);
-}
-
-void print_and_log_multi_graph_both_cmd_setting(Shannon_C_setting & setting)
-{
-    print_and_log_general_setting(setting);
-    print_and_log_multi_graph_setting(setting);
-    print_and_log_mb_setting(setting);
-    print_and_log_sf_setting(setting);
-}
-
-void print_and_log_output_setting(Shannon_C_setting & setting)
-{
-    Local_files & local_files = setting.local_files;
-    std::cout << "\033[1;33m";
-    std::cout << "output save to           : " << local_files.output_path << std::endl;
-    std::cout << "output_seq_min_len is    : " << setting.output_seq_min_len << std::endl;
-    std::cout << "\033[0m" << std::endl;
-    shc_log_info(shc_logname, "output save to             : %s\n", local_files.output_kmer_path.c_str());
-    shc_log_info(shc_logname, "output_seq_min_len         : %d\n", setting.output_seq_min_len);
-}
-
-void print_and_log_ref_setting(Shannon_C_setting & setting)
-{
-    std::cout << "\033[1;33m";
-    if(!setting.local_files.reference_seq_path.empty())
-        std::cout << "reference path           : " << setting.local_files.reference_seq_path << std::endl;
-    else
-        std::cout << "reference path           : No ref available" << std::endl;
-    std::cout << "\033[0m" << std::endl;
-
-    if(!setting.local_files.reference_seq_path.empty())
-        shc_log_info(shc_logname, "reference path           : %s\n", setting.local_files.reference_seq_path.c_str());
-    else
-        shc_log_info(shc_logname, "reference path           : No ref available\n");
-}
-
-void print_and_log_partition_setting(Shannon_C_setting & setting)
-{
-    std::cout << "\033[1;31m";  //34 blue, 31 red, 35 purple
-    std::cout << "Duplicate correction     *********** " << std::endl;
-    std::cout << "load_factor              : " << setting.dup_setting.load_factor << std::endl;
-    std::cout << "rmer_length              : " << (uint16_t)setting.dup_setting.rmer_length << std::endl;
-    std::cout << "min_count                : " << setting.dup_setting.min_count << std::endl;
-    std::cout << "min_len                  : " << setting.dup_setting.min_len << std::endl;
-    std::cout << "threshold                : " << setting.dup_setting.threshold << std::endl;
-    std::cout << "is_use_set               : " << ((setting.dup_setting.is_use_set)?("Yes"):("No")) << std::endl;
-    std::cout << "num_sort_thread          : " << ((setting.dup_setting.num_sort_thread)) << std::endl;
-    std::cout << std::endl;
-
-    std::cout << "\033[1;31m";  //34 blue, 31 red, 35 purple
-    std::cout << "Metis setup              *********** " << std::endl;
-    std::cout << "use_multiple_partition   : " << ((setting.metis_setup.is_multiple_partition)?("Yes"):("No")) << std::endl;
-    std::cout << "partition_size           : " << setting.metis_setup.partition_size << std::endl;
-    std::cout << "non_partition_size       : " << setting.metis_setup.non_partition_size << std::endl;
-    std::cout << "penalty                  : " << setting.metis_setup.penalty << std::endl;
-    std::cout << "overload                 : " << setting.metis_setup.overload << std::endl;
-    std::cout << std::endl;
-
-    std::cout << "\033[1;31m";  //34 blue, 31 red, 35 purple
-    std::cout << "Contig graph setup       *********** " << std::endl;
-    std::cout << "num_test                 : " << setting.contig_graph_setup.num_test << std::endl;
-    std::cout << "is_assign_best           : " << ((setting.contig_graph_setup.is_assign_best)?("Yes"):("No")) << std::endl;
-    std::cout << "read_sampler_k           : " << setting.contig_graph_setup.read_sampler_k << std::endl;
-    std::cout << "\033[0m" << std::endl;
-    std::cout << std::endl;
-
-    shc_log_info(shc_logname, "Duplicate correction     ***********\n");
-    shc_log_info(shc_logname, "load_factor              : %f\n", setting.dup_setting.load_factor);
-    shc_log_info(shc_logname, "rmer_length              : %d\n", (uint16_t)setting.dup_setting.rmer_length);
-    shc_log_info(shc_logname, "min_count                : %d\n", setting.dup_setting.min_count);
-    shc_log_info(shc_logname, "min_len                  : %d\n", setting.dup_setting.min_len);
-    shc_log_info(shc_logname, "threshold                : %f\n", setting.dup_setting.threshold);
-    shc_log_info(shc_logname, "is_use_set               : %s\n", ((setting.dup_setting.is_use_set)?("Yes"):("No")));
-    shc_log_info(shc_logname, "num_sort_thread          : %d\n", ((setting.dup_setting.num_sort_thread)));
-    shc_log_info(shc_logname, "\n");
-
-    shc_log_info(shc_logname, "Metis setup              *********** \n");
-    shc_log_info(shc_logname, "use_multiple_partition   : %s\n", ((setting.metis_setup.is_multiple_partition)?("Yes"):("No")));
-    shc_log_info(shc_logname, "partition_size           : %d\n", setting.metis_setup.partition_size);
-    shc_log_info(shc_logname, "non_partition_size       : %d\n", setting.metis_setup.non_partition_size);
-    shc_log_info(shc_logname, "penalty `                : %d\n", setting.metis_setup.penalty);
-    shc_log_info(shc_logname, "overload                 : %f\n", setting.metis_setup.overload);
-    shc_log_info(shc_logname, "\n");
-
-    shc_log_info(shc_logname, "Contig graph setup       *********** \n");
-    shc_log_info(shc_logname, "num_test                 : %d\n", setting.contig_graph_setup.num_test);
-    shc_log_info(shc_logname, "is_assign_best           : %s\n", ((setting.contig_graph_setup.is_assign_best)?("Yes"):("No")));
-    shc_log_info(shc_logname, "read_sampler_k           : %d\n", setting.contig_graph_setup.read_sampler_k);
-
-    shc_log_info(shc_logname, "\n");
-}
-
-void print_and_log_input_path_setting(Shannon_C_setting & setting)
-{
-    Local_files & local_files = setting.local_files;
-    std::cout << "\033[1;33m";
-    if(!local_files.input_kmer_path.empty())
-    {
-        std::cout << "single kmer input from   : " << local_files.input_kmer_path << std::endl;
-    }
-    if(local_files.has_single)
-    {
-        std::cout << "single read input from   : " << local_files.input_read_path << std::endl;
-    }
-
-    if(local_files.has_pair)
-    {
-        std::cout << "read pair1 input from    : " << local_files.input_read_path_1 << std::endl;
-        std::cout << "read pair2 input from    : " << local_files.input_read_path_2 << std::endl;
-    }
-    std::cout << "\033[0m" << std::endl;
-
-
-    if(!local_files.input_kmer_path.empty())
-    {
-        shc_log_info(shc_logname, "single kmer input from   : %s", local_files.input_kmer_path.c_str());
-    }
-    if(local_files.has_single)
-    {
-        shc_log_info(shc_logname, "single read input from   : %s", local_files.input_read_path.c_str());
-    }
-
-    if(local_files.has_pair)
-    {
-        shc_log_info(shc_logname, "read pair1 input from    : %s\n", local_files.input_read_path_1.c_str());
-        shc_log_info(shc_logname, "read pair2 input from    : %s\n", local_files.input_read_path_2.c_str());
-    }
-    if(!local_files.input_kmer_path.empty())
-    {
-        shc_log_info(shc_logname, "single kmer input from   : %s\n", local_files.input_kmer_path.c_str());
-    }
-}
-
-void print_and_log_read_length_setting(Shannon_C_setting & setting)
-{
-    std::cout << "\033[1;33m";
-    std::cout << "has_single               : " << ((setting.has_single)?("Yes"):("No")) << std::endl;
-    if(setting.has_single)
-        std::cout << "single read length       : " << (setting.single_read_length) << std::endl;
-    std::cout << "has_pair                 : " << ((setting.has_pair)?("Yes"):("No")) << std::endl;
-    if(setting.has_pair)
-    {
-        std::cout << "pair 1 length            : " << (setting.pair_1_read_length) << std::endl;
-        std::cout << "pair 2 length            : " << (setting.pair_2_read_length) << std::endl;
-    }
-    std::cout << "\033[0m";
-
-    shc_log_info(shc_logname, "has_single               : %s\n", ((setting.has_single)?("Yes"):("No")));
-    if(setting.has_single)
-        shc_log_info(shc_logname, "single length            : %d\n", (setting.single_read_length));
-    shc_log_info(shc_logname, "has_pair                 : %s\n", ((setting.has_pair)?("Yes"):("No")));
-    if(setting.has_pair)
-    {
-        shc_log_info(shc_logname, "pair 1 length            : %d\n", (setting.pair_1_read_length));
-        shc_log_info(shc_logname, "pair 2 length            : %d\n", (setting.pair_2_read_length));
-    }
-}
-
-void print_and_log_kmer_strand_setting(Shannon_C_setting & setting)
-{
-    std::cout << "\033[1;33m";
-    std::cout << "kmer_length is           : " << static_cast<uint16_t>(setting.kmer_length) << std::endl;
-    std::cout << "double stranded          : " << ((setting.is_double_stranded)?("Yes"):("No")) << std::endl;
-    std::cout << "\033[0m";
-    shc_log_info(shc_logname, "kmer_length is           : %d\n", static_cast<uint16_t>(setting.kmer_length));
-    shc_log_info(shc_logname, "double stranded          : %s\n", ((setting.is_double_stranded)?("Yes"):("No")));
-}
-
-void print_and_log_general_setting(Shannon_C_setting & setting)
-{
-    ;
-}
-
-void print_and_log_mb_setting(Shannon_C_setting & setting)
-{
-    std::cout << "\033[1;34m";
-    std::cout << "Multi-bridge     ***********" << std::endl;
-    std::cout << "max_hop_path             : " << setting.seq_graph_setup.max_hop_path << std::endl;
-    std::cout << "\033[0m" << std::endl;
-    shc_log_info(shc_logname, "Multi-bridge     ***********\n");
-    shc_log_info(shc_logname, "max_hop_path             : %d\n", setting.seq_graph_setup.max_hop_path);
-}
-
-void print_and_log_sf_setting(Shannon_C_setting & setting)
-{
-    std::cout << "\033[1;34m";
-    std::cout << "Sparse flow     ***********" << std::endl;
-    std::cout << "sparse flow multiple test: " << setting.sparse_flow_setup.multiple_test << std::endl;
-    std::cout << "\033[0m" << std::endl;
-    shc_log_info(shc_logname, "Sparse flow     ***********\n");
-    shc_log_info(shc_logname, "sparse flow multiple test: %d\n", setting.sparse_flow_setup.multiple_test);
-}
-
-void print_and_log_multi_graph_setting(Shannon_C_setting & setting)
-{
-    std::cout << "\033[1;34m";
-    std::cout << "Multi-graph     ***********" << std::endl;
-    std::cout << "num_parallel             : " << setting.num_parallel << std::endl;
-    std::cout << "\033[0m" << std::endl;
-    shc_log_info(shc_logname, "Multi-graph     ***********\n");
-    shc_log_info(shc_logname, "num_parallel             : %d\n", setting.num_parallel);
 }

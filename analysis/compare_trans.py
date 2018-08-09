@@ -2,7 +2,7 @@ import sys
 import tester
 import os
 
-os.chdir('/home/bowen/Shannon_Cpp_RNA_seq/analysis')
+os.chdir('./analysis')
 
 python_path = 'python'
 

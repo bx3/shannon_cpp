@@ -52,7 +52,7 @@ public:
     Multi_graph_handler(Shannon_C_setting & setting_): setting(setting_)
     {
         pair_fp_thresh = 0.9;
-        rmer_length = 24;
+        rmer_length = setting_.rmer_length;
         if (pthread_mutex_init(&work_lock, NULL) != 0)
         {
             shc_log_error("unable to initialize mutex\n");
@@ -66,11 +66,10 @@ public:
         if(!setting.local_files.single_node_dir.empty())
         {
             //std::cout <<"single_node_dir " << setting.local_files.single_node_dir << std::endl;
-            boost::filesystem::path dir_boost_path(setting.local_files.single_node_dir);
-            if(boost::filesystem::exists(setting.local_files.single_node_dir))
-                empty_directory(dir_boost_path);
-            else
-                add_directory(dir_boost_path);
+            //boost::filesystem::path dir_boost_path(setting.local_files.single_node_dir);
+            add_or_overwrite_directory(setting.local_files.single_node_dir,
+                                            setting.local_files.output_path);
+
         }
     }
 

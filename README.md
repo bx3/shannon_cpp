@@ -7,8 +7,8 @@ This is a **C++** implementatin for the work **ShannonRNA: an Information-Optima
 - [Installing](#installing)
 - [Input requirement](#input-requirement)
 - [Getting started](#getting-started)
-- [Output file structure](#output-file-structure)
 - [Flowchart](#flowchart)
+- [Output file structure](#output-file-structure)
 - [Usage](#usage)
 - [Config file](#config-file)
 - [Memory parameter](#memory-parameter)
@@ -22,6 +22,8 @@ This is a **C++** implementatin for the work **ShannonRNA: an Information-Optima
 * g++
 
 ### Installing
+* install python 
+    * sudo apt install python2.7 python-pip 
 * Install METIS
 	* sudo apt-get install libmetis-dev
 	* OR follow instructions from [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/download) .
@@ -95,30 +97,34 @@ custom              use json configuration file
 
 Usage: Shannon_D_RNA_seq <CMD> --help to see options
 ```
-### CMD<shannon>
-Shannon performs denovo transcriptome assembly by first partitioning reads into components, which can be individually run with CMD<partition>. Shannon then builds a de-bruijn graph for each component and runs CMD<multi-bridge> and CMD<sparse-flow> on that graph. To process all components at the same time, CMD<multi-graph> spawns multiple processes to facilitate parallel computing. At this step, Shannon has obtained reconstructed transcriptome and it uses CMD<find-rep> to remove redundancy. After all, CMD<ref-align> is optional, and allows comparison to the *ground true* result with BLAT. 
-The Input to CMD<shannon> takes a large number of raw reads (or Rcorrected reads), and Shannon runs those subcommands and store both intermidiate results and final output at output directory.
+### CMD\<shannon>
+Shannon performs denovo transcriptome assembly by first partitioning reads into components, which can be individually run with CMD\<partition>. Shannon then builds a de-bruijn graph for each component and runs CMD\<multi-bridge> and CMD\<sparse-flow> on that graph. To process all components at the same time, CMD\<multi-graph> spawns multiple processes to facilitate parallel computing. At this step, Shannon has obtained reconstructed transcriptome and it uses CMD\<find-rep> to remove redundancy. After all, CMD\<ref-align> is optional, and allows comparison to the *ground true* result using BLAT. 
 
-For a single-ended fasta read file at **path_to_single_ended_read**, with accepted 101 bases per read, Shannon processes and gives output at **output_path** 
-```
-./Shannon_RNASeq_Cpp shannon -l 101 -s path_to_single_ended_read -o output_path
-```
+CMD\<shannon> takes raw reads (or Rcorrected reads) as its input.
 
-For pair-ended fasta read file at **path_to_pair_ended_read_1** and **path_to_pair_ended_read_2**, with corresponding accepted **76** and **76** bases per read, Shannon processes and gives output at **output_path**
+For a single-ended fasta read file at **path_to_single_ended_read**, with accepted 101 bases per read, Shannon processes and gives assembled transcriptome at **output_path** 
 ```
-./Shannon_RNASeq_Cpp shannon -i 76 76 -p path_to_pair_ended_read_1 path_to_pair_ended_read_2 -o output_path
+./Shannon_RNASeq_Cpp shannon -l 101 -s path_to_single_ended_read -o output_path -t 1 -g 0
 ```
 
-### CMD<partition>
-Given a large noisy fasta-reads, CMD<partition> performs error correction, and partitions the reads into multiple components. Each component contains two files, a kmer file which holds all error-corrected kmer and read files which selectively include original input reads for that component depending on the partition algorithm. 
+For pair-ended fasta read file at **path_to_pair_ended_read_1** and **path_to_pair_ended_read_2**, with corresponding accepted **76** and **76** bases per read, Shannon processes and gives output at **output_path**. 
+```
+./Shannon_RNASeq_Cpp shannon -i 76 76 -p path_to_pair_ended_read_1 path_to_pair_ended_read_2 -o output_path -t 1 -g 0
+```
+
+**-t** specifies the number of running processes (2 threads per process). 
+**-g** controls the read subsampling at components partition step. It has a great impact on the running speed when input read files are large, since the partitioned reads are later used for multibridging. Setting it to 0 disables subsample operation; otherwise a higher **g** tends to keep more reads. For read i, the sampling is based on the formula P_i(KEEP) = min(1, g/read_count_for_read_i)
+
+### CMD\<partition>
+Given a large noisy fasta-reads, CMD\<partition> performs error correction, and partitions the reads into multiple components. Each component contains two files, a kmer file which holds all error-corrected kmer and read files which selectively include original input reads for that component depending on the partition algorithm. 
 
 ```
 ./Shannon_RNASeq_Cpp partition -l read_length -s path_to_pair_ended_read_1 -o output_path
 ```
 For all components, kmer files are stored together at **output_path/components_kmer**, read files are stored together at **output_path/components_reads**. 
 
-### CMD<multi-bridge>
-Given one component (for example component 2) with kmer-reads pair as its input, it builds a de-bruijn graph using the kmer file. CMD<multi-bridge> then condenses and pre-processes the graph by removing bubbles and suspicuous low abundance leaf nodes. After that it runs multi-bridge algorithm with the graph and the read files, which effectively reduces the number of xnodes within the graph if not all of them. 
+### CMD\<multi-bridge>
+Given one component (for example component 2) with kmer-reads pair as its input, it builds a de-bruijn graph using the kmer file. CMD\<multi-bridge> then condenses and pre-processes the graph by removing bubbles and suspicuous low abundance leaf nodes. After that it runs multi-bridge algorithm with the graph and the read files, which effectively reduces the number of xnodes within the graph if not all of them. 
 
 ```
 ./Shannon_RNASeq_Cpp multi-bridge -f path_to_kmer_file -l read_length -s path_to_read_file -o output_path 
@@ -138,15 +144,15 @@ output_path/comp_graph/Graph_paths_2/path(0,1,...,n)
 where 2 is a graph component index
 ```
 
-### CMD<sparse-flow>
-CMD<sparse-flow> takes node,edge,path files as its inputs (for example node0,edge0,path0 ), then build a de-bruijn graph to run sparse flow algorithm. It generates reconstructed transcriptome.
+### CMD/<sparse-flow>
+CMD/<sparse-flow> takes node,edge,path files as its inputs (for example node0,edge0,path0 ), then build a de-bruijn graph to run sparse flow algorithm. It generates reconstructed transcriptome.
 
 ```
 ./Shannon_RNASeq_Cpp sparse-flow --node_path path_to_node --edge_path path_to_edge --path_path path_to_path --output_path output_fasta_path
 ```
 
-### CMD<multi-graph>
-CMD<multi-graph> processes multiple components at the same time, use **-t** to specify the number of process where each process contains two threads, hence **-t 2** would allow 4 components running at the same time. Three modes are allowd
+### CMD\<multi-graph>
+CMD\<multi-graph> processes multiple components at the same time, use **-t** to specify the number of process where each process contains two threads, hence **-t 2** would allow 4 components running at the same time. Three modes are allowd
 ```
 multi-bridge    run multi-bridge algorithm on multiple components
 sparse-flow     run sparse-flow algorithm on all output graphs from multi-bridge
@@ -166,86 +172,313 @@ The input to **both** mode is the same as **multi-bridge** MODE
 ./Shannon_RNASeq_Cpp multi-graph both -l single_read_length -c kmers_dir -r reads_dir -o output_path -t 1
 ```
 
-### CMD<find-rep>
-CMD<find-rep> reduces number of redundant outputs by checking for any two reconstructed contigs, if they has the similar length and both have the same starting r-mer and ending r-mer, where r is set to be 24.
+### CMD\<find-rep>
+CMD\<find-rep> reduces number of redundant outputs by checking for any two reconstructed contigs, if they has the similar length and both have the same starting r-mer and ending r-mer, where r is set to be 24.
 ```
 ./Shannon_RNASeq_Cpp find-rep --input path_to_input_fasta_file --output output_fasta_path
 ```
-### CMD<ref-align>
-CMD<ref-align> uses BLAT(https://genome.ucsc.edu/FAQ/FAQblat) to do the read alignment. It takes reconstructed transcriptome as its target, and for each reference transcript, it searches for the best match. To qualify for an alignment, the match length must be 90% of the reference length.
+### CMD\<ref-align>
+CMD\<ref-align> uses BLAT(https://genome.ucsc.edu/FAQ/FAQblat) to do the read alignment. It takes reconstructed transcriptome as its target, and for each reference transcript, it searches for the best match. To qualify for an alignment, the match length must be 90% of the reference length.
+
+### CMD\<custom>
+A developer interface, which takes a config file.
 
 ```
 ./Shannon_RNASeq_Cpp ref-align --input path_to_reconstructed_transcriptome --output_dir output_dir --ref path_to_reference_transcriptome
 ```
 
-## Output file structure
+## Flowchart
+The following flow chart illustrates how this implementation works:
+* each cylinder represents a data storage, which is listed in the **output file structure** section. Item with [] means this file was just created by last functional block.
+![Alt text](./doc/shannon_flowchart.png?raw=true "Optional Title")
 
-./  
+
+## Output file structure
 * algo_input (when only fasta file is provided, this directory takes jellyfish output)
 	* kmer.dict
 	* kmer.jf
 * kmer_unfiltered_sorted
 * kmer
 * contig
+* contig_filtered.fasta
 * jf_stat
 * components_kmer
-	* kmer# (is partitioned kmer file for #-th component)	
+	* kmer0, kmer1, kmer2 ...
 * compomemts_read (# represents component index, & represents order of concatenation)
-	* comp#_& (is partititoned fasts files for #-th components, @ is the chained filed number)
-	* comp#_p1_& (used for paired read )
-	* comp#_p2_& (used for paired read )
+    * for single-ended reads
+    	* comp0_0, comp0_1, ...
+    	* comp1_0, comp1_1, ...
+    	* ......
+    	* compN_0, compN_1, ...
+    * for paired-ended reads
+    	* comp0_p1_0, comp0_p2_0, comp0_p1_1, comp0_p2_1 ... 
+    	* ....
+    	* compN_p1_0, compN_p2_0, compN_p1_1, compN_p2_1 ... 
 * comp_array (a file for recording property of each component)
-* comp_graph (# represents component index, @ represents graph index)
+* comp_graph (# represents component index)
 	* Graph_nodes_#
-		* node@ 
-		* single_node_#
+		* node0, node1, ... ,  single_node_#
 	* Graph_edges_#
-		* edge@
+		* edge0, edge1, ...
 	* Graph_paths_#
-		* path@
+		* path0, path1, ...
 * comp_graph_output (a temporary output file for storing reconstructed seq by each process)
 * log_shannonC 
-* reconstructed_seq.fasta (final output, combine fasta_single and fasta_sf, then perform filtering)
 * reconstructed_seq.fasta_single (reconstructed seq from multibridge step)
 * reconstructed_seq.fasta_sf (reconstructed seq from sparse flow step)
-* reconstructed_seq.fasta_unfiltered (simply combine fasta_single and fasta_sf)
-
-## Flowchart
-The following flow chart illustrates how this implementation works:
-* each cylinder represents inputs, which was listed in the **output file structure** above, required by each functional block. Item with [] means this file was just created by last functional block.
-![Alt text](./doc/shannon_flowchart.PNG?raw=true "Optional Title")
+* reconstructed_seq.fasta (final output, combining filtered fasta_single, fasta_sf and contig_filtered.fasta)
+* reconstructed_seq.fasta_unfiltered (simply combine fasta_single, fasta_sf and contig_filtered.fasta)
 
 
-## Usage
-Two modes are available 
-* shannon
-	* shannon provide a way to specify most important parameters through command line 
- 	* required field
- 		* j -- config file, specifying all detail parameter (More details in next section)
- 		* k -- kmer length (**<=32**)
- 		* o -- output directory
- 		* input fasta path and lenght
-			* single ended input
- 				* s -- single ended fasta path
- 				* l -- single ended fasta read typical length
-			* paired ended input
- 				* p -- paired ended fasta path
- 				* i -- paired ended fasta read typical length in a list
- 			* OR include both
- 	* optional field
- 		* it is fine only provide fasta path, but if jf and kmer dictionary is available, and user does not want to do duplicate work, paths to those file can be provided by
- 			* n -- jf path
- 			* m -- kmer path
- 		* if reference is available for evaluation
- 			* r -- reference 
- 		* d -- is single stranded
-* custom 
+## Manual
+
+### shannon
+```
+Usage: options_description [options]
+Allowed options:
+  --help                                produce help message
+  -k [ --kmer_length ] arg (=25)        kmer length. default 25
+  -d [ --double_strand ] arg (=1)       is reads considered double stranded.
+  -l [ --single_read_length ] arg       single read length
+  -i [ --pair_read_length ] arg         pair read length
+  -s [ --SE_read_path ] arg             single ended read path 
+  -p [ --PE_read_path ] arg             pair read path
+  -e [ --output_seq_min_len ] arg (=200)
+                                        minimal reconstructed output length
+  -o [ --output_dir ] arg               output dir path
+  --jf_path arg                         jf path from jellyfish
+  --kmer_path arg                       kmer path from jellyfish
+  --load_factor arg (=0.80000000000000004)
+                                        kmer dictionary load factor, control 
+                                        memory usage
+  -u [ --num_sort_thread ] arg (=1)     argument passing to linux sort function
+  --rmer_length arg (=15)               rmer length for error correction
+  --threshold arg (=0.5)                ratio of common rmer between two 
+                                        contigs for determing if two contifs 
+                                        are repetative
+  --min_count arg (=3)                  minimal kmer counts requirement for 
+                                        serving as seeds in the greedy contig 
+                                        formation step, also used in further 
+                                        selection formula discussed in the 
+                                        paper
+  --min_length arg (=75)                minimal contigs length, also also used 
+                                        in further selection formula discussed 
+                                        in the paper
+  --is_use_set arg (=0)                 use accummulating set for error 
+                                        correction, it would reduce memory 
+                                        usage, but give less performance
+  --read_num_test arg (=3)              number test for a read to decide which 
+                                        components the read should go to
+  --is_assign_best arg (=1)             only assign a read to its best matching
+                                        component or all components which work
+  -g [ --read_sampler_k ] arg (=0)      given that many reads are redundant, 
+                                        setting k to subsample matching reads 
+                                        to speedup later works, where k can be 
+                                        interpreted as coverage depth. k=0: no 
+                                        subsample; k>0: probabilistic sample; 
+                                        k<0: sample every (-k) read
+  --metis_use_multiple_partition arg (=1)
+                                        after one metis partition, reweight 
+                                        graph so that previously broken edge 
+                                        stays, it makes sure no information 
+                                        loss due to partition, but generate 
+                                        more output
+  --metis_partition_size arg (=500)     metis parameter to control number of 
+                                        contig within partitioned components
+  --metis_non_partition_size arg (=500) for those graphs small enough not to be
+                                        partitioned Shannon groups little 
+                                        pieces together, and the parameter 
+                                        control the collector component size
+  --penalty arg (=5)                    metis parameter, for controlling 
+                                        partition methods
+  --overload arg (=2)                   metis parameter, for controlling 
+                                        partition methods
+  -r [ --reference ] arg                Reference path for the output to 
+                                        compare with
+  --rmer_length arg (=24)               rmer size used to check duplicates
+  -t [ --num_process ] arg (=1)         Specify number processs for multi graph
+                                        procedureswhere each process produces 
+                                        two threads by default
+  --max_hop_for_known_path arg (=30)    Max number of hops allowable for a read
+                                        to cover
+  --multiple_test arg (=8)              number of times that a linear program 
+                                        sparse flow is solved
+
+```
+
+### partition
+```
+  --help                                produce help message
+  -k [ --kmer_length ] arg (=25)        kmer length. default 25
+  -d [ --double_strand ] arg (=1)       is reads considered double stranded.
+  -l [ --single_read_length ] arg       single read length
+  -i [ --pair_read_length ] arg         pair read length
+  -s [ --SE_read_path ] arg             single ended read path 
+  -p [ --PE_read_path ] arg             pair read path
+  -e [ --output_seq_min_len ] arg (=200)
+                                        minimal reconstructed output length
+  -o [ --output_dir ] arg               output dir path
+  --jf_path arg                         jf path from jellyfish
+  --kmer_path arg                       kmer path from jellyfish
+  --load_factor arg (=0.80000000000000004)
+                                        kmer dictionary load factor, control 
+                                        memory usage
+  -u [ --num_sort_thread ] arg (=1)     argument passing to linux sort function
+  --rmer_length arg (=15)               rmer length for error correction
+  --threshold arg (=0.5)                ratio of common rmer between two 
+                                        contigs for determing if two contifs 
+                                        are repetative
+  --min_count arg (=3)                  minimal kmer counts requirement for 
+                                        serving as seeds in the greedy contig 
+                                        formation step, also used in further 
+                                        selection formula discussed in the 
+                                        paper
+  --min_length arg (=75)                minimal contigs length, also also used 
+                                        in further selection formula discussed 
+                                        in the paper
+  --is_use_set arg (=0)                 use accummulating set for error 
+                                        correction, it would reduce memory 
+                                        usage, but give less performance
+  --read_num_test arg (=3)              number test for a read to decide which 
+                                        components the read should go to
+  --is_assign_best arg (=1)             only assign a read to its best matching
+                                        component or all components which work
+  -g [ --read_sampler_k ] arg (=0)      given that many reads are redundant, 
+                                        setting k to subsample matching reads 
+                                        to speedup later works, where k can be 
+                                        interpreted as coverage depth. k=0: no 
+                                        subsample; k>0: probabilistic sample; 
+                                        k<0: sample every (-k) read
+  --metis_use_multiple_partition arg (=1)
+                                        after one metis partition, reweight 
+                                        graph so that previously broken edge 
+                                        stays, it makes sure no information 
+                                        loss due to partition, but generate 
+                                        more output
+  --metis_partition_size arg (=500)     metis parameter to control number of 
+                                        contig within partitioned components
+  --metis_non_partition_size arg (=500) for those graphs small enough not to be
+                                        partitioned Shannon groups little 
+                                        pieces together, and the parameter 
+                                        control the collector component size
+  --penalty arg (=5)                    metis parameter, for controlling 
+                                        partition methods
+  --overload arg (=2)                   metis parameter, for controlling 
+                                        partition methods
+```
+
+### multi-bridge
+```
+Usage: options_description [options]
+Allowed options:
+  --help                                produce help message
+  -f [ --kmer_path ] arg                kmer path used as trusted debruijn 
+                                        graph edge
+  -l [ --single_read_length ] arg       single read length
+  -i [ --pair_read_length ] arg         pair read length
+  -s [ --SE_read_path ] arg             single ended read path 
+  -p [ --PE_read_path ] arg             pair read path
+  --max_hop_for_known_path arg (=30)    Max number of hops allowable for a read
+                                        to cover
+  -e [ --output_seq_min_len ] arg (=200)
+                                        minimal reconstructed output length
+  -o [ --output_dir ] arg               output dir path
+```
+
+### sparse-flow
+```
+Usage: options_description [options]
+Allowed options:
+  --help                                produce help message
+  --node_path arg                       input nodes path to sparse flow
+  --edge_path arg                       input edges path to sparse flow
+  --path_path arg                       input path path to sparse flow
+  -e [ --output_seq_min_len ] arg (=200)
+                                        minimal reconstructed output length
+  --output_path arg                     output path
+  --multiple_test arg (=8)              number of times that a linear program 
+                                        sparse flow is solved
+
+```
+
+### multi-graph multi-bridge
+```
+Usage: options_description [options]
+Allowed options:
+  --help                                produce help message
+  -k [ --kmer_length ] arg (=25)        kmer length. default 25
+  -d [ --double_strand ] arg (=1)       is reads considered double stranded.
+  -r [ --read_components_dir ] arg      specify reads_components dir produced 
+                                        from partition step
+  -c [ --kmer_components_dir ] arg      specify kmer_components dir produced 
+                                        from partition step
+  -l [ --single_read_length ] arg       single read length
+  -i [ --pair_read_length ] arg         pair read length
+  -e [ --output_seq_min_len ] arg (=200)
+                                        minimal reconstructed output length
+  -o [ --output_dir ] arg               output dir path
+  --multiple_test arg (=8)              number of times that a linear program 
+                                        sparse flow is solved
+  --max_hop_for_known_path arg (=30)    Max number of hops allowable for a read
+                                        to cover
+  -t [ --num_process ] arg (=1)         Specify number processs for multi graph
+                                        procedureswhere each process produces 
+                                        two threads by default
+
+```
+
+### multi-graph sparse-flow
+```
+Usage: options_description [options]
+Allowed options:
+  --help                                produce help message
+  -h [ --graphs_dir ] arg               specify graphs dir generated from 
+                                        multi-bridge
+  -e [ --output_seq_min_len ] arg (=200)
+                                        minimal reconstructed output length
+  -o [ --output_dir ] arg               output dir path
+  --multiple_test arg (=8)              number of times that a linear program 
+                                        sparse flow is solved
+  -t [ --num_process ] arg (=1)         Specify number processs for multi graph
+                                        procedureswhere each process produces 
+                                        two threads by default
+```
+
+### find-rep 
+```
+Usage: options_description [options]
+Allowed options:
+  --help                                produce help message
+  -e [ --output_seq_min_len ] arg (=200)
+                                        minimal reconstructed output length
+  --rmer_length arg (=24)               rmer size used to check duplicates
+  --input arg                           input path
+  --output arg                          output path
+  -d [ --double_strand ] arg (=1)       Specify if reads are considered double 
+                                        stranded.
+```
+
+### ref-align
+```
+Usage: options_description [options]
+Allowed options:
+  --help                produce help message
+  --input arg           reconstucted fasta path
+  --ref arg             reference path
+  --output_dir arg      output dir
+
+```
+
+
+
+### custom
+```
 	* argument: a config file (More details in next section) 
-	* custom setting provides a fine-tuned control over the whole processing, an user can start at any functional block to practice new parameters
-	* 19 tests are available to start at any point in the flowchart, provided that the corresponding inputs inside a cylinder are available and placed at proper place [See Output file structure](#output-file-structure)
-	* start from beginning, run the whole process: choose 12 (same as command line)
+	* custom setting provides a greater control over the whole processing, an user can start at any functional block to practice new parameters, provided that the corresponding inputs are available and placed at proper place [See Output file structure](#output-file-structure)
+	* start from beginning, run the whole process: choose 12 (same as command line shannon)
 	* run task A, B, C          	 : choose 3
 	* run task B, C             	 : choose 14
+	* run task B, C, D, E, F       	 : choose 21
 	* run task C	            	 : choose 4	
 	* run task C, D, E, F       	 : choose 20
 	* run task D, E, F    	    	 : choose 13
@@ -255,7 +488,7 @@ Two modes are available
 	* run single graph in task E	 : choose 10, then enter component component numner, then graph number
 	* run task F                	 : choose 19	
 	* run evaluation            	 : choose 16 (provided reference is given)
-
+```
 
 ## Config file
 Every task have various parameter, it is cumbumsome to have them all in argument. The config file serves to fit default value
@@ -269,7 +502,7 @@ Usage: each setting file should corresponds to a distinct output path
 	* threashold: an internal parameter for filtering noisy kmer (see paper)
 	* min_count: an internal parameter for filtering noisy kmer (see paper)
 	* min_length: an internal parameter for filtering noisy kmer (see paper)
-	* is_use_set: usually set to false, instead use a dictionary filtering (see paper)
+	* is_use_set: usually set to false, instead use a dictionary filtering 
 
 * contig_graph_setup
 	* num_test: for each fasta-read (pair), it specifies number of kmer it would check for assigning the read to the components
@@ -280,25 +513,20 @@ Usage: each setting file should corresponds to a distinct output path
 	* overload: see metis manual
 	* use_multiple_partition: see paper
 * multi_graph_setup
-	* num_parallel: specify number of **process** created for multibridging all graphs. (each process would spawn two threads)
-	* max_hop_for_pair_search: given a pair read, it would search for a unique path(if available) between the paired end and constructed a pseudo super-read
-		* negative number: turn it off
-		* 0: consider only if two termainl ends of the paired read both reside on the same node
-		* positive number: check for how many hops
-	* mate_pair_len: for the paired search mentioned above, only accept the super-read if middle part has a length less than this number
-	* single_node_seq_len: when a graph is too well multibridged, it would yield many single nodes, consider this node to be a reconstructed RNA sequence iff its length is higher than this number
+    * num_parallel: specify number of **process** created for multibridging all graphs. (each process would spawn two threads)
+* seq_graph_setup
 	* max_hop_for_known_path: known path is used in sparse flow, only consider path less than this number
 * sparse_flow_setup
 	* multiple_test: it specifies how many random trails are performed for solving L1 norm (see paper)
-	* sf_num_parallel: number of **process** created for solving sparse flow (each process implicitly creats two threads)
-	
+* find_rep_setup
+    * rmer_length   
 
 ## Memory parameter
 To address the memory issue, two several are defined 
 * choose methods to represents kmer count: in the file src/shc_types.h
 	* USE_APPROX_COUNT -- use 8 bytes for kmer dictionary value part
 	* USE_EXACT_COUNT  -- use 16 bytes for kmer dictionary value part
-	* experiment shows thatn for input with size 34G, USE_APPROX_COUNT takes 61G, USE_EXACT_COUNT takes 82G
+	* experiment shows that for input with size 34G, USE_APPROX_COUNT takes 61G, USE_EXACT_COUNT takes 82G
 * choose dictionary to store kmer count: in the file src/shc_setting.h
 	* USE_HOPSCOTCH
 	* USE_SPARSEPP

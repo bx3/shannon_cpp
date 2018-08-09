@@ -1198,7 +1198,7 @@ void Contig_graph_handler::assign_paired_read_to_components(
     std::string dir_path = lf.output_components_read_dir;
     path_t comp_read_path(dir_path);
     if(boost::filesystem::exists(comp_read_path))
-        empty_directory(comp_read_path);
+        empty_directory(comp_read_path, lf.output_path);
     else
         add_directory(comp_read_path);
 

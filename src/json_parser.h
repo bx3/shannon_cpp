@@ -216,10 +216,10 @@ struct Sparse_flow_setup {
 
 struct Shannon_C_setting {
     Shannon_C_setting () :
-            kmer_length(0), single_read_length(0), pair_1_read_length(0),
+            kmer_length(25), single_read_length(0), pair_1_read_length(0),
             pair_2_read_length(0), has_single(false), has_pair(false),
             is_double_stranded(true), is_compress(false), num_parallel(1),
-            take_single_node_seq(true), take_contig_seq(true){}
+            take_single_node_seq(true), take_contig_seq(true), rmer_length(24){}
 
     bool has_single;
     uint8_t kmer_length;
@@ -238,6 +238,8 @@ struct Shannon_C_setting {
     bool take_contig_seq;
 
     int num_parallel;
+
+    int rmer_length;
 
     int output_seq_min_len;
 
@@ -259,25 +261,7 @@ struct Shannon_C_setting {
 
 std::string get_setting_string(Shannon_C_setting & setting);
 void parser_setting_file(std::string & file_path, Shannon_C_setting & setting);
-void print_and_log_all_setting(Shannon_C_setting & setting);
-void print_setting(Shannon_C_setting & setting);
-void log_setting(Shannon_C_setting & setting);
-void print_and_log_general_setting(Shannon_C_setting & setting);
-void print_and_log_partition_setting(Shannon_C_setting & setting);
-void print_and_log_multi_graph_setting(Shannon_C_setting & setting);
-void print_and_log_mb_setting(Shannon_C_setting & setting);
-void print_and_log_sf_setting(Shannon_C_setting & setting);
-void print_and_log_general_setting(Shannon_C_setting & setting);
-void print_and_log_partition_setting(Shannon_C_setting & setting);
-void print_and_log_general_setting(Shannon_C_setting & setting);
-void print_and_log_multi_graph_setting(Shannon_C_setting & setting);
-void print_and_log_mb_setting(Shannon_C_setting & setting);
-void print_and_log_sf_setting(Shannon_C_setting & setting);
-void print_and_log_kmer_strand_setting(Shannon_C_setting & setting);
-void print_and_log_input_path_setting(Shannon_C_setting & setting);
-void print_and_log_read_length_setting(Shannon_C_setting & setting);
-void print_and_log_kmer_strand_setting(Shannon_C_setting & setting);
-void print_and_log_output_setting(Shannon_C_setting & setting);
+
 
 
 

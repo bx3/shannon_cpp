@@ -52,6 +52,13 @@ void stop_timer(struct Block_timer * bt)
     print_timer(bt);
 }
 
+uint64_t take_time(struct Block_timer * bt)
+{
+    struct Block_timer curr_bt;
+    clock_gettime(CLOCK_MONOTONIC,&(curr_bt.nano_stamp));
+    return (curr_bt.nano_stamp.tv_sec - bt->nano_start.tv_sec);
+}
+
 void stop_timer_np(struct Block_timer * bt)
 {
     clock_gettime(CLOCK_MONOTONIC,&bt->nano_stamp);

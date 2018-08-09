@@ -4387,7 +4387,7 @@ void Sequence_graph_handler::seq_graph_output_dir_setup_helper(std::string & dir
 {
     boost::filesystem::path dir_boost_path(dir);
     if(boost::filesystem::exists(dir))
-        empty_directory(dir_boost_path);
+        empty_directory(dir_boost_path, setting.local_files.output_path);
     else
         add_directory(dir_boost_path);
 }
@@ -4525,8 +4525,9 @@ void Sequence_graph_handler::output_components(std::string & node_dir,
     sinlge_node_writer.close();
     if(!is_run_single_component)
     {
-        std::string cmd("cp " + single_node_path + ' ' +
-                    setting.local_files.single_node_dir);
+        std::string cmd("cp " + single_node_path + " " +
+                    setting.local_files.single_node_dir + "/single_node_" + std::to_string(curr_comp));
+        //std::cout << cmd << std::endl;
         run_command(cmd, false);
     }
 }

@@ -334,16 +334,23 @@ void test_all(Shannon_C_setting * setting)
         exit(1);
     }
 #endif
+
+
     Block_timer main_timer;
     start_timer(&main_timer);
 
-    Block_timer jellyfish_timer;
-    start_timer(&jellyfish_timer);
+    Block_timer part_timer;
+    start_timer(&part_timer);
     run_jellyfish(*setting);
     std::cout << "Jellyfish task finishes, using time " << std::endl;
-    stop_timer(&jellyfish_timer);
+    stop_timer(&part_timer);
     shc_log_info(shc_logname, "finish run jellyfish\n");
-    log_stop_timer(&jellyfish_timer);
+    log_stop_timer(&part_timer);
+
+
+    info_log_info(setting->local_files.timing_path.c_str(),
+                        "jellyfish %u sec\n", take_time(&part_timer));
+    start_timer(&part_timer);
 
     Duplicate_setting & dup = setting->dup_setting;
     Local_files * lf = &setting->local_files;
@@ -375,6 +382,11 @@ void test_all(Shannon_C_setting * setting)
         //stop_timer(&contig_dump_timer);
         //kmer_handler.clear_kmer_map();
     }
+
+    info_log_info(setting->local_files.timing_path.c_str(),
+                        "building contig %u sec\n", take_time(&main_timer));
+    start_timer(&part_timer);
+
     // reload everything just to free memory
     {
         show_main_timer(&main_timer);
@@ -408,27 +420,40 @@ void test_all(Shannon_C_setting * setting)
 
     }
 
+    info_log_info(setting->local_files.timing_path.c_str(),
+                        "partition finish %u sec\n", take_time(&main_timer));
+    start_timer(&part_timer);
 
     // starting multibridge and sparse flow
     {
         Multi_graph_handler multi_graph(*setting);
         multi_graph.run_multi_seq_graph();
 
+        info_log_info(setting->local_files.timing_path.c_str(),
+                            "multi-graph multi-bridge finish %u sec\n", take_time(&main_timer));
         show_main_timer(&main_timer);
 
         // sparse flow
         multi_graph.run_multi_sparse_flow(-1);
-
+        info_log_info(setting->local_files.timing_path.c_str(),
+                            "multi-graph sparse-flow finish %u sec\n", take_time(&main_timer));
+        start_timer(&part_timer);
 
         multi_graph.combine_all_reconst_seq_to_output();
         multi_graph.filter_output_seq_by_length();
         //multi_graph.filter_FP(setting->local_files.reconstructed_seq_path);
         multi_graph.filter_reconstructed();
+        info_log_info(setting->local_files.timing_path.c_str(),
+                            "find-rep finish %u sec\n", take_time(&main_timer));
+        start_timer(&part_timer);
 
         shc_log_info(shc_logname, "\t\t** entire process finish, \n");
         show_main_timer(&main_timer);
     }
 
+    info_log_info(setting->local_files.timing_path.c_str(),
+                        "shannon finish %u sec\n", take_time(&main_timer));
+    start_timer(&part_timer);
     eval_reconstructed_seq(setting->local_files);
 }
 

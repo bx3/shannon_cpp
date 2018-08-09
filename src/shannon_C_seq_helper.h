@@ -64,6 +64,26 @@ int eval_align_counts(std::string filename, int & num_single_seq,
                         int & num_single_contribute, int & num_contig_contribute,
                         int & num_sf_contribute);
 
+void print_and_log_all_setting(Shannon_C_setting & setting);
+void print_and_log_general_setting(Shannon_C_setting & setting);
+void print_and_log_partition_setting(Shannon_C_setting & setting);
+void print_and_log_multi_graph_setting(Shannon_C_setting & setting);
+void print_and_log_mb_setting(Shannon_C_setting & setting);
+void print_and_log_sf_setting(Shannon_C_setting & setting);
+void print_and_log_general_setting(Shannon_C_setting & setting);
+void print_and_log_partition_setting(Shannon_C_setting & setting);
+void print_and_log_general_setting(Shannon_C_setting & setting);
+void print_and_log_multi_graph_setting(Shannon_C_setting & setting);
+void print_and_log_mb_setting(Shannon_C_setting & setting);
+void print_and_log_sf_setting(Shannon_C_setting & setting);
+void print_and_log_kmer_strand_setting(Shannon_C_setting & setting);
+void print_and_log_input_path_setting(Shannon_C_setting & setting);
+void print_and_log_read_length_setting(Shannon_C_setting & setting);
+void print_and_log_kmer_strand_setting(Shannon_C_setting & setting);
+void print_and_log_output_setting(Shannon_C_setting & setting);
+void print_and_log_find_rep_setting(Shannon_C_setting & setting);
+
+
 int get_kmer_length_from_kmer_file(std::string kmer_path);
 void produce_summary_file(struct Local_files & lf);
 

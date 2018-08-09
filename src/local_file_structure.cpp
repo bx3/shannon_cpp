@@ -77,20 +77,20 @@ void add_or_overwrite_directory(std::string & dir, std::string & output_dir)
         convert_relative_path_to_abs(dir);
     if(!is_abs_path(output_dir))
         convert_relative_path_to_abs(output_dir);
-    std::cout << "add or clean dir " << dir << std::endl;
+    std::cout << "add or overwrite dir " << dir << std::endl;
     int output_path_length = output_dir.size();
     std::string dir_prefix = dir.substr(0, output_path_length);
     if( dir.size()<=output_path_length || dir_prefix != output_dir)
     {
-        std::cout << "cannot overwrite or add, since new dir is not a subdir of output dir" << std::endl;
-        std::cout << "new dir:    " << dir << std::endl;
+        std::cout << "cannot overwrite, since dir is not a subdir of output dir" << std::endl;
+        std::cout << "new dir : " << dir << std::endl;
         std::cout << "output dir: " << output_dir << std::endl;
         exit(0);
     }
 
     boost::filesystem::path dir_boost_path(dir);
     if(boost::filesystem::exists(dir))
-        empty_directory(dir_boost_path);
+        empty_directory(dir_boost_path, output_dir);
     else
         add_directory(dir_boost_path);
 }
@@ -120,8 +120,18 @@ bool is_file_empty(std::string a_path)
     return is_empty;
 }
 
-void empty_directory(boost::filesystem::path & dir_path)
+void empty_directory(boost::filesystem::path & dir_path, std::string output_dir)
 {
+    int output_path_length = output_dir.size();
+    std::string dir = dir_path.string();
+    std::string dir_prefix = dir.substr(0, output_path_length);
+    if( dir.size()<=output_path_length || dir_prefix != output_dir)
+    {
+        std::cout << "cannot clean, since dir is not a subdir of output dir" << std::endl;
+        std::cout << "clean dir : " << dir << std::endl;
+        std::cout << "output dir: " << output_dir << std::endl;
+        exit(0);
+    }
     boost::filesystem::remove_all(dir_path);
     add_directory(dir_path);
 }
