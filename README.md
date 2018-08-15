@@ -102,7 +102,7 @@ Shannon performs denovo transcriptome assembly by first partitioning reads into 
 
 CMD\<shannon> takes raw reads (or Rcorrected reads) as its input.
 
-For a single-ended fasta read file at **path_to_single_ended_read**, with accepted 101 bases per read, Shannon processes and gives assembled transcriptome at **output_path** 
+For a single-ended fasta read file at **path_to_single_ended_read**, with accepted 101 bases per read, Shannon processes and gives assembled transcriptome at **output_path**. It is suggested to set the output_path to a non-existant new directory while working with command line.
 ```
 ./Shannon_RNASeq_Cpp shannon -l 101 -s path_to_single_ended_read -o output_path -t 1 -g 0
 ```

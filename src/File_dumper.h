@@ -546,7 +546,7 @@ struct Single_dumper {
 #ifdef LOG_FILER_DUMPER
         std::cout << "finish finalize mem read files" << std::endl;
 #endif
-        stop_timer(&l_timer);
+        //stop_timer(&l_timer);
         log_stop_timer(&l_timer);
         deallocate_mem();
     }
@@ -714,7 +714,7 @@ struct FASTA_dumper {
 #ifdef LOG_FILER_DUMPER
             std::cout << "finish dump single file" << std::endl;
             stop_timer(&dump_timer);
-#endif            
+#endif
             log_stop_timer(&dump_timer);
         }
         if(has_pair)

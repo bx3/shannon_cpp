@@ -26,14 +26,15 @@ void produce_summary_file(struct Local_files & lf)
     int total_align = eval_align_counts(lf.eval_path + "_align" ,
                 align_num_single_seq, align_num_contig_seq, align_num_sf_seq,
                 num_single_contribute, num_contig_contribute,
-                num_sf_contribute);
+                num_sf_contribute, lf);
     int total_contribute = num_single_contribute+
                             num_contig_contribute+num_sf_contribute;
 
-
+    writer << "number inside () denotes the number of unique aligned shannon output" << std::endl;
+    writer << "so multiple ref transcripts might align to a single reconstructed transcript" << std::endl;
 
     int one_l = 1;
-    writer << "               " << "aligned" << "\t|\t" << "output" << "\t|\t" << "percentage right" <<std::endl;
+    writer << "               " << "aligned" << "\t|\t" << "sh output" << "\t|\t" << "percentage correct" <<std::endl;
     writer << "total seq      " << total_align << "\t|\t" << num_output_seq
            << " (" << total_contribute << ")" << "\t|\t"
            << total_contribute*100/(std::max((uint64_t)1, num_output_seq))<<std::endl;
@@ -201,7 +202,7 @@ std::string get_py_eval_summary(Local_files & lf, std::vector<std::string> & py_
 int eval_align_counts(std::string filename,
         int & num_single_seq, int & num_contig_seq, int & num_sf_seq,
         int & num_single_contribute, int & num_contig_contribute,
-        int & num_sf_contribute)
+        int & num_sf_contribute, struct Local_files & lf)
 {
     num_single_seq = 0;
     num_contig_seq = 0;
@@ -242,9 +243,17 @@ int eval_align_counts(std::string filename,
             exit(0);
         }
     }
+
     num_single_contribute = single_contributing_seq.size();
     num_contig_contribute = contig_contributing_seq.size();
     num_sf_contribute = comp_contributing_seq.size();
+    std::ofstream comp_name_writer(lf.eval_dir_path + "/comp_align.fasta");
+    for(std::set<std::string>::iterator it=comp_contributing_seq.begin();
+                                    it!=comp_contributing_seq.end(); it++)
+    {
+        comp_name_writer << (*it) << std::endl;
+    }
+
     return total_align;
 }
 

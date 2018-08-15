@@ -62,7 +62,7 @@ void count_seq_types_num(std::string filename, int & num_single_seq,
 int eval_align_counts(std::string filename, int & num_single_seq,
                         int & num_contig_seq, int & num_sf_seq,
                         int & num_single_contribute, int & num_contig_contribute,
-                        int & num_sf_contribute);
+                        int & num_sf_contribute, struct Local_files & lf);
 
 void print_and_log_all_setting(Shannon_C_setting & setting);
 void print_and_log_general_setting(Shannon_C_setting & setting);

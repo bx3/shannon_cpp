@@ -7,7 +7,7 @@ bool convert_to_abs_and_check_exist(std::string & path)
     if(!exist_path(path))
     {
         std::cout << "\033[0;33m";
-        std::cout << "ERROR: path not exist"  << std::endl;
+        std::cout << "path not exist"  << std::endl;
         std::cout << path  << std::endl;
         std::cout << "\033[0m";
         return false;
@@ -132,6 +132,7 @@ void empty_directory(boost::filesystem::path & dir_path, std::string output_dir)
         std::cout << "output dir: " << output_dir << std::endl;
         exit(0);
     }
+    std::cout << "*********clean dir" << std::endl;
     boost::filesystem::remove_all(dir_path);
     add_directory(dir_path);
 }
