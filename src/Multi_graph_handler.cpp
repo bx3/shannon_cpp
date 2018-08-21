@@ -873,7 +873,8 @@ duplicate_check_ends(std::vector<std::string> & seqs, uint64_t header, bool rc)
         if(index_pair.first>=0 && index_pair.second>=0)
         {
             int64_t diff = index_pair.second - index_pair.first;
-            if(std::abs(diff+rmer_length-seq.size()) < 3)
+            int64_t seq_size = static_cast<int64_t>(seq.size());
+            if(std::abs(diff+rmer_length-seq_size) < 3)
             {
                 std::string & seq_other = seqs[it->first];
                 if(seq.size()<seq_other.size() ||
