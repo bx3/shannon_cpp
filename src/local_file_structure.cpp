@@ -23,6 +23,13 @@ void convert_relative_path_to_abs(std::string rel_path, std::string & abs_path)
     abs_path = abs_out_path;
 }
 
+void cp_file(std::string src_file, std::string dst_file)
+{
+    std::ifstream  src(src_file, std::ios::binary);
+    std::ofstream  dst(dst_file,   std::ios::binary);
+    dst << src.rdbuf();
+}
+
 void convert_relative_path_to_abs(std::string & a_path)
 {
     char resolved_path[PATH_MAX];
@@ -132,7 +139,7 @@ void empty_directory(boost::filesystem::path & dir_path, std::string output_dir)
         std::cout << "output dir: " << output_dir << std::endl;
         exit(0);
     }
-    std::cout << "*********clean dir" << std::endl;
+    //std::cout << "*********clean dir" << std::endl;
     boost::filesystem::remove_all(dir_path);
     add_directory(dir_path);
 }

@@ -25,6 +25,8 @@
 //#include "shannon_C_seq_helper.h"
 
 
+
+
 struct Local_files;
 
 void add_or_overwrite_directory(std::string & dir, std::string & output_dir);
@@ -37,6 +39,7 @@ void print_and_log_local_file_system(Local_files *lf);
 bool exist_path(std::string a_path);
 bool is_file_empty(std::string a_path);
 void overwirte_a_file(std::string file_path);
+void cp_file(std::string src, std::string dst);
 
 size_t get_filesize(const std::string & filename);
 size_t estimate_num_read(const std::string & filename, size_t read_length);
@@ -61,6 +64,31 @@ std::string get_current_calender_time();
 #define TEST_NUM_LINE 5000
 #define SIZE_MULTIPLIER 1.15
 
+struct Mem_profiler {
+    Mem_profiler() {}
+    void set_path(std::string output_dir_)
+    {
+        output_dir = output_dir_;
+        mem_dir = output_dir + "/shannon_mem_log";
+        add_or_overwrite_directory(mem_dir, output_dir);
+        main_log_path = mem_dir + "/main";
+        sort_log_path = mem_dir + "/sort";
+        jelly_log_path = mem_dir + "/jelly";
+        parallel_dir = mem_dir + "/shannon_parallel";
+        add_or_overwrite_directory(parallel_dir, output_dir);
+        parallel_path_prefix = parallel_dir + "/process_";
+        mem_summary = output_dir + "/mem_summary";
+    }
+    std::string main_log_path;
+    std::string sort_log_path;
+    std::string jelly_log_path;
+    std::string parallel_dir;
+    std::string parallel_path_prefix;
+    std::string output_dir;
+    std::string mem_dir;
+    std::string mem_summary;
+};
+
 struct Local_files {    //"/test_data"
     typedef std::string s;
 
@@ -81,6 +109,7 @@ struct Local_files {    //"/test_data"
         if(!output_path.empty())
         {
             add_output_path(output_path);
+
         }
     }
 
@@ -146,6 +175,9 @@ struct Local_files {    //"/test_data"
         timing_path = output_path + "/Shannon.timing";
         overwirte_a_file(timing_path);
 
+        component_mem_info = output_path + "/component_mem_info";
+
+
         //std::cout << "output_path " << output_path << std::endl;
         //std::cout << "output_seq_graph_path " << output_seq_graph_path << std::endl;
 
@@ -153,6 +185,8 @@ struct Local_files {    //"/test_data"
         boost::filesystem::path output_path_boost(output_path);
         if( !boost::filesystem::exists(output_path_boost) )
             add_directory(output_path_boost);
+
+        mem_profiler.set_path(output_path);
 
         boost::filesystem::path output_seq_graph_path_boost(output_seq_graph_path);
         if( !boost::filesystem::exists(output_seq_graph_path_boost) )
@@ -166,6 +200,11 @@ struct Local_files {    //"/test_data"
         boost::filesystem::path eval_dir_path_boost(eval_dir_path);
         if( !boost::filesystem::exists(eval_dir_path_boost) )
             add_directory(eval_dir_path_boost);
+
+        fifo_dir = output_path + "/multi_graph_fifo";
+        add_or_overwrite_directory(fifo_dir, output_path);
+
+        //output_mem_log_dir = output_path + "/mem_log";
 
         //boost::filesystem::path summary_file_path_boost(summary_file_path);
         //if( !boost::filesystem::exists(summary_file_path_boost) )
@@ -222,9 +261,12 @@ struct Local_files {    //"/test_data"
 
         timing_path = output_path + "/Shannon.timing";
         overwirte_a_file(timing_path);
+        component_mem_info = output_path + "/component_mem_info";
+
 
 
         // prepare dir and files
+
         boost::filesystem::path output_path_boost(output_path);
         if( !boost::filesystem::exists(output_path_boost) )
             add_directory(output_path_boost);
@@ -238,13 +280,18 @@ struct Local_files {    //"/test_data"
         if( !boost::filesystem::exists(eval_dir_path_boost) )
             add_directory(eval_dir_path_boost);
 
+        fifo_dir = output_path + "/multi_graph_fifo";
+        add_or_overwrite_directory(fifo_dir, output_path);
+
+        mem_profiler.set_path(output_path);
+
         //boost::filesystem::path summary_file_path_boost(summary_file_path);
         //if( !boost::filesystem::exists(summary_file_path_boost) )
         //    add_directory(summary_file_path_boost);
 
         add_directory_if_not_exist(algo_input);
 
-        //std::cout << "finish add output path" << std::endl;
+        //output_mem_log_dir = output_path + "/mem_log";
     }
 
     void update_output_file_tree(std::string output_root_path)
@@ -307,6 +354,12 @@ struct Local_files {    //"/test_data"
 
     std::string start_time;
     std::string end_time;
+
+    std::string fifo_dir;
+
+    Mem_profiler mem_profiler;
+    std::string component_mem_info;
+
 private:
     //input name
     std::string contig_name;

@@ -57,7 +57,7 @@ void run_entire(int argc, char** argv)
 
 }
 
-void run_custom(int argc, char** argv, std::string setting_path)
+void run_custom(int argc, char** argv, Shannon_C_setting setting)
 {
     int desiredTest = -1;
     while(desiredTest<0 || desiredTest>21)
@@ -88,10 +88,6 @@ void run_custom(int argc, char** argv, std::string setting_path)
         std::cin >> desiredTest;
     }
 
-    Shannon_C_setting setting;
-    parser_setting_file(setting_path, setting);
-    memcpy(shc_logname, setting.local_files.log_filename_path.c_str(),
-                                        setting.local_files.log_filename_path.size());
 
     info_log_info(setting.local_files.timing_path.c_str(), "Command line Inputs\n");
     std::string cmd;
@@ -305,7 +301,7 @@ void test_multi_seq_sf(Shannon_C_setting * setting)
         multi_graph.run_multi_seq_graph();
 
         std::cout << "multi seq graph finish, " << std::endl;
-        show_main_timer(&main_timer);
+        show_main_timer(&main_timer);        
 
         // sparse flow
         multi_graph.run_multi_sparse_flow(-1);
@@ -349,7 +345,7 @@ void test_all(Shannon_C_setting * setting)
 
 
     info_log_info(setting->local_files.timing_path.c_str(),
-                        "jellyfish %u sec\n", take_time(&part_timer));
+                        "jellyfish finish at %u sec\n", take_time(&part_timer));
     start_timer(&part_timer);
 
     Duplicate_setting & dup = setting->dup_setting;
@@ -384,7 +380,7 @@ void test_all(Shannon_C_setting * setting)
     }
 
     info_log_info(setting->local_files.timing_path.c_str(),
-                        "building contig %u sec\n", take_time(&main_timer));
+                        "building contig finish at %u sec\n", take_time(&main_timer));
     start_timer(&part_timer);
 
     // reload everything just to free memory
@@ -421,7 +417,7 @@ void test_all(Shannon_C_setting * setting)
     }
 
     info_log_info(setting->local_files.timing_path.c_str(),
-                        "partition finish %u sec\n", take_time(&main_timer));
+                        "partition finish at %u sec\n", take_time(&main_timer));
     start_timer(&part_timer);
 
     // starting multibridge and sparse flow
@@ -430,13 +426,13 @@ void test_all(Shannon_C_setting * setting)
         multi_graph.run_multi_seq_graph();
 
         info_log_info(setting->local_files.timing_path.c_str(),
-                            "multi-graph multi-bridge finish %u sec\n", take_time(&main_timer));
+                            "multi-graph multi-bridge finish at %u sec\n", take_time(&main_timer));
         show_main_timer(&main_timer);
 
         // sparse flow
         multi_graph.run_multi_sparse_flow(-1);
         info_log_info(setting->local_files.timing_path.c_str(),
-                            "multi-graph sparse-flow finish %u sec\n", take_time(&main_timer));
+                            "multi-graph sparse-flow finish at %u sec\n", take_time(&main_timer));
         start_timer(&part_timer);
 
         multi_graph.combine_all_reconst_seq_to_output();
@@ -444,7 +440,7 @@ void test_all(Shannon_C_setting * setting)
         //multi_graph.filter_FP(setting->local_files.reconstructed_seq_path);
         multi_graph.filter_reconstructed();
         info_log_info(setting->local_files.timing_path.c_str(),
-                            "find-rep finish %u sec\n", take_time(&main_timer));
+                            "find-rep finish at %u sec\n", take_time(&main_timer));
         start_timer(&part_timer);
 
         shc_log_info(shc_logname, "\t\t** entire process finish, \n");
@@ -452,7 +448,7 @@ void test_all(Shannon_C_setting * setting)
     }
 
     info_log_info(setting->local_files.timing_path.c_str(),
-                        "shannon finish %u sec\n", take_time(&main_timer));
+                        "shannon finish at %u sec\n", take_time(&main_timer));
     start_timer(&part_timer);
     eval_reconstructed_seq(setting->local_files);
 }

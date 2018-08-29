@@ -4,14 +4,18 @@
 
 #include "Sequence_graph_handler.h"
 
-void Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
+int64_t Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
 {
     is_run_single_component = is_single_component;
     is_multi_thread = true;
 
-    //std::cout <<" \t\tworking on comp " << comp_i << std::endl;
+
     curr_comp  = comp_i;
+
+    //std::cout <<" \t\tworking on comp " << comp_i << std::endl;
     //curr_comp = comp_i;
+    //std::cout << "start" << std::endl;
+    //usleep(2000000);
     if (curr_comp >= 0)
     {
         setup_input_file_path(comp_i);
@@ -38,7 +42,16 @@ void Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
     Block_timer part_timer;
     start_timer(&part_timer);
 
+    //std::cout << "start build graph" << std::endl;
+    //usleep(2000000);
+
     build_kmer_graph_from_edges();
+
+    // peak mem
+    int64_t curr_mem = get_mem(getpid());
+    if(curr_mem > peak_mem)
+        peak_mem = curr_mem;
+
     build_num_node = get_num_nodes();
     build_num_edge = get_num_edges();
 #ifdef PRINT_TIME
@@ -245,6 +258,8 @@ void Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
     output_time = dump_timer.nTime;
     //clear_seq_graph_mem();
 
+    //std::cout << "\t\t\t\t" << "Finish comp " << curr_comp << std::endl;
+
     if(is_single_component)
     {
         std::cout << std::endl;
@@ -291,6 +306,7 @@ void Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
     shc_log_info(shc_logname, "output_time           %d sec, %u single seq\n", output_time, num_single_seq);
     shc_log_info(shc_logname, "total time \n");
     log_stop_timer(&main_timer);
+    return peak_mem;
 }
 
 void Sequence_graph_handler::
@@ -469,7 +485,6 @@ void Sequence_graph_handler::build_kmer_graph_from_edges()
 
         graph[*it].prevalence = (in_sum_p+out_sum_p)/2;
     }
-
     load_all_read(kmer_node_map);
 }
 
@@ -569,6 +584,10 @@ void Sequence_graph_handler::load_all_read(Kmer_Node_map & kmer_node_map)
             load_all_paired_read(kmer_node_map);
         }
     }
+    // since after declare and finish, a temporary dictionary mem is released
+    int64_t curr_mem = get_mem(getpid());
+    if(curr_mem > peak_mem)
+        peak_mem = curr_mem;
 
     coll_read_list.declare_read_finish();
 #ifdef LOG_SEQ_GRAPH

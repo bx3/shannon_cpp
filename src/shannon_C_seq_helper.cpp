@@ -1,4 +1,171 @@
 #include "shannon_C_seq_helper.h"
+#include <boost/tokenizer.hpp>
+
+
+uint64_t get_mem(pid_t id)
+{
+    std::string mem_log_file = "/proc/" + std::to_string(id)+ "/status";
+    if(exist_path(mem_log_file))
+    {
+        FILE* file = fopen(mem_log_file.c_str(), "r");
+        uint64_t result = 0;
+        char line[128];
+
+        while (fgets(line, 128, file) != NULL){
+            if (strncmp(line, "VmRSS:", 6) == 0){
+                result = parseLine(line);
+                break;
+            }
+        }
+        fclose(file);
+        return result*1024;  //return byte
+    }
+    else
+        return 0;
+}
+
+
+void get_mem_statistics(int num_parallel, Mem_profiler & mp)
+{
+    std::string get_parallel_max_cmd = mp.parallel_dir;
+    std::vector<std::string> lines(num_parallel);
+
+    std::vector<std::shared_ptr<std::ifstream> > process_log_readers;
+    for (int i=0; i<num_parallel; i++)
+    {
+        std::string process_log_path = mp.parallel_path_prefix + std::to_string(i) + ".ps.log";
+        std::shared_ptr<std::ifstream> process_reader(new std::ifstream);
+
+        process_reader->open(process_log_path.c_str());
+
+        std::getline(*process_reader, lines[i]);
+
+        process_log_readers.push_back(process_reader);
+
+    }
+
+    uint64_t max_RSS_sum = 0;
+    uint64_t line_num = 1;
+    uint64_t max_line = 0;
+
+    typedef boost::tokenizer<boost::char_separator<char> >  tokenizer;
+    boost::char_separator<char> sep(" ");
+
+    while(true)
+    {
+
+        uint64_t RSS_sum = 0;
+        for(int i=0; i<num_parallel; i++)
+        {
+            std::ifstream & reader = *(process_log_readers[i]);
+            if(!std::getline(reader, lines[i]).eof())
+            {
+
+                tokenizer tok(lines[i], sep);
+                int j=0;
+                for(tokenizer::iterator it=tok.begin(); it!=tok.end();++it)
+                {
+                    if (j++ == 6)
+                    {
+                        uint64_t RSS = boost::lexical_cast<uint64_t>(*it);
+                        //std::cout << "RSS " << RSS << std::endl;
+                        RSS_sum +=RSS;
+                    }
+                }
+            }
+        }
+        //std::cout << "RSS_sum "<< RSS_sum << std::endl;
+        //std::cout << "line_num "<< line_num << std::endl;
+
+        if(max_RSS_sum < RSS_sum)
+        {
+            max_RSS_sum = RSS_sum;
+            max_line = line_num;
+        }
+        line_num++;
+        if(RSS_sum == 0)
+            break;
+    }
+
+    for (int i=0; i<num_parallel; i++)
+    {
+        (process_log_readers[i])->close();
+    }
+
+
+    std::ofstream writer(mp.mem_summary);
+    writer << "paralle max_RSS_sum "<< max_RSS_sum/1024.0 << " MB <=> " << max_RSS_sum/1024.0/1014.0 << " GB" <<  std::endl;
+    writer << "paralle max line    "<< max_line << std::endl;
+
+
+    uint64_t main_RSS = get_max_RSS(mp.main_log_path+ ".ps.log");
+    uint64_t jelly_RSS = get_max_RSS(mp.jelly_log_path+ ".ps.log");
+    uint64_t sort_RSS = get_max_RSS(mp.sort_log_path+ ".ps.log");
+
+    writer << "main_RSS  " << main_RSS/1024.0 << " MB <=> " << main_RSS/1024.0/1014.0 << " GB" << std::endl;
+    writer << "jelly_RSS " << jelly_RSS/1024.0 << " MB <=> " << jelly_RSS/1024.0/1014.0 << " GB"<< std::endl;
+    writer << "sort_RSS  " << sort_RSS/1024.0 << " MB <=> " << sort_RSS/1024.0/1014.0 << " GB" << std::endl;
+    writer.close();
+}
+
+uint64_t get_max_RSS(std::string filename)
+{
+    std::ifstream reader(filename);
+    std::string line;
+    std::getline(reader, line);
+    typedef boost::tokenizer<boost::char_separator<char> >  tokenizer;
+    boost::char_separator<char> sep(" ");
+    uint64_t RSS_max = 0;
+    while(std::getline(reader, line))
+    {
+
+        tokenizer tok(line, sep);
+        int j=0;
+        for(tokenizer::iterator it=tok.begin(); it!=tok.end();++it)
+        {
+            if (j++ == 6)
+            {
+                uint64_t RSS = boost::lexical_cast<uint64_t>(*it);
+                //std::cout << "RSS " << RSS << std::endl;
+                if(RSS_max < RSS)
+                    RSS_max = RSS;
+            }
+        }
+    }
+    reader.close();
+    return RSS_max;
+}
+
+pid_t fork_mem_profiler(pid_t running_pid, std::string output_dir)
+{
+    pid_t profiler_pid;
+    if( (profiler_pid = fork()) < 0)
+    {
+            printf("fork error");
+            _exit(1);
+    }
+    else if (profiler_pid == 0)
+    {
+        std::string pid_str = std::to_string(running_pid);
+        std::string command = "./syrupy.py";
+        if (execlp(command.c_str(), command.c_str(), "-q", "-p",
+            pid_str.c_str(), "-i", "10", output_dir.c_str(), (char *)0) < 0)
+        {
+                printf("execlp error");
+                _exit(1);
+        }
+    }
+    return profiler_pid;
+}
+
+void join_mem_profiler(pid_t profiler_pid)
+{
+    if (waitpid(profiler_pid, NULL, 0) < 0)
+    {
+            printf("wait profiler error");
+            _exit(1);
+    }
+}
 
 void produce_summary_file(struct Local_files & lf)
 {
@@ -355,6 +522,14 @@ void parse_jf_info(Local_files & lf, JF_stats & jf_stats)
 
 }
 
+void print_yellow_cmd(std::string cmd)
+{
+    std::cout << "\033[0;33m";
+    std::cout << "run command" << std::endl;
+    std::cout << cmd << std::endl;
+    std::cout << "\033[0m" << std::endl << std::endl;
+}
+
 void run_command(std::string cmd, bool print_cmd)
 {
     if(system(NULL))
@@ -432,41 +607,123 @@ void run_jellyfish(Shannon_C_setting & setting)
         lf.input_kmer_path = lf.algo_input + "/kmer.dict";
         lf.input_jf_path = lf.algo_input + "/kmer.jf";
 
+
         if(!exist_path(lf.input_kmer_path))
         {
             std::cout << "Run jellyfish with kmer length" << ((uint16_t)setting.kmer_length)
                       << std::endl;
             shc_log_info(shc_logname, "run jellyfish with kmer length %d\n",
                                                 setting.kmer_length);
+            std::string num_thread_str = std::to_string(setting.num_parallel);
+            std::string kmer_length_str = std::to_string(setting.kmer_length);
 
-            std::string cmd_count = "jellyfish count -t 32 -o " + lf.input_jf_path +
-                              " -m " + std::to_string(setting.kmer_length) +
-                              " -s 200000000 ";
+            int num_field = 15;
+            char **argv = (char**) malloc(num_field*sizeof(char*));
+            for(int i=0;i<num_field;i++){
+                argv[i] = (char*) malloc(1000*sizeof(char));
+            }
+
+            int arg_n = 0;
+            strcpy(argv[arg_n++], "jellyfish");
+            strcpy(argv[arg_n++], "count");
+            strcpy(argv[arg_n++], "-t");
+            strcpy(argv[arg_n++], num_thread_str.c_str());
+            strcpy(argv[arg_n++], "-o");
+            strcpy(argv[arg_n++], lf.input_jf_path.c_str());
+            strcpy(argv[arg_n++], "-m");
+            strcpy(argv[arg_n++], kmer_length_str.c_str());
+            strcpy(argv[arg_n++], "-s");
+            strcpy(argv[arg_n++], "200000000");
+
+
+
+            //std::string cmd_count = "jellyfish count -t 16 -o " + lf.input_jf_path +
+            //                  " -m " + std::to_string(setting.kmer_length) +
+            //                  " -s 200000000 ";
+            if(setting.is_double_stranded)
+            {
+                //cmd_count += (std::string(" -C "));
+                strcpy(argv[arg_n++], "-C");
+            }
 
             std::string input_reads;
             if(setting.has_single)
             {
-                input_reads += " " + lf.input_read_path;
+                //input_reads += lf.input_read_path;
+                strcpy(argv[arg_n++], lf.input_read_path.c_str());
+                argv[arg_n++] =  NULL;
             }
 
             if(setting.has_pair)
             {
-                input_reads += " " + lf.input_read_path_1 + " " + lf.input_read_path_2;
+                //input_reads += lf.input_read_path_1 + " " + lf.input_read_path_2;
+                strcpy(argv[arg_n++], lf.input_read_path_1.c_str());
+                strcpy(argv[arg_n++], lf.input_read_path_2.c_str());
+                argv[arg_n++] = NULL;
             }
 
-            if(setting.is_double_stranded)
-                cmd_count += (std::string(" -C ") + input_reads);
-            else
-                cmd_count += input_reads;
 
-
+            // cmd_count += input_reads;
 
             std::string cmd_dump = "jellyfish dump -ct -o " + lf.input_kmer_path +
                                 " " + lf.input_jf_path;
 
+            std::string cmd_count;
+            for(int i=0;i<arg_n-1;i++)
+            {
+                cmd_count += std::string(argv[i]) + " ";
+            }
 
+            pid_t pid;
 
-            run_command(cmd_count, true);
+            if ((pid = fork()) < 0)
+            {
+                printf("fork error");
+                _exit(1);
+            }
+            else if (pid == 0)
+            {
+                print_yellow_cmd(cmd_count);
+                if(execvp("jellyfish", argv))
+                {
+                    printf("execlp error");
+                    _exit(1);
+                }
+
+                _exit(0);
+            }
+
+            pid_t profiler_pid;
+            if( (profiler_pid = fork()) < 0)
+            {
+                    printf("fork error");
+                    _exit(1);
+            }
+            else if (profiler_pid == 0)
+            {
+                    printf("jelly pid %d\n", pid);
+                    std::string pid_str = std::to_string(pid);
+
+                    if (execlp("./syrupy.py", "./syrupy.py", "-q", "-p", pid_str.c_str(), "-i", "10",
+                                setting.local_files.mem_profiler.jelly_log_path.c_str(),(char *)0) < 0)
+                    {
+                            printf("execlp error");
+                            _exit(1);
+                    }
+                    _exit(0);
+            }
+
+            if (waitpid(pid, NULL, 0) < 0)
+            {
+                    printf("wait error");
+                    _exit(1);
+            }
+            if (waitpid(profiler_pid, NULL, 0) < 0)
+            {
+                    printf("wait profiler error");
+                    _exit(1);
+            }
+
             run_command(cmd_dump, true);
 
             std::cout << " Finish jellyfish" << std::endl;
@@ -485,6 +742,33 @@ void run_jellyfish(Shannon_C_setting & setting)
         }
     }
 }
+
+/*
+if(setting.is_double_stranded)
+{
+
+
+    if (execlp("jellyfish", "jellyfish", "count", "-t", num_thread_str.c_str(),
+                "-o", lf.input_jf_path.c_str(),
+                "-m", kmer_length_str.c_str(),
+                "-s", "200000000", "-C",  input_reads.c_str(), (char *)0) < 0)
+    {
+            printf("execlp error");
+            _exit(1);
+    }
+}
+else
+{
+    if (execlp("jellyfish", "jellyfish", "count", "-t", num_thread_str.c_str(),
+                "-o", lf.input_jf_path.c_str(),
+                "-m", kmer_length_str.c_str(),
+                "-s", "200000000", input_reads.c_str(), (char *)0) < 0)
+    {
+            printf("execlp error");
+            _exit(1);
+    }
+}
+*/
 
 int get_kmer_length_from_kmer_file(std::string kmer_path)
 {
@@ -733,9 +1017,19 @@ void print_and_log_multi_graph_setting(Shannon_C_setting & setting)
     std::cout << "\033[1;34m";
     std::cout << "Multi-graph     ***********" << std::endl;
     std::cout << "num_parallel             : " << setting.num_parallel << std::endl;
+    std::cout << "avail mem (byte)         : " << setting.avail_mem << std::endl;
     std::cout << "\033[0m" << std::endl;
     shc_log_info(shc_logname, "Multi-graph     ***********\n");
     shc_log_info(shc_logname, "num_parallel             : %d\n", setting.num_parallel);
+    shc_log_info(shc_logname, "avail mem (byte          : %d\n", setting.avail_mem);
+}
+
+//https://stackoverflow.com/questions/2513505/how-to-get-available-memory-c-g/26639774
+int64_t get_machine_physical_limit_mem()
+{
+    int64_t pages = sysconf(_SC_PHYS_PAGES);
+    int64_t page_size = sysconf(_SC_PAGE_SIZE);
+    return pages * page_size;
 }
 
 /*

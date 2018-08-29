@@ -9,6 +9,39 @@ std::string get_setting_string(Shannon_C_setting & setting)
     return setting_str;
 }
 
+int64_t format_memory_arg(std::string input)
+{
+    std::string units = "kMGT";
+    char unit = input.back();
+    std::size_t found = units.find(unit);
+    if(found == std::string::npos)
+    {
+        for(int i=0; i<input.size(); i++)
+            assert(input[i] >= '0' && input[i] <= '9');
+        return boost::lexical_cast<int64_t>(input);
+    }
+    else
+    {
+        for(int i=0; i<input.size()-1; i++)
+            assert(input[i] >= '0' && input[i] <= '9');
+        std::string num_str = input.substr(0,input.size()-1);
+        int64_t num = boost::lexical_cast<int64_t>(num_str);
+        if(unit == 'k')
+            return num * 1024;
+        else if (unit == 'M')
+            return num * 1024*1024;
+        else if (unit == 'G')
+            return num * 1024*1024*1024;
+        else if (unit == 'T')
+            return num * 1024*1024*1024*1024;
+        else
+        {
+            std::cout << "unknown type " << input << std::endl;
+            exit(1);
+        }
+    }
+}
+
 void parser_setting_file(std::string & file_path, Shannon_C_setting & setting)
 {
     using boost::property_tree::ptree;
@@ -31,6 +64,8 @@ void parser_setting_file(std::string & file_path, Shannon_C_setting & setting)
     int output_seq_min_len = pt.get<int>("output_seq_min_len");
     bool take_single_node_seq = pt.get<bool>("take_single_node_seq");
     bool take_contig_seq = pt.get<bool>("take_contig_seq");
+
+
     //int num_parallel = pt.get<int>("num_parallel");
 
     setting.kmer_length = kmer_length;
@@ -49,6 +84,10 @@ void parser_setting_file(std::string & file_path, Shannon_C_setting & setting)
 
     ptree multi_graph_setup = pt.get_child("multi_graph_setup");
     setting.num_parallel = multi_graph_setup.get<int>("num_parallel");
+
+    std::string avail_mem_str = multi_graph_setup.get<std::string>("avail_mem");
+    int64_t avail_mem =  format_memory_arg(avail_mem_str);
+    setting.avail_mem = avail_mem;
 
     ptree find_rep = pt.get_child("find_rep");
     setting.rmer_length = find_rep.get<int>("rmer_length");

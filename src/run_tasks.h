@@ -49,7 +49,7 @@ void test_filter_output(Shannon_C_setting * setting);
 void test_load_contig_patition_and_multi_seq_sf(Shannon_C_setting * setting);
 void test_sorted_kmer_contig_and_multi_seq_sf(Shannon_C_setting * setting);
 
-void run_custom(int argc, char** argv, std::string setting_path);
+void run_custom(int argc, char** argv, Shannon_C_setting setting);
 void run_entire(int argc, char** argv);
 
 

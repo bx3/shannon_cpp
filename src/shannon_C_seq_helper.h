@@ -20,12 +20,17 @@
 #include <iostream>
 #include <fstream>
 #include <ctime>
+#include <sys/wait.h>
+#include <sys/types.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include "log.h"
 #include "json_parser.h"
 #include "local_file_structure.h"
 #include "shc_type.h"
+
+uint64_t get_mem(pid_t id);
+int64_t get_machine_physical_limit_mem();
 
 struct JF_stats {
     JF_stats() {}
@@ -42,6 +47,7 @@ void fasta_file_validator(std::string path);
 void run_jellyfish(Shannon_C_setting & setting);
 void run_jellyfish_for_file(Shannon_C_setting & setting, std::string & kmer_path);
 void run_command(std::string cmd, bool print_cmd);
+void print_yellow_cmd(std::string cmd);
 
 void parse_jf_info(Local_files & lf, JF_stats & jf_info);
 
@@ -82,6 +88,13 @@ void print_and_log_read_length_setting(Shannon_C_setting & setting);
 void print_and_log_kmer_strand_setting(Shannon_C_setting & setting);
 void print_and_log_output_setting(Shannon_C_setting & setting);
 void print_and_log_find_rep_setting(Shannon_C_setting & setting);
+
+pid_t fork_mem_profiler(pid_t running_pid, std::string syrupy_path);
+void join_mem_profiler(pid_t profiler_pid);
+
+
+void get_mem_statistics(int num_parallel, Mem_profiler & mp);
+uint64_t get_max_RSS(std::string filename);
 
 
 int get_kmer_length_from_kmer_file(std::string kmer_path);

@@ -10,6 +10,7 @@
 
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
+#include <boost/lexical_cast.hpp>
 #include <iostream>
 #include <string.h>
 #include "shc_type.h"
@@ -219,7 +220,8 @@ struct Shannon_C_setting {
             kmer_length(25), single_read_length(0), pair_1_read_length(0),
             pair_2_read_length(0), has_single(false), has_pair(false),
             is_double_stranded(true), is_compress(false), num_parallel(1),
-            take_single_node_seq(true), take_contig_seq(true), rmer_length(24){}
+            take_single_node_seq(true), take_contig_seq(true), rmer_length(24),
+            is_log_mem(true), avail_mem(0) {}
 
     bool has_single;
     uint8_t kmer_length;
@@ -243,6 +245,10 @@ struct Shannon_C_setting {
 
     int output_seq_min_len;
 
+    bool is_log_mem;
+
+    int64_t avail_mem;
+
     Local_files local_files;
 
     Duplicate_setting dup_setting;
@@ -261,6 +267,7 @@ struct Shannon_C_setting {
 
 std::string get_setting_string(Shannon_C_setting & setting);
 void parser_setting_file(std::string & file_path, Shannon_C_setting & setting);
+int64_t format_memory_arg(std::string input);
 
 
 

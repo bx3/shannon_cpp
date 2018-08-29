@@ -100,8 +100,7 @@ struct bundled_node_p {
     kmer_count_node_t prevalence;
     kmer_count_node_t copy_count;
     kmer_count_node_t norm;
-
-    std::vector<Adj_bases> adj_info;
+    
     std::vector<Bdg_read_info> reads_info;
     std::vector<Terminal_node_info> term_nodes_info;
     S_info s_info;

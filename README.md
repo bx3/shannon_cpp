@@ -31,6 +31,7 @@ This is a **C++** implementatin for the work **ShannonRNA: an Information-Optima
 	* sudo apt-get install cmake
 * Install Jellyfish
 	* follow instrctions from [JellyFish](http://www.cbcb.umd.edu/software/jellyfish/) 
+	* tested on 2.2.9, but any higher 2.x.x version would work
 * Install boost library (May be the most painful part if you have an old one on system, cmake might not link properly)
 	* follow instruction from [boost](http://www.boost.org/doc/libs/1_66_0/more/getting_started/unix-variants.html)
 	* ~~sudo apt-get install libboost-all-dev~~, since it would install an older version, which would not compile
@@ -46,6 +47,9 @@ This is a **C++** implementatin for the work **ShannonRNA: an Information-Optima
 * hopscotch -- https://github.com/Tessil/hopscotch-map (already included in the repo, no action needed)
 * Download sparsepp -- https://github.com/greg7mdp/sparsepp
 	* download from link above, extract and place the whole files in the directory where CMakeLists.txt resides
+* Syrupy -- https://github.com/jeetsukumaran/Syrupy
+    * used for memory profiling
+    * No action needed, already included
 
 * After all, go to CMakelist.txt directory and type
 ```
@@ -102,18 +106,20 @@ Shannon performs denovo transcriptome assembly by first partitioning reads into 
 
 CMD\<shannon> takes raw reads (or Rcorrected reads) as its input.
 
-For a single-ended fasta read file at **path_to_single_ended_read**, with accepted 101 bases per read, Shannon processes and gives assembled transcriptome at **output_path**. It is suggested to set the output_path to a non-existant new directory while working with command line.
+For a single-ended fasta read file at **path_to_single_ended_read**, with accepted 101 bases per read, Shannon processes and gives assembled transcriptome at **output_path**. 
 ```
-./Shannon_RNASeq_Cpp shannon -l 101 -s path_to_single_ended_read -o output_path -t 1 -g 0
+./Shannon_RNASeq_Cpp shannon -l 101 -s path_to_single_ended_read -o output_path -t 1 -g 0 -m 100G
 ```
 
 For pair-ended fasta read file at **path_to_pair_ended_read_1** and **path_to_pair_ended_read_2**, with corresponding accepted **76** and **76** bases per read, Shannon processes and gives output at **output_path**. 
 ```
-./Shannon_RNASeq_Cpp shannon -i 76 76 -p path_to_pair_ended_read_1 path_to_pair_ended_read_2 -o output_path -t 1 -g 0
+./Shannon_RNASeq_Cpp shannon -i 76 76 -p path_to_pair_ended_read_1 path_to_pair_ended_read_2 -o output_path -t 1 -g 0 -m 100G
 ```
+**-o** When processing a fasta file for the first time, it is suggested to set the output_path to a non-existant new directory while working with command line. However, if a user wants to re-run the assembly with the same input file but different parameters, it is fine to use the same output directory, Shannon can automatically detect previously generated jellyfish file and sorted kmer file and load them. However, when kmer length is the changed parameter, the jellyfish file becomes invalid and hence a new output directory is needed.
 
-**-t** specifies the number of running processes (2 threads per process). 
+**-t** specifies the number of running processes (1 threads per process). 
 **-g** controls the read subsampling at components partition step. It has a great impact on the running speed when input read files are large, since the partitioned reads are later used for multibridging. Setting it to 0 disables subsample operation; otherwise a higher **g** tends to keep more reads. For read i, the sampling is based on the formula P_i(KEEP) = min(1, g/read_count_for_read_i)
+**-m** specifies max amount of memory allowed for Shannon in the multi-bridge step, to prevent process crushing due to memory overflow. User can indicate the memory value using number of byte (like 1234), or using a number with unit (1k,1M,1G,1T). Notice, this memory limit is only effective in the multi-bridge step, and it manages the number of working processes to prevent memory crashing due to too many processes working at the same time.
 
 ### CMD\<partition>
 Given a large noisy fasta-reads, CMD\<partition> performs error correction, and partitions the reads into multiple components. Each component contains two files, a kmer file which holds all error-corrected kmer and read files which selectively include original input reads for that component depending on the partition algorithm. 
@@ -161,7 +167,7 @@ both            run multi-bridge and then sparse-flow on multiple components
 The inputs to **multi-bridge** MODE are kmer-read inputs pair where kmer files for all components are stored together under **kmers_dir**, and all reads stored under **reads_dir**.
 
 ```
-./Shannon_RNASeq_Cpp multi-graph multi-bridge -l single_read_length -c kmers_dir -r reads_dir -o output_path -t 1
+./Shannon_RNASeq_Cpp multi-graph multi-bridge -l single_read_length -c kmers_dir -r reads_dir -o output_path -t 1 -m 100G
 ```
 The **sparse-flow** MODE, where **graph_dirs** holds all graphs
 ```
@@ -169,7 +175,7 @@ The **sparse-flow** MODE, where **graph_dirs** holds all graphs
 ```
 The input to **both** mode is the same as **multi-bridge** MODE
 ```
-./Shannon_RNASeq_Cpp multi-graph both -l single_read_length -c kmers_dir -r reads_dir -o output_path -t 1
+./Shannon_RNASeq_Cpp multi-graph both -l single_read_length -c kmers_dir -r reads_dir -o output_path -t 1 -m 100G
 ```
 
 ### CMD\<find-rep>
@@ -228,6 +234,8 @@ The following flow chart illustrates how this implementation works:
 * reconstructed_seq.fasta_sf (reconstructed seq from sparse flow step)
 * reconstructed_seq.fasta (final output, combining filtered fasta_single, fasta_sf and contig_filtered.fasta)
 * reconstructed_seq.fasta_unfiltered (simply combine fasta_single, fasta_sf and contig_filtered.fasta)
+* mem_summary (a file summarizing memory usage)
+* Shannon.timing ( a file keeping the time stamps once major tasks finish)
 
 
 ## Manual
@@ -297,8 +305,8 @@ Allowed options:
                                         compare with
   --rmer_length arg (=24)               rmer size used to check duplicates
   -t [ --num_process ] arg (=1)         Specify number processs for multi graph
-                                        procedureswhere each process produces 
-                                        two threads by default
+                                        procedureswhere each process owns 
+                                        one thread by default
   --max_hop_for_known_path arg (=30)    Max number of hops allowable for a read
                                         to cover
   --multiple_test arg (=8)              number of times that a linear program 
@@ -422,8 +430,8 @@ Allowed options:
   --max_hop_for_known_path arg (=30)    Max number of hops allowable for a read
                                         to cover
   -t [ --num_process ] arg (=1)         Specify number processs for multi graph
-                                        procedureswhere each process produces 
-                                        two threads by default
+                                        procedureswhere each process owns 
+                                        one thread by default
 
 ```
 
@@ -440,8 +448,8 @@ Allowed options:
   --multiple_test arg (=8)              number of times that a linear program 
                                         sparse flow is solved
   -t [ --num_process ] arg (=1)         Specify number processs for multi graph
-                                        procedureswhere each process produces 
-                                        two threads by default
+                                        procedureswhere each process owns 
+                                        one thread by default
 ```
 
 ### find-rep 

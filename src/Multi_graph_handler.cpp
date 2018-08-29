@@ -231,17 +231,6 @@ void Multi_graph_handler::run_multi_sparse_flow(int specific_comp)
 void Multi_graph_handler::sort_work_list_by_size(std::deque<int> & work_list)
 {
     std::vector<ID_size_pair> work_size_list;
-    for(int i=0; i<work_list.size(); ++i)
-    {
-        size_t file_size;
-        if(get_read_file_size(i, file_size))
-            work_size_list.emplace_back(work_list.at(i), file_size);
-        else
-        {
-            shc_log_error("%d file not exists\n", i);
-            exit(1);
-        }
-    }
 
     File_sorter file_sorter;
     std::sort(work_size_list.begin(), work_size_list.end(), file_sorter);
@@ -251,14 +240,41 @@ void Multi_graph_handler::sort_work_list_by_size(std::deque<int> & work_list)
     }
 }
 
+void Multi_graph_handler::sort_work_list_by_size(std::list<Comp_size_info> & work_list)
+{
+    std::ofstream writer(setting.local_files.component_mem_info);
+    writer << "comp_id" << "\t\t" << "num_kmer" << "\t\t"
+           << "read_size(byte)" << "\t\t"
+           << "estimated_required_mem(byte)"
+           << std::endl << std::endl;
+
+    writer << "estimated_required_mem(byte) = (read size) + (num kmer)*"
+           << std::to_string(ROUGH_EMPIRICAL_KMER_NUM_MEM_RATIO)  << std::endl
+           << "since the last column is an estimate, the actual available "
+           << "memory need to be " + std::to_string(mem_safe_ratio) << " times of the estimate "
+           << "for algorithm to run without threat of crushing"
+           << "either increase avail_mem arg or re-run partition algorithm "
+           << "with smaller \"partition_size\" and \"partition_size\""
+           << std::endl << std::endl;
+    work_list.sort();
+    for(std::list<Comp_size_info>::iterator it=work_list.begin();
+                    it!=work_list.end(); it++)
+    {
+        int64_t estimated_mem = it->read_size + (it->kmer_num * ROUGH_EMPIRICAL_KMER_NUM_MEM_RATIO);
+        writer << (it->comp_id) << "\t\t" << (it->kmer_num)
+                  << "\t\t" << (it->read_size) << "\t\t" << estimated_mem << std::endl;
+    }
+    writer.close();
+}
+
 void Multi_graph_handler::
-partition_work_to_process(int num_thread, std::deque<int> & work_list,
+partition_work_to_process(int num_parallel, std::deque<int> & work_list,
                                 std::vector<std::deque<int>> & process_queue)
 {
     std::vector<int> place_order;
-    for(int i=0; i<num_thread; i++ )
+    for(int i=0; i<num_parallel; i++ )
         place_order.push_back(i);
-    for(int i=num_thread-1; i>=0; i-- )
+    for(int i=num_parallel-1; i>=0; i-- )
         place_order.push_back(i);
 
     int j = 0;
@@ -274,7 +290,23 @@ partition_work_to_process(int num_thread, std::deque<int> & work_list,
     }
 }
 
-bool Multi_graph_handler::get_read_file_size(int i, size_t & size)
+bool Multi_graph_handler::get_comp_num_kmer(int i, int64_t & num)
+{
+    std::string file_path =
+                     setting.local_files.output_components_kmer_dir
+                     + setting.local_files.comp_kmer_prefix
+                     + std::to_string(i);
+
+    num = 0;
+    if(!exist_path(file_path))
+        return false;
+
+    num = get_num_kmer(file_path);
+
+    return true;
+}
+
+bool Multi_graph_handler::get_read_file_size(int i, int64_t & size)
 {
     if(setting.has_single)
     {
@@ -333,18 +365,45 @@ bool Multi_graph_handler::get_read_file_size(int i, size_t & size)
 
 void Multi_graph_handler::process_multi_seq_graph(int num_parallel, int num_components)
 {
-    std::deque<int> work_queue;
-    std::deque<int> * work_queue_ptr = &(work_queue);
-    std::vector<std::deque<int>> process_queue(num_parallel, std::deque<int>());
+    Local_files & lf = setting.local_files;
+    std::list<Comp_size_info> work_list;
+    std::vector<pid_t> child_pids;
+    int num, wk_fd, read_fd;
+
+    int num_threads = 1;
 
     int start_class = 0;
     int end_class = num_components;
     for(int i=start_class; i<end_class; i++)
     {
-        work_queue.push_back(i);
+        int64_t kmer_num, read_size;
+        if(get_comp_num_kmer(i, kmer_num) &&
+           get_read_file_size(i, read_size))
+        {
+            Comp_size_info p(i, kmer_num, read_size);
+            work_list.push_back(p);
+        }
+        else
+        {
+            shc_log_error("%d file not exists\n", i);
+            exit(1);
+        }
+
     }
-    sort_work_list_by_size(work_queue);
-    partition_work_to_process(num_parallel, work_queue, process_queue);
+    sort_work_list_by_size(work_list);
+
+    Comp_size_info largest_comp = work_list.front();
+    if (!is_mem_enough_for_comp(largest_comp, ROUGH_EMPIRICAL_KMER_NUM_MEM_RATIO,
+                                    avail_mem, mem_safe_ratio))
+    {
+        std::string message ("memory allocated " + std::to_string(setting.avail_mem)
+                + " not enough for processing largest component, see file at \n"
+                + setting.local_files.component_mem_info + "\n"
+                + "to check component mem usage");
+        print_important_notice(message);
+        exit(0);
+    }
+    //exit(0);
     add_or_overwrite_directory(setting.local_files.output_seq_graph_path,
                                setting.local_files.output_path);
     if(!setting.local_files.single_node_dir.empty())
@@ -353,59 +412,62 @@ void Multi_graph_handler::process_multi_seq_graph(int num_parallel, int num_comp
         add_or_overwrite_directory(setting.local_files.single_node_dir,
                                        setting.local_files.output_path);
     }
-    for(int i=0; i<process_queue.size(); i++)
+
+    std::string wk_fifo = lf.fifo_dir + "/wk_fifo";
+    std::vector<std::string> c_fifos;
+    for(int i=0; i<num_parallel; i++)
     {
-        //std::cout << "process " << i << ": ";
-        std::deque<int> & my_works = process_queue[i];
-        std::cout << "process " << i << " has " << my_works.size()
-                  << " components to process" << std::endl;;
-        info_log_info(shc_logname, "process %d: ", i);
-        for(std::deque<int>::iterator it=my_works.begin();
-                            it!=my_works.end(); it++)
-        {
-        //    std::cout << (*it) << " ";
-            info_log_info(shc_logname, "%d ", (*it));
-        }
-        //std::cout << std::endl;
-        info_log_info(shc_logname, "\n");
+        std::string c_fifo = lf.fifo_dir + "/c_fifo" + std::to_string(i);
+        c_fifos.push_back(c_fifo);
     }
+    if (mkfifo(wk_fifo.c_str(), 0666) < 0)
+        perror("mkfifo");
+	for(int i=0; i<num_parallel; i++)
+	{
+	    if (mkfifo(c_fifos[i].c_str(), 0666) < 0)
+   		    perror("mkfifo");
+	}
 
     pid_t pid;
-    int i;
-    std::cout << "num parallel " << num_parallel << std::endl;
     std::cout << "parent pid = " << getpid() << std::endl;
-    for (i=0; i < num_parallel ; i++)
+    for (int i=0; i < num_parallel ; i++)
     {
         //std::cout << "create " << i << " children" << std::endl; // Child can keep going and fork once
         pid = fork();    // Fork
         //std::cout << "finish create " << i << " children" << std::endl; // Child can keep going and fork once
         if ( pid != 0) // if it is parent
         {
+            child_pids.push_back(pid);
             usleep(5000);
             continue;
         }
 
-
-        std::cout << "Child " << getpid() << std::endl; // Child can keep going and fork once
-
+        pid_t child_pid = getpid();
+        std::cout << "Child pid " << child_pid << std::endl; // Child can keep going and fork once
+        std::string child_mem_path = setting.local_files.mem_profiler.parallel_path_prefix
+                                   + std::to_string(i);
+        pid_t profiler_pid = fork_mem_profiler(child_pid, child_mem_path);
         // children process starts here
         int process_queue_index = i;
-        std::deque<int> my_works = process_queue[process_queue_index];
-        auto engine = std::default_random_engine{};
-        std::shuffle(std::begin(my_works), std::end(my_works), engine);
+
+		if ((wk_fd = open(wk_fifo.c_str(), O_WRONLY)) < 0)
+				perror("child - open");
+		if ((read_fd = open(c_fifos[i].c_str(), O_RDONLY)) < 0)
+				perror("child - open");
+
         pthread_mutex_t work_lock;
         if (pthread_mutex_init(&work_lock, NULL) != 0)
             { shc_log_error("unable to initialize mutex\n"); exit(1);}
 
-
         Seq_graph_works seq_graph_work;
-        seq_graph_work.work_list = &my_works;
         seq_graph_work.setting = setting;
         seq_graph_work.work_lock_ptr = &work_lock;
-        seq_graph_work.init_total_work = my_works.size();
         seq_graph_work.process_i = process_queue_index;
+        seq_graph_work.wk_fd = wk_fd;
+        seq_graph_work.read_fd = read_fd;
+        seq_graph_work.my_id  = std::to_string(process_queue_index);
 
-        int num_threads = 2;
+
         std::vector<pthread_t> threads(num_threads);
 
         for(int i=0; i<num_threads; i++)
@@ -420,32 +482,257 @@ void Multi_graph_handler::process_multi_seq_graph(int num_parallel, int num_comp
                std::cerr << "thread creation fails" << std::endl;
                exit(1);
            }
-           // else
-           //{
-           //   std::cout << "created thread " << i << std::endl;
-           //}
         }
 
         for(int i=0; i<threads.size(); i++)
         {
            pthread_join(threads[i], NULL);
         }
-        pthread_mutex_destroy(&work_lock);
-        std::cout << "child process " << process_queue_index << " finish  " << std::endl;
+        close(wk_fd);
+        close(read_fd);
+
+        //pthread_mutex_destroy(&work_lock);
+
+        //std::cout << "child process " << process_queue_index << " finish  " << std::endl;
         _exit(0);
     }
 
+    usleep(500000);
+
+    // parent
+    if ((wk_fd = open(wk_fifo.c_str(), O_RDWR)) < 0)
+        perror("parent - open");
+
+    int c_fd[num_parallel];
+    for(int i=0; i<num_parallel; i++)
+    {
+		if ((c_fd[i] = open(c_fifos[i].c_str(), O_WRONLY)) < 0)
+        	perror("parent - open");
+    }
+    char write_buf[256];
+    char read_buf[4096];
+    int64_t num_process_finish = 0;
+    int64_t num_comp_finish = 0;
+
+    Process_comp_man proc_comp_man(num_parallel);
+
+    {
+        std::string message = "Multi-graph run " + std::to_string(work_list.size())
+                            + " components\n";
+        Progress_bar progress{std::cout, 70u, message};
+        uint64_t init_num_comp = work_list.size();
+        std::vector<int> cli_list;
+
+        do
+        {
+            if ((num = read(wk_fd, read_buf, sizeof(read_buf))) < 0)
+    		    perror("parent - read");
+            else
+            {
+                read_buf[num] = '\0';
+    			std::string line_str(read_buf);
+                int k = 0;
+
+                std::vector<int> next_cli_list;
+
+                for(int i=0; i<line_str.size(); i++)
+                {
+                    if (line_str[i] == ' ')
+                    {
+                        int len = i - k;
+                        std::string pid_token = line_str.substr(k, len);
+                        k = i + 1;
+
+                        //std::cout << "pid_token " <<  pid_token << std::endl;
+
+                        memcpy(write_buf, line_str.c_str() + k, len);
+                        write_buf[len] = '\0';
+                        int previous_comp = DEFAULT_COMP_NUM;
+                        int delimitor_index = -1;
+                        for(int j=0; j<pid_token.size(); j++)
+                        {
+                            if (pid_token[j] == ',')
+                            {
+                                delimitor_index = j;
+                                break;
+                            }
+                        }
+                        assert(delimitor_index!=-1);
+                        std::string pid_str = pid_token.substr(0, delimitor_index);
+                        std::string prev_mem_str = pid_token.substr(delimitor_index+1);
+
+                        int cli_idx = boost::lexical_cast<int>(pid_str);
+                        cli_list.push_back(cli_idx);
+
+                        int64_t prev_mem = boost::lexical_cast<int64_t>(prev_mem_str);
+
+
+                        if(prev_mem != DEFAULT_COMP_MEM)
+                        {
+                            num_comp_finish += 1;
+                            Comp_size_info completed_comp = proc_comp_man.process_comp[cli_idx];
+                            //std::cout << "comp " <<  completed_comp.comp_id << " prev_mem " << prev_mem << std::endl;
+                            int64_t kmer_part = prev_mem - completed_comp.read_size ;
+                            assert(kmer_part > 0 );
+                            double kmer_num_mem_ratio = static_cast<double>(kmer_part) /
+                                                 static_cast<double>(completed_comp.kmer_num);
+                            proc_comp_man.kmer_num_mem_ratio_list.push_back(kmer_num_mem_ratio);
+                            avail_mem += completed_comp.mem_required;
+                            //std::cout << "avail_mem release " << avail_mem << std::endl;
+                            //std::cout << "kmer_num_mem_ratio " << kmer_num_mem_ratio << std::endl;
+                        }
+    				}
+                }
+
+
+                double percentage = static_cast<double>(num_comp_finish) /
+                                    static_cast<double>(init_num_comp);
+                progress.write(percentage);
+
+                //std::cout << "freshed cli "<< std::endl;
+                //for(int i=0; i<cli_list.size(); i++)
+                //{
+                //    int fresh_cli = cli_list[i];
+                //    std::cout << "process " << child_pids[fresh_cli] << " - " << fresh_cli << std::endl;
+                //}
+
+
+                for(int i=0; i<cli_list.size(); i++)
+                {
+                    double mean_ratio = proc_comp_man.get_mean_ratio();
+                    //std::cout << "mean_ratio " << mean_ratio << std::endl;
+                    Comp_size_info comp_info = get_next_comp(child_pids,
+                                work_list, num_parallel, mean_ratio);
+
+                    // when mem is not enough, not send anything to child and children
+                    // chile block, save their request in the futurn and in
+                    // higher priority
+                    if(comp_info.comp_id == MEM_NOT_ENOUGH_ID)
+                    {
+                        next_cli_list.assign(cli_list.begin()+i, cli_list.end());
+                        //next_cli_list.push_back(cli_list[i]);
+                        std::cout << std::endl;
+                        std::string message("\ndetect insufficient memory for " +
+                                std::to_string(next_cli_list.size()) +
+                                " un-processed component, child process(es) blocking, wait for memory release from any finishing child\n\n");
+                        std::string blocked_pids(
+                                        std::to_string(next_cli_list.size()) +
+                                        " blocked process ");
+                        for(int ni=0; ni<next_cli_list.size(); ni++)
+                        {
+                            int block_cli = next_cli_list[ni];
+                            blocked_pids += std::to_string(child_pids[block_cli]) + " ";
+                            //std::cout << "blocked process " <<  << " - " << block_cli << std::endl;
+                        }
+                        std::string print_message = message + blocked_pids + "\n\n";
+                        print_important_notice(print_message);
+                        break;
+
+                    }
+
+                    int cli_idx = cli_list[i];
+                    int comp_to_process = comp_info.comp_id;
+                    //std::cout << "comp_to_process " <<  comp_to_process << std::endl;
+
+                    proc_comp_man.process_comp[cli_idx] = comp_info;
+
+                    //process_comp[cli_idx].emplace_back(cli_idx, comp_info);
+
+                    if (comp_to_process == -1)
+                    {
+                        num_process_finish++;
+                    }
+                    std::string comp_to_process_str = std::to_string(comp_to_process);
+
+                    memcpy(write_buf, comp_to_process_str.c_str(), comp_to_process_str.size());
+                    write_buf[comp_to_process_str.size()] = '\0';
+
+
+                    if ((num = write(c_fd[cli_idx], write_buf, strlen(write_buf))) < 0)
+                         perror("parent - write");
+                }
+                cli_list = next_cli_list;
+            }
+
+
+            if(num_process_finish == num_parallel*num_threads)
+            {
+                //printf("everything finishes\n");
+                break;
+            }
+
+        } while (num > 0);
+    }
+
+    // collect zombie and last child process
     std::cout << "parent process is waiting for children " << std::endl;
     for(int i=0; i<num_parallel; i++)
     {
         int status;
         wait(&status);
     }
-    std::cout << "parent process gets children " << std::endl;
+    std::cout << "parent process finish wait " << std::endl;
 
+    close(wk_fd);
+
+	for(int i=0; i<num_parallel; i++)
+	{
+		close(c_fd[i]);
+   		unlink(c_fifos[i].c_str());
+	}
+	unlink(wk_fifo.c_str());
     return;
 }
 
+//return true when allow
+bool Multi_graph_handler::
+is_mem_enough_for_comp(Comp_size_info & curr_comp, double mean_ratio_,
+                        int64_t avail_memory, double memory_safe_ratio)
+{
+    curr_comp.mem_required = mean_ratio_ * curr_comp.kmer_num + curr_comp.read_size;
+
+    return curr_comp.mem_required*memory_safe_ratio < avail_memory;
+}
+
+Multi_graph_handler::Comp_size_info
+Multi_graph_handler::get_next_comp(std::vector<pid_t> & child_pids,
+        std::list<Comp_size_info> & work_list, int num_parallel, double mean_ratio)
+{
+    if(work_list.empty())
+    {
+        Comp_size_info a(-1,0,0);
+        return a;
+    }
+
+    for(std::list<Comp_size_info>::iterator it=work_list.begin();
+                        it!=work_list.end(); it++)
+    {
+        Comp_size_info curr_comp = *it;
+        if(is_mem_enough_for_comp(curr_comp, mean_ratio, avail_mem, mem_safe_ratio))
+        {
+            //std::cout << "avail_mem       " << avail_mem << std::endl;
+            avail_mem = avail_mem - curr_comp.mem_required;
+            //std::cout << "mem_required    " << curr_comp.mem_required << std::endl;
+            //std::cout << "avail_mem left  " << avail_mem << std::endl;
+            work_list.erase(it);
+            return curr_comp;
+        }
+    }
+
+    // memory not enough for any comp
+    Comp_size_info b(MEM_NOT_ENOUGH_ID,0,0);
+    return b;
+}
+
+uint64_t Multi_graph_handler::get_parallel_total_mem(std::vector<pid_t> & child_pids, int num_parallel)
+{
+    uint64_t mem_sum = 0;
+    for(int i=0; i<num_parallel; i++)
+    {
+        mem_sum += get_mem(child_pids[i]);
+    }
+    return mem_sum;
+}
 
 void Multi_graph_handler::process_sparse_flow_graph(int & num_parallel, int num_components, int specific_comp)
 {
@@ -546,7 +833,7 @@ void Multi_graph_handler::process_sparse_flow_graph(int & num_parallel, int num_
                     "/process"+std::to_string(process_queue_index);
         sparse_flow_work.init_total_work = my_works.size();
 
-        int num_threads = 2;
+        int num_threads = 1;
         std::vector<pthread_t> threads(num_threads);
 
         for(int i=0; i<num_threads; i++)
@@ -674,18 +961,12 @@ output_fasta_file_validator(std::string & output_path)
 void Multi_graph_handler::
 find_representatives(std::string in_file, std::string output_file)
 {
+
+    uint64_t num_seq;
+
+    //std::cout << "getpid " << getpid() << std::endl;
     Block_timer timer;
     start_timer(&timer);
-
-    std::vector<std::string> headers;
-    std::vector<std::string> seqs;
-
-    std::string header, seq, line, rmer;
-    rmer.resize(rmer_length);
-    uint64_t contig_num = 0;
-    uint64_t byte;
-    std::ifstream file_reader(in_file);
-    uint64_t num_seq;
 
     if(exist_path(in_file))
         num_seq = get_num_seq(in_file);
@@ -702,52 +983,88 @@ find_representatives(std::string in_file, std::string output_file)
         ave_read_length = (setting.pair_1_read_length +
                 setting.pair_2_read_length + setting.single_read_length)/3;
 
+    //std::vector<std::string> headers(num_seq, std::string(30, '\0'));
+    //std::vector<std::string> seqs(num_seq, std::string(ave_read_length, '\0'));
+    std::vector<std::string> headers;
+    std::vector<std::string> seqs;
+
+    std::string header, seq, line, rmer;
+    rmer.resize(rmer_length);
+    uint64_t contig_num = 0;
     rmer_contig_map.reserve(num_seq*ave_read_length);
 
-    while( std::getline(file_reader, line))
+
+
+    uint64_t byte;
     {
-        if( line[0] == '>')
+        std::ifstream file_reader(in_file);
+        Seqs_header_map seqs_header_map;
+        //seqs_header_map.reserve(num_seq);
+
+        while( std::getline(file_reader, line))
         {
-            header = line.substr(1);
-            headers.push_back(header);
-            if(contig_num %SHOW_STEP == 0)
+            if( line[0] == '>')
             {
-                std::cout << "processed " << contig_num << " sequences of out "
-                          << num_seq <<  ", ";
-                stop_timer(&timer);
-                start_timer(&timer);
-            }
-        }
-        else
-        {
-            if(line.size() > setting.output_seq_min_len)
-            {
-                seqs.push_back(line);
-                for(uint64_t i=0; i<line.size()-rmer_length+1; i++)
+                header = line.substr(1);
+                headers.push_back(header);
+                if(contig_num %SHOW_STEP == 0)
                 {
-                    encode_kmer(&line.at(i), &byte, rmer_length);
-                    Seq_info seq_info(contig_num, i);
-                    Rmer_contig_map_iterator it = rmer_contig_map.find(byte);
-                    if(it != rmer_contig_map.end())
-                    {
-                        (it.value()).push_back(seq_info);
-                    }
-                    else
-                    {
-                        std::vector<Seq_info> vec_seq(1, seq_info);
-                        vec_seq.reserve(VEC_INIT_SIZE);
-                        rmer_contig_map.insert(std::make_pair(byte, vec_seq));
-                    }
+                    std::cout << "processed " << contig_num << " sequences of out "
+                              << num_seq <<  ", ";
+                    stop_timer(&timer);
+                    start_timer(&timer);
                 }
-                contig_num++;
             }
             else
             {
-                headers.pop_back();
+                if(seqs_header_map.find(line) != seqs_header_map.end())
+                {
+                    //Seqs_header_map_iterator it = ;
+                    //std::cout << "find repeat seq " << std::endl;
+                    //std::cout << seqs_header_map[line] << std::endl;
+                    //std::cout << headers.back() << std::endl;
+
+                    //std::cout << line << std::endl;
+                    headers.pop_back();
+                    continue;
+                }
+
+                if(line.size() > setting.output_seq_min_len)
+                {
+                    //std::cout << "hello0" << std::endl;
+                    //std::cout << "hello1" << line.size() << std::endl;
+                    seqs.push_back(line);
+                    //std::cout << "hello2" << line.size() << std::endl;
+                    for(uint64_t i=0; i<line.size()-rmer_length+1; i++)
+                    {
+                        encode_kmer(&line.at(i), &byte, rmer_length);
+                        //std::cout << "hello3" << std::endl;
+                        Seq_info seq_info(contig_num, i);
+                        Rmer_contig_map_iterator it = rmer_contig_map.find(byte);
+                        if(it != rmer_contig_map.end())
+                        {
+                            (it->second).push_back(seq_info);
+                        }
+                        else
+                        {
+                            std::vector<Seq_info> list_seq(1, seq_info);
+                            list_seq.shrink_to_fit();//reserve(VEC_INIT_SIZE);
+                            rmer_contig_map.insert(std::make_pair(byte, list_seq));
+                        }
+                    }
+                    contig_num++;
+                    seqs_header_map.insert(std::make_pair(line, headers.back()));
+                }
+                else
+                {
+                    headers.pop_back();
+                }
             }
         }
+        file_reader.close();
     }
-    file_reader.close();
+
+    //std::cout << "after build rmer_contig_map " << std::endl;
 
     contig_num = 0;
     std::ofstream file_writer(output_file);
@@ -821,8 +1138,8 @@ duplicate_check_ends(std::vector<std::string> & seqs, uint64_t header, bool rc)
     if(last_rc_it == rmer_contig_map.end())
         return false;
 
-    std::vector<Seq_info> & first_contig_vec = first_rc_it.value();
-    std::vector<Seq_info> & last_contig_vec = last_rc_it.value();
+    std::vector<Seq_info> & first_contig_vec = first_rc_it->second;
+    std::vector<Seq_info> & last_contig_vec = last_rc_it->second;
 
     typedef tsl::hopscotch_map<uint64_t, Index_pair,
                    hash_u64, equ64> Contig_dict_map;

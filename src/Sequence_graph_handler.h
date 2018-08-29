@@ -44,6 +44,9 @@
 #define KNOWN_PATH_VEC_INIT_SIZE 10
 
 #define SEQ_GRAPH_WORK_STEP_UPDATE 5
+#define DEFAULT_COMP_MEM -2
+#define DEFAULT_COMP_NUM -2
+#define MEM_NOT_ENOUGH_ID -3
 
 //#define SHOW_SEQ_GRAPH_PROGRESS
 //#define LOG_SEQ_GRAPH
@@ -198,6 +201,7 @@ public:
 
         prevalence_threshold = 1;
         hamming_frac = 0.1;
+        peak_mem = 0;
 
         read_empty = Bdg_read_info(IMPOSSIBLE_READ_NUM, IMPOSSIBLE_READ_LENGTH);
         read_delete = Bdg_read_info(IMPOSSIBLE_READ_NUM-1000, IMPOSSIBLE_READ_LENGTH-1000);
@@ -225,7 +229,7 @@ public:
     }
 
     // available public function
-    void run_it(int comp_i, bool is_single_component);
+    int64_t run_it(int comp_i, bool is_single_component);
     void setup_input_file_path(int comp_i);
     void setup_input_file_path(std::string kmer_path, std::string s_read_path,
                             std::string p1_read_path, std::string p2_read_path);
@@ -490,56 +494,113 @@ private:
     uint64_t num_assigned_read;
 
     read_length_t min_read_len;
+
+    int64_t peak_mem;
 };
 
 
 struct Seq_graph_works {
-    Seq_graph_works () {}
+    Seq_graph_works ()
+    {
+        finish_token = "-1";
+    }
     Seq_graph_works (std::deque<int> * work_list_, Shannon_C_setting & setting_,
-                    pthread_mutex_t * work_lock_ptr_) :
+                    pthread_mutex_t * work_lock_ptr_,
+                    int read_fd_, int wk_fd_) :
             work_list(work_list_),  setting(setting_),
-            work_lock_ptr(work_lock_ptr_) {}
+            work_lock_ptr(work_lock_ptr_),
+            read_fd(read_fd_), wk_fd(wk_fd_)
+    {
+
+
+        //memset(read_buf, 0x00, 256);
+        //memset(write_buf, 0x00, 256);
+    }
+
     std::deque<int> * work_list;
     Shannon_C_setting setting;
     pthread_mutex_t * work_lock_ptr;
     int init_total_work;
     int process_i;
 
+    int read_fd;
+    int wk_fd;
+
+    char read_buf[256];
+    char write_buff[256];
+    std::string my_id;
+
+    std::string finish_token;
+
     static void * run_multi_seq_graph(void * seq_graph_work_ptr)
     {
-        Seq_graph_works seq_graph_work =
+        Seq_graph_works sgw =
             (*static_cast<Seq_graph_works * >(seq_graph_work_ptr));
+        int num;
+        int comp_i = DEFAULT_COMP_NUM;
+        int64_t peak_mem = DEFAULT_COMP_MEM;
+
         while(1)
         {
             // take the work
-            pthread_mutex_lock(seq_graph_work.work_lock_ptr);
-            if(seq_graph_work.work_list->empty())
+            //pthread_mutex_lock(sgw.work_lock_ptr);
+            std::string last_comp_mem = std::to_string(peak_mem);
+
+            // requset
+            int offset = 0;
+            memcpy(sgw.write_buff, sgw.my_id.c_str(), sgw.my_id.size());
+            sgw.write_buff[sgw.my_id.size()] = ',';
+            offset += sgw.my_id.size() + 1;
+            memcpy(sgw.write_buff + offset, last_comp_mem.c_str(), last_comp_mem.size());
+            offset += last_comp_mem.size();
+            sgw.write_buff[offset] = ' ';
+
+            sgw.write_buff[offset+1] = '\0';
+            if ((num = write(sgw.wk_fd, sgw.write_buff, strlen(sgw.write_buff))) < 0)
+				perror("child - write");
+			//else
+			//	printf("child %d - wrote %d bytes %s \n", sgw.process_i,  num, sgw.write_buff);
+
+            // receive
+            std::string receive_token;
+			do
+			{
+                memset(sgw.read_buf, 0x00, 256);
+				if ((num = read(sgw.read_fd, sgw.read_buf, sizeof(sgw.read_buf))) < 0)
+					perror("child  - read");
+				else
+				{
+                    receive_token = sgw.read_buf;
+					//printf("child get: %s\n", sgw.read_buf);
+					break;
+				}
+			} while (num > 0);
+
+            if(receive_token == sgw.finish_token)
             {
                 //std::cout <<"releasing a thread " << std::endl;
-                pthread_mutex_unlock(seq_graph_work.work_lock_ptr);
+                //pthread_mutex_unlock(sgw.work_lock_ptr);
                 return ((void*) 0);
             }
-            int comp_i = seq_graph_work.work_list->front();
-            seq_graph_work.work_list->pop_front();
-            int num_comp_left = seq_graph_work.work_list->size();
-            pthread_mutex_unlock(seq_graph_work.work_lock_ptr);
 
-            Sequence_graph_handler * seq_graph_ptr =
-                    new Sequence_graph_handler(seq_graph_work.setting);
+            comp_i = boost::lexical_cast<int>(receive_token);
+            //pthread_mutex_unlock(sgw.work_lock_ptr);
 
+            Sequence_graph_handler * seq_graph_ptr = new Sequence_graph_handler(sgw.setting);
 
-            if(num_comp_left%SEQ_GRAPH_WORK_STEP_UPDATE==0)
-            {
-                int percentage = (100 * (seq_graph_work.init_total_work-num_comp_left))/seq_graph_work.init_total_work;
-                printf("[ %3d%%] MB process %4d, \t num left %d/%d\n",
-                        percentage, seq_graph_work.process_i, num_comp_left,
-                        seq_graph_work.init_total_work);
-            }
+            //if(num_comp_left%SEQ_GRAPH_WORK_STEP_UPDATE==0)
+            //{
+            //    int percentage = (100 * (seq_graph_work.init_total_work-num_comp_left))/seq_graph_work.init_total_work;
+            //    printf("[ %3d%%] MB process %4d, \t num left %d/%d\n",
+            //            percentage, seq_graph_work.process_i, num_comp_left,
+            //            seq_graph_work.init_total_work);
+            //}
             //std::cout << "process  " << seq_graph_work.process_i << " runs comp "
             //          << comp_i << std::endl;
-            seq_graph_ptr->run_it(comp_i, false);
+            peak_mem = seq_graph_ptr->run_it(comp_i, false);
 
             delete seq_graph_ptr;
+
         }
 
         return NULL;

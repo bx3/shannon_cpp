@@ -60,11 +60,29 @@ void parse_output_options(
 
 
 int main(int argc, char** argv) {
+
+    pid_t shannon_Cpp_pid = ::getpid();
+    pid_t profiler_pid;
+    //for memory logging
+
     bool show_command_help_message = false;
+    Shannon_C_setting setting;
+
+    /*
+    struct Mem_profiler mem_profiler;
+    mem_profiler.parallel_path_prefix =
+            "/data1/bowen/Shannon_D_seq/output_medium_relative_path/shannon_mem_log/shannon_parallel/process_";
+    mem_profiler.main_log_path = "/data1/bowen/Shannon_D_seq/output_medium_relative_path/shannon_mem_log/main.ps.log";
+    mem_profiler.sort_log_path = "/data1/bowen/Shannon_D_seq/output_medium_relative_path/shannon_mem_log/sort.ps.log";
+    mem_profiler.jelly_log_path = "/data1/bowen/Shannon_D_seq/output_medium_relative_path/shannon_mem_log/jelly.ps.log";
+    mem_profiler.mem_summary ="/data1/bowen/Shannon_D_seq/output_medium_relative_path/mem_summary";
+    get_mem_statistics(16, mem_profiler);
+    return 0;
+    */
+
     if (argc > 1)
     {
         std::string subcommand(argv[1]);
-        Shannon_C_setting setting;
         if(subcommand == "custom")
         {
             if(argc != 3)
@@ -88,17 +106,25 @@ int main(int argc, char** argv) {
                 std::cout << "\033[0m";
                 exit(1);
             }
-            run_custom(argc, argv, setting_path);
+            parser_setting_file(setting_path, setting);
+            //get_mem_statistics(setting.num_parallel, setting.local_files.mem_profiler);
+            //return 0;
+
+            profiler_pid = fork_mem_profiler(shannon_Cpp_pid, setting.local_files.mem_profiler.main_log_path);
+            memcpy(shc_logname, setting.local_files.log_filename_path.c_str(),
+                                                setting.local_files.log_filename_path.size());
+            run_custom(argc, argv, setting);
         }
         else if(subcommand == "shannon")
         {
             command_line_for_shannon(argc, argv, setting);
-
+            profiler_pid = fork_mem_profiler(shannon_Cpp_pid, setting.local_files.mem_profiler.main_log_path);
             test_all(&setting);
         }
         else if(subcommand == "partition")
         {
             command_line_for_partition(argc, argv, setting);
+            profiler_pid = fork_mem_profiler(shannon_Cpp_pid, setting.local_files.mem_profiler.main_log_path);
             test_Contig_graph(&setting);
         }
         else if(subcommand == "multi-graph")
@@ -110,7 +136,7 @@ int main(int argc, char** argv) {
                 if (sub_sub_cmd == "both")
                 {
                     command_line_for_multi_graph_both(argc, argv, setting);
-
+                    profiler_pid = fork_mem_profiler(shannon_Cpp_pid, setting.local_files.mem_profiler.main_log_path);
                     Multi_graph_handler multi_graph(setting);
                     multi_graph.run_multi_seq_graph();
                     // sparse flow
@@ -119,12 +145,15 @@ int main(int argc, char** argv) {
                 else if (sub_sub_cmd == "multi-bridge")
                 {
                     command_line_for_multi_graph_mb(argc, argv, setting);
+                    profiler_pid = fork_mem_profiler(shannon_Cpp_pid, setting.local_files.mem_profiler.main_log_path);
+
                     test_multi_seq_graph(&setting);
                     //run multi_bridge
                 }
                 else if (sub_sub_cmd == "sparse-flow")
                 {
                     command_line_for_multi_graph_sf(argc, argv, setting);
+                    profiler_pid = fork_mem_profiler(shannon_Cpp_pid, setting.local_files.mem_profiler.main_log_path);
 
                     Multi_graph_handler multi_graph(setting);
                     multi_graph.run_multi_sparse_flow(-1);
@@ -164,6 +193,8 @@ int main(int argc, char** argv) {
             std::string p2_read_path;
             command_line_for_seq_graphs(argc, argv, setting,
                     kmer_path, s_read_path, p1_read_path, p2_read_path);
+            //profiler_pid = fork_mem_profiler(shannon_Cpp_pid, setting.local_files.mem_profiler.main_log_path);
+
             Sequence_graph_handler seq_graph_handler(setting);
 
             int comp_i = -1;
@@ -176,6 +207,8 @@ int main(int argc, char** argv) {
             std::string node_path, edge_path, path_path, output_path;
             command_line_for_sparse_flow(argc, argv, setting,
                         node_path, edge_path, path_path, output_path);
+            //profiler_pid = fork_mem_profiler(shannon_Cpp_pid, setting.local_files.mem_profiler.main_log_path);
+
             Comp_graph comp_graph(-1,-1);
             pthread_mutex_t write_lock;
             if (pthread_mutex_init(&write_lock, NULL) != 0)
@@ -190,6 +223,8 @@ int main(int argc, char** argv) {
         {
             std::string infile, outfile;
             command_line_for_find_rep(argc, argv, setting, infile, outfile);
+            //profiler_pid = fork_mem_profiler(shannon_Cpp_pid, setting.local_files.mem_profiler.main_log_path);
+
             Multi_graph_handler multi_graph(setting);
 
             multi_graph.find_representatives(infile, outfile);
@@ -198,6 +233,8 @@ int main(int argc, char** argv) {
         {
             std::string infile, outdir, ref_file;
             command_line_for_ref_align(argc, argv, setting, infile, ref_file, outdir);
+            profiler_pid = fork_mem_profiler(shannon_Cpp_pid, setting.local_files.mem_profiler.main_log_path);
+
             Local_files & lf = setting.local_files;
             lf.output_path = outdir;
             lf.summary_file_path = outdir + "/summary.log";
@@ -245,6 +282,8 @@ int main(int argc, char** argv) {
         std::cout << "\033[0m";
         exit(0);
     }
+    //join_mem_profiler(profiler_pid);
+    get_mem_statistics(setting.num_parallel, setting.local_files.mem_profiler);
 
     return 0;
 }
@@ -422,6 +461,10 @@ void command_line_for_multi_graph_both(int argc, char** argv, Shannon_C_setting 
 {
     namespace po = boost::program_options;
     po::options_description desc("Allowed options");
+
+    int64_t machine_mem_limit = get_machine_physical_limit_mem();
+    std::string machine_mem_limit_str = std::to_string(machine_mem_limit);
+
     try {
         desc.add_options()
             ("help", "produce help message")
@@ -433,6 +476,8 @@ void command_line_for_multi_graph_both(int argc, char** argv, Shannon_C_setting 
                         "specify reads_components dir produced from partition step")
             ("kmer_components_dir,c", po::value<std::string>()->required(),
                         "specify kmer_components dir produced from partition step")
+            ("avail_mem,m", po::value<std::string>()->default_value(machine_mem_limit_str),
+                        "specify available memory for running multi-graph multi-bridge")
         ;
         add_read_length_options(desc);
         add_output_options(desc);
@@ -461,6 +506,9 @@ void command_line_for_multi_graph_both(int argc, char** argv, Shannon_C_setting 
         setting.output_seq_min_len = vm["output_seq_min_len"].as<int>();
         setting.take_single_node_seq = true;
         setting.take_contig_seq = false;
+
+        std::string avail_mem_str = vm["avail_mem"].as<std::string>();
+        setting.avail_mem = format_memory_arg(avail_mem_str);
 
         Local_files & lf = setting.local_files;
         print_and_log_kmer_strand_setting(setting);
@@ -704,7 +752,7 @@ void add_multi_graph_options(boost::program_options::options_description & desc)
     namespace po = boost::program_options;
     desc.add_options()
         ("num_process,t",po::value<int>()->default_value(1), "Specify number processs for multi graph procedures"
-                     "where each process produces two threads by default")
+                     "where each process owns one thread by default")
     ;
 }
 
@@ -788,6 +836,10 @@ void command_line_for_shannon(int argc, char** argv, Shannon_C_setting  & settin
 {
     namespace po = boost::program_options;
     Local_files & lf = setting.local_files;
+
+    int64_t machine_mem_limit = get_machine_physical_limit_mem();
+    std::string machine_mem_limit_str = std::to_string(machine_mem_limit);
+
     try {
         std::string config_path;
 
@@ -804,7 +856,10 @@ void command_line_for_shannon(int argc, char** argv, Shannon_C_setting  & settin
                                      "Reference path for the output to compare with")
             ("rmer_length", po::value<int>()->default_value(24),
                      "rmer size used to check duplicates")
+            ("avail_mem,m", po::value<std::string>()->default_value(machine_mem_limit_str),
+                     "specify available memory for running multi-graph multi-bridge")
         ;
+
         add_multi_graph_options(desc);
         add_multi_bridge_options(desc);
         add_sparse_flow_options(desc);
@@ -830,6 +885,10 @@ void command_line_for_shannon(int argc, char** argv, Shannon_C_setting  & settin
         setting.num_parallel = vm["num_process"].as<int>();
         setting.seq_graph_setup.max_hop_path = vm["max_hop_for_known_path"].as<int>();
         setting.sparse_flow_setup.multiple_test = vm["multiple_test"].as<int>();
+
+        std::string avail_mem_str = vm["avail_mem"].as<std::string>();
+        setting.avail_mem = format_memory_arg(avail_mem_str);
+
         if(vm.count("reference"))
             lf.reference_seq_path =  vm["reference"].as<std::string>();
 
@@ -849,7 +908,7 @@ void command_line_for_shannon(int argc, char** argv, Shannon_C_setting  & settin
             std::string sub_cmd = argv[i];
             cmd += sub_cmd + " ";
         }
-        info_log_info(setting.local_files.timing_path.c_str(), "%s\n\n", cmd.c_str());        
+        info_log_info(setting.local_files.timing_path.c_str(), "%s\n\n", cmd.c_str());
 
         return;
     }

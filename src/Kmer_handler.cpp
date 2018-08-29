@@ -441,11 +441,70 @@ inline bool Kmer_handler::is_kmer_info_has_suffix(uint8_t info)
 
 void Kmer_handler::sort_kmer_descending_count_external()
 {
-    std::string num_thread_str= std::to_string(dup_setting.num_sort_thread);
-    std::string cmd(std::string("sort --parallel=") + num_thread_str + std::string(" -t '\t' -k2 -nr "));
-    cmd += (lf->unfilter_file + " > " + lf->sorted_unfilter_file);
-    run_command(cmd, true);
+    pid_t pid;
+
+    if ((pid = fork()) < 0)
+    {
+            printf("fork error");
+            _exit(1);
+    } else if (pid == 0)
+    {
+            std::string parallel_arg("--parallel=");
+            parallel_arg += std::to_string(dup_setting.num_sort_thread);
+            std::string cmd(std::string("sort --parallel=") + std::to_string(dup_setting.num_sort_thread) +
+                                    std::string(" -t '\t' -k2 -nr "));
+            cmd += (lf->unfilter_file + " > " + lf->sorted_unfilter_file);
+            print_yellow_cmd(cmd);
+
+            if (execlp("sort", "sort", "-t","\t", "-k", "2", "-n", "-r",
+                        parallel_arg.c_str(),  lf->unfilter_file.c_str(),
+                        "-o", lf->sorted_unfilter_file.c_str(),  (char *)0) < 0)
+            {
+                    printf("execlp error");
+                    _exit(1);
+            }
+            _exit(0);
+    }
+
+    pid_t profiler_pid;
+    if( (profiler_pid = fork()) < 0)
+    {
+            printf("fork error");
+            _exit(1);
+    }
+    else if (profiler_pid == 0)
+    {
+            printf("sort pid %d\n", pid);
+            std::string pid_str = std::to_string(pid);
+
+            if (execlp("./syrupy.py", "./syrupy.py", "-q", "-p", pid_str.c_str(), "-i", "10",
+                        setting.local_files.mem_profiler.sort_log_path.c_str(),(char *)0) < 0)
+            {
+                    printf("execlp error");
+                    _exit(1);
+            }
+            _exit(0);
+    }
+
+    if (waitpid(pid, NULL, 0) < 0)
+    {
+            printf("wait error");
+            _exit(1);
+    }
+    if (waitpid(profiler_pid, NULL, 0) < 0)
+    {
+            printf("wait profiler error");
+            _exit(1);
+    }
+
 }
+
+/*
+std::string num_thread_str= std::to_string(dup_setting.num_sort_thread);
+std::string cmd(std::string("sort --parallel=") + num_thread_str + std::string(" -t '\t' -k2 -nr "));
+cmd += (lf->unfilter_file + " > " + lf->sorted_unfilter_file);
+run_command(cmd, true);
+*/
 
 
 /* sort by command
@@ -909,7 +968,7 @@ contig_num_t Kmer_handler::find_contig_external()
     shc_log_info(shc_logname, "kmer size is %llu\n", kmer_counter.size());
     shc_log_info(shc_logname, "Finish finding contig, %ld contigs, %d kmer_get deleted\n",
                                                    ch->num_contig, num_kmer_deleted);
-     
+
     return ch->num_contig;
 }
 
