@@ -118,7 +118,9 @@ For pair-ended fasta read file at **path_to_pair_ended_read_1** and **path_to_pa
 **-o** When processing a fasta file for the first time, it is suggested to set the output_path to a non-existant new directory while working with command line. However, if a user wants to re-run the assembly with the same input file but different parameters, it is fine to use the same output directory, Shannon can automatically detect previously generated jellyfish file and sorted kmer file and load them. However, when kmer length is the changed parameter, the jellyfish file becomes invalid and hence a new output directory is needed.
 
 **-t** specifies the number of running processes (1 threads per process). 
+
 **-g** controls the read subsampling at components partition step. It has a great impact on the running speed when input read files are large, since the partitioned reads are later used for multibridging. Setting it to 0 disables subsample operation; otherwise a higher **g** tends to keep more reads. For read i, the sampling is based on the formula P_i(KEEP) = min(1, g/read_count_for_read_i)
+
 **-m** specifies max amount of memory allowed for Shannon in the multi-bridge step, to prevent process crushing due to memory overflow. User can indicate the memory value using number of byte (like 1234), or using a number with unit (1k,1M,1G,1T). Notice, this memory limit is only effective in the multi-bridge step, and it manages the number of working processes to prevent memory crashing due to too many processes working at the same time.
 
 ### CMD\<partition>
@@ -150,8 +152,8 @@ output_path/comp_graph/Graph_paths_2/path(0,1,...,n)
 where 2 is a graph component index
 ```
 
-### CMD/<sparse-flow>
-CMD/<sparse-flow> takes node,edge,path files as its inputs (for example node0,edge0,path0 ), then build a de-bruijn graph to run sparse flow algorithm. It generates reconstructed transcriptome.
+### CMD\<sparse-flow>
+CMD\<sparse-flow> takes node,edge,path files as its inputs (for example node0,edge0,path0 ), then build a de-bruijn graph to run sparse flow algorithm. It generates reconstructed transcriptome.
 
 ```
 ./Shannon_RNASeq_Cpp sparse-flow --node_path path_to_node --edge_path path_to_edge --path_path path_to_path --output_path output_fasta_path
@@ -304,6 +306,10 @@ Allowed options:
   -r [ --reference ] arg                Reference path for the output to 
                                         compare with
   --rmer_length arg (=24)               rmer size used to check duplicates
+  -m [ --avail_mem ] arg ()
+                                        specify max memory for running
+                                        multi-graph multi-bridge
+  -t [ --num_process ] arg (=1)         Specify number processs for multi graph
   -t [ --num_process ] arg (=1)         Specify number processs for multi graph
                                         procedureswhere each process owns 
                                         one thread by default
@@ -420,6 +426,9 @@ Allowed options:
                                         from partition step
   -c [ --kmer_components_dir ] arg      specify kmer_components dir produced 
                                         from partition step
+  -m [ --avail_mem ] arg ()
+                                        specify max memory for running
+                                        multi-graph multi-bridge                            
   -l [ --single_read_length ] arg       single read length
   -i [ --pair_read_length ] arg         pair read length
   -e [ --output_seq_min_len ] arg (=200)
