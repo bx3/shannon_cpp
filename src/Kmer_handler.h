@@ -24,7 +24,7 @@
 #include "shc_google_sparsehash.h"
 #include <bits/stringfwd.h>
 #include <sys/wait.h>
-#include <sys/types.h>  
+#include <sys/types.h>
 #include <string>
 #include <cmath>
 #include <fstream>
@@ -331,7 +331,7 @@ private:
     int add_kmer(uint64_t kmer, kmer_count_t count);
     void build_dict_from_kmer_file_helper(std::string  file);
 
-    bool find_contig_helper(std::string & line_s, uint64_t count);
+    bool find_contig_helper(std::string & line_s, uint64_t count, bool is_rc);
 
     //sorting function
     bool find_prefix_kmer(uint64_t *kmer, Kmer_counter_map_iterator & next_iter);

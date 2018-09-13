@@ -268,11 +268,7 @@ void test_sorted_kmer_contig(Shannon_C_setting * setting)
     Contig_handler contig_handler(setting->is_compress);
     kmer_handler.get_contig_handler(&contig_handler);
 
-    kmer_handler.load_kmer_into_dict();
-
-    kmer_handler.find_contig();
-    std::cout << "after find contig, mem " <<  std::endl;
-    stop_timer(&timer);
+    kmer_handler.run_kmer_handler();
 
     kmer_handler.dump_kmers_with_info_to_file(lf->output_kmer_path);
     std::cout << "after dumping kmer" <<  std::endl;
@@ -301,7 +297,7 @@ void test_multi_seq_sf(Shannon_C_setting * setting)
         multi_graph.run_multi_seq_graph();
 
         std::cout << "multi seq graph finish, " << std::endl;
-        show_main_timer(&main_timer);        
+        show_main_timer(&main_timer);
 
         // sparse flow
         multi_graph.run_multi_sparse_flow(-1);

@@ -143,6 +143,7 @@ void Kmer_handler::dump_kmers_with_info_to_file(std::string & filename)
     shc_log_info(shc_logname, "Start dumps kmer\n");
     start_timer(&kh_timer);
     std::ofstream outfile (filename.c_str());
+    //std::ofstream unused_outfile (filename+ "_unused");
 
     Kmer_counter_map_iterator it;
 
@@ -169,6 +170,12 @@ void Kmer_handler::dump_kmers_with_info_to_file(std::string & filename)
                                      << "\t" << get_count(it->second.count, compress_ratio)
                                      << "\t" << (uint16_t)(it->second.info)  << std::endl;
             }
+            //else
+            //{
+            //    unused_outfile <<kmer_base << "\t" << it->second.contig
+            //                         << "\t" << get_count(it->second.count, compress_ratio)
+            //                         << "\t" << (uint16_t)(it->second.info)  << std::endl;
+            //}
 
             if(num_kmer_processed%progress_step ==0)
             {
@@ -314,7 +321,7 @@ void Kmer_handler::build_dict_from_kmer_file_helper(std::string file)
     //std::ofstream low_complex_writer(setting.local_files.output_path + "/low_complex_kmer");
     //std::cout << "Sorted kmer path " << lf->sorted_unfilter_file << std::endl;
     //shc_log_info(shc_logname, "load sorted kmer path %s\n", lf->sorted_unfilter_file.c_str());
-
+    //std::cout << "sort file " << file << std::endl;
 
     Block_timer read_timer;
     start_timer(&read_timer);
@@ -392,7 +399,7 @@ int Kmer_handler::build_dict_from_kmer_file ()
     start_timer(&local_timer);
 
     shc_log_info(shc_logname, "Start load Kmer\n");
-    build_dict_from_kmer_file_helper(lf->input_kmer_path);
+    build_dict_from_kmer_file_helper(lf->sorted_unfilter_file);
     shc_log_info(shc_logname, "finish kmer load %u\n", kmer_counter.size());
 
     init_kmer_size = kmer_counter.size();
@@ -763,18 +770,27 @@ contig_num_t Kmer_handler::find_contig()
 }
 
 //return false if kmer is skipped
-bool Kmer_handler::find_contig_helper(std::string & line_s, uint64_t count)
+bool Kmer_handler::find_contig_helper(std::string & line_s, uint64_t count, bool is_rc)
 {
     //shc_log_info(shc_logname, "find_contig_helper\n");
     char base_string[KMER_HOLDER_LEN];
     char root_string[KMER_HOLDER_LEN];
+    char reverse_comp_root[KMER_HOLDER_LEN];
     base_string[kmer_length] = '\0';
     root_string[kmer_length] = '\0';
+    reverse_comp_root[kmer_length] = '\0';
     uint64_t root_byte;// = boost::lexical_cast<uint64_t>(line_s);
-
     //char debug[1000000];
-
-    encode_kmer(line_s.c_str(), &root_byte, kmer_length);
+    if (is_rc)
+    {
+        encode_reverse_kmer(line_s.c_str(), &root_byte, kmer_length);
+        complement_num(&root_byte, kmer_length);
+        decode_kmer(reverse_comp_root, &root_byte, kmer_length);
+    }
+    else
+    {
+        encode_kmer(line_s.c_str(), &root_byte, kmer_length);
+    }
     //std::cout << "line_s " << line_s << std::endl;
     //std::cout << "count_s " << count_s << std::endl;
 
@@ -811,6 +827,7 @@ bool Kmer_handler::find_contig_helper(std::string & line_s, uint64_t count)
         //find prefix extension
         while (find_prefix_kmer(&next_kmer, next_iter))
         {
+
             ch->contig_list.push_back(decode_prefix_base(&next_kmer, kmer_length));
             total_count += get_count(next_iter->second.count, compress_ratio);
 
@@ -823,8 +840,16 @@ bool Kmer_handler::find_contig_helper(std::string & line_s, uint64_t count)
                       ch->contig_list.end());
 
         // push the root string
-        for(uint8_t t=0; t<kmer_length; t++)
-            ch->contig_list.push_back(line_s[t]);
+        if(is_rc)
+        {
+            for(uint8_t t=0; t<kmer_length; t++)
+                ch->contig_list.push_back(reverse_comp_root[t]);
+        }
+        else
+        {
+            for(uint8_t t=0; t<kmer_length; t++)
+                ch->contig_list.push_back(line_s[t]);
+        }
         //decode_kmer(root_string, &(root_byte), kmer_length);
         //shc_log_info(shc_logname, "Root kmer %s\n", line_s.c_str());
         //shc_log_info(shc_logname, "Root kmer %s\n", root_string);
@@ -858,7 +883,6 @@ bool Kmer_handler::find_contig_helper(std::string & line_s, uint64_t count)
             //uint8_t * contig_start = &(ch->contig_list.at(ch->delimitor[ch->num_contig]));
             //memcpy(debug, contig_start, contig_len);
             //debug[contig_len] = '\0';
-            //shc_log_info(shc_logname, "contig %s\n",debug);
             ch->declare_new_contig(std::ceil(contig_mean_count), contig_len);
             //std::cout << "accept, num contig " <<ch->num_contig << std::endl;
         }
@@ -873,6 +897,10 @@ bool Kmer_handler::find_contig_helper(std::string & line_s, uint64_t count)
 
         kmer_curr_proc += total_kmer_in_contig;
     }
+    //else
+    //{
+    //    shc_log_info(shc_logname, "kmer used %u %s %d\n", ch->num_contig, line_s.c_str(), is_rc);
+    //}
     return true;
 }
 
@@ -908,12 +936,11 @@ contig_num_t Kmer_handler::find_contig_external()
             }
 
             uint64_t count = boost::lexical_cast<uint64_t>(count_s);
-            if(!find_contig_helper(line_s, count))
+            if(!find_contig_helper(line_s, count, false))
                 break;
             if(setting.is_double_stranded)
             {
-                std::reverse(line_s.begin(), line_s.end());
-                find_contig_helper(line_s, count);
+                find_contig_helper(line_s, count, true);
             }
 
             if((kmer_curr_proc-kmer_prev_proc) > progress_step)
@@ -1117,13 +1144,13 @@ void Kmer_handler::delete_kmer_for_contig(uint8_t * contig_start,
         kmer_counter.erase(byte);
     }
     //shc_log_info(shc_logname, "Finish delete kmer\n");
-#ifdef LOG_DELETED_KMER
+//#ifdef LOG_DELETED_KMER
     for(Contig_handler::size_type i=0; i<contig_len; i++)
     {
         info_log_info(lf->deleted_contig_path.c_str(), "%c", (char)contig_start[i]);
     }
     info_log_info(lf->deleted_contig_path.c_str(), "\n");
-#endif
+//#endif
     num_kmer_deleted += contig_len-kmer_length+1;
 
 }

@@ -163,6 +163,14 @@ assign_comp_without_graph()
             uint64_t byte;
             encode_kmer(base_start+j, &byte, kmer_length);
             Kmer_counter_map_iterator it = kh->kmer_counter.find(byte);
+            //if(it == kh->kmer_counter.end())
+            //{
+            //    char temp[33];
+            //    memcpy(temp, base_start+j, kmer_length);
+            //    temp[kmer_length] = '\0';
+            //    std::cout << "cannot find kmer " << temp << std::endl;
+            //    exit(0);
+            //}
 
             if(j==0 || j==len-kmer_length)
             {

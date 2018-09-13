@@ -113,29 +113,35 @@ void Multi_graph_handler::run_multi_seq_graph()
 // collect sf seq and single seq into final output
 void Multi_graph_handler::collect_process_file(int num_parallel)
 {
-    std::string cmd("cat ");
-    for(int i=0; i<num_parallel; i++)
-    {
-        std::string file_path =
-                    setting.local_files.output_seq_graph_result_path +
-                    "/process"+std::to_string(i);
-        cmd += file_path + " ";
-    }
-    cmd += " > " + setting.local_files.reconstructed_sf_path;
-    //std::cout << "cmd " << cmd << std::endl;
-    run_command(cmd, true);
+    std::string touch_cmd("touch " + setting.local_files.reconstructed_sf_path);
+    run_command(touch_cmd, false);
 
-    //rm all temp process
-    for(int i=0; i<num_parallel; i++)
+    if(num_parallel > 0)
     {
-        std::string rm_cmd("rm ");
-        std::string file_path =
-                    setting.local_files.output_seq_graph_result_path +
-                    "/process"+std::to_string(i);
-        rm_cmd += file_path;
-        run_command(rm_cmd, false);
+        std::string cmd("cat ");
+        for(int i=0; i<num_parallel; i++)
+        {
+            std::string file_path =
+                        setting.local_files.output_seq_graph_result_path +
+                        "/process"+std::to_string(i);
+            cmd += file_path + " ";
+        }
+        cmd += " > " + setting.local_files.reconstructed_sf_path;
+        //std::cout << "cmd " << cmd << std::endl;
+        run_command(cmd, true);
+
+        //rm all temp process
+        for(int i=0; i<num_parallel; i++)
+        {
+            std::string rm_cmd("rm ");
+            std::string file_path =
+                        setting.local_files.output_seq_graph_result_path +
+                        "/process"+std::to_string(i);
+            rm_cmd += file_path;
+            run_command(rm_cmd, false);
+        }
+        std::cout << "remove all temp process sparse flow output file under comp_graph_output" << std::endl;
     }
-    std::cout << "remove all temp process sparse flow output file under comp_graph_output" << std::endl;
 }
 
 void Multi_graph_handler::combine_contigs_seq_output()
@@ -759,6 +765,7 @@ void Multi_graph_handler::process_sparse_flow_graph(int & num_parallel, int num_
 
     std::cout << "start_class " << start_class <<std::endl;
     std::cout << "end_class " << end_class <<std::endl;
+    std::cout << "num paralle " << num_parallel << std::endl;
 
     std::deque<Comp_graph> work_queue;
 
@@ -1352,7 +1359,7 @@ void Multi_graph_handler::reverse_complement(std::string & seq)
             *it = 'C';
         else
         {
-            shc_log_error("find unknown char\n");
+            shc_log_error("find unknown char %c\n", *it);
             exit(1);
         }
     }
