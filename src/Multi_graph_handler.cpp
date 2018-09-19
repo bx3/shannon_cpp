@@ -1,19 +1,37 @@
 #include "Multi_graph_handler.h"
 
+int Multi_graph_handler::count_num_path_file(std::string path_dir)
+{
+    int num_path = 0;
+    for(auto& entry : boost::make_iterator_range(
+        boost::filesystem::directory_iterator(path_dir), {}))
+    {
+        std::string entry_str = entry.path().string();
+        int underscore_index = 0;
+        for(int i=entry_str.size()-1; i>=0; i--)
+        {
+            if(entry_str[i] == '_')
+            {
+                underscore_index = i;
+                break;
+            }
+        }
+
+        std::string path_prefix = "paths";
+        std::string parse_str =
+            entry_str.substr(underscore_index-path_prefix.size(), path_prefix.size());
+        if(parse_str == path_prefix)
+            num_path++;
+    }
+    return num_path;
+}
+
 int Multi_graph_handler::
 count_num_component_sparse_flow()
 {
-    num_comp = 0;
-    for(auto& entry : boost::make_iterator_range(
-        boost::filesystem::directory_iterator(setting.local_files.output_seq_graph_path), {}))
-    {
-        int test_index = setting.local_files.output_seq_graph_path.size() + 7;
-        std::string entry_str = entry.path().string();
-        //std::cout << "entry_str " << entry_str << std::endl;
-        if(entry_str[test_index] == 'p')
-            num_comp++;
-        //std::cout << entry << "\n";
-    }
+    std::cout << "lf.output_seq_graph_path " << setting.local_files.output_seq_graph_path << std::endl;
+    num_comp = count_num_path_file(setting.local_files.output_seq_graph_path);
+
     std::cout << "number of component for sparse flow is " << num_comp << std::endl;
     return num_comp;
 }
@@ -113,8 +131,8 @@ void Multi_graph_handler::run_multi_seq_graph()
 // collect sf seq and single seq into final output
 void Multi_graph_handler::collect_process_file(int num_parallel)
 {
-    std::string touch_cmd("touch " + setting.local_files.reconstructed_sf_path);
-    run_command(touch_cmd, false);
+    overwirte_a_file(setting.local_files.reconstructed_sf_path);
+
 
     if(num_parallel > 0)
     {
@@ -522,6 +540,22 @@ void Multi_graph_handler::process_multi_seq_graph(int num_parallel, int num_comp
 
     Process_comp_man proc_comp_man(num_parallel);
 
+    std::string important_message("\nProgress bar below updates whenever one component finishes. "
+                    "If there is one component with giant kmer-read files, it usually becomes "
+                    "the bottleneck, and becomes the last component to finish. So if the process "
+                    "bar stops at 95% or higher for long time, go to dir \n\n"
+                    + setting.local_files.output_components_kmer_dir + "\n"
+                    + setting.local_files.output_components_read_dir + "\n\n"
+                    "check for file size (read files for each component are represented as a list 0,1,..) "
+                    "to see if a few components are significantly greater\n\n"
+                    + "Solution for slow processing time to a giant component:\n" +
+                    + "1. change read sub-sampling parameter -g\n"
+                    + "       for saving some multi-bridging attempts (preferred)\n"
+                    + "2. reduce partition size: --metis_partition_size\n"
+                    + "       for reducing component size, ( but might break long transcripts)\n");
+
+    print_important_notice(important_message);
+
     {
         std::string message = "Multi-graph run " + std::to_string(work_list.size())
                             + " components\n";
@@ -578,7 +612,7 @@ void Multi_graph_handler::process_multi_seq_graph(int num_parallel, int num_comp
                             num_comp_finish += 1;
                             Comp_size_info completed_comp = proc_comp_man.process_comp[cli_idx];
                             //std::cout << "comp " <<  completed_comp.comp_id << " prev_mem " << prev_mem << std::endl;
-                            int64_t kmer_part = prev_mem - completed_comp.read_size ;
+                            int64_t kmer_part = prev_mem;// - completed_comp.read_size ;
                             assert(kmer_part > 0 );
                             double kmer_num_mem_ratio = static_cast<double>(kmer_part) /
                                                  static_cast<double>(completed_comp.kmer_num);

@@ -632,7 +632,7 @@ void Contig_graph_handler::run_metis_and_assign_comp(graph_t & graph, std::vecto
           NULL, NULL, &metis_input.adjwgt.at(0), &metis_setup.num_partition,
           NULL, NULL, metis_setup.options, &metis_setup.objval, &part.at(0));
     //shc_log_info(shc_logname, "after running metis\n");
-
+    
     if(ret == METIS_ERROR_INPUT)
         shc_log_error("METIS_ERROR_INPUT\n");
     if(ret == METIS_ERROR_MEMORY)

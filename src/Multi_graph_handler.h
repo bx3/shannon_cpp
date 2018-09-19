@@ -137,6 +137,7 @@ public:
 
     int count_num_component_seq_graph();
     int count_num_component_sparse_flow();
+    int count_num_path_file(std::string path_dir);
 
     int get_num_components_seq_graph() {return count_num_component_seq_graph();}
     int get_num_components_sparse_flow() {return count_num_component_sparse_flow();}
