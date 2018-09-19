@@ -119,7 +119,7 @@ For pair-ended fasta read file at **path_to_pair_ended_read_1** and **path_to_pa
 
 **-t** specifies the number of running processes (1 threads per process). 
 
-**-g** controls the read subsampling at components partition step. It has a great impact on the running speed when input read files are large, since the partitioned reads are later used for multibridging. Setting it to 0 disables subsample operation; otherwise a higher **g** tends to keep more reads. For read i, the sampling is based on the formula P_i(KEEP) = min(1, g/read_count_for_read_i)
+**-g** controls the read subsampling at components partition step. It has a great impact on the running speed when input read files are large, since the partitioned reads are later used for multibridging. Setting it to 0 disables subsample operation; otherwise a higher **g** tends to keep more reads. For read i, the sampling is based on the formula P_i(KEEP) = min(1, g/read_count_for_read_i), if it is not known, using 50-100 to avoid lossing too much reads
 
 **-m** specifies max amount of memory allowed for Shannon in the multi-bridge step, to prevent process crushing due to memory overflow. User can indicate the memory value using number of byte (like 1234), or using a number with unit (1k,1M,1G,1T). Notice, this memory limit is only effective in the multi-bridge step, and it manages the number of working processes to prevent memory crashing due to too many processes working at the same time.
 
