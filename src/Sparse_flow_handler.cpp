@@ -21,6 +21,9 @@ void * Sparse_flow_handler::run_sparse_flow_handler_helper( Comp_graph comp_grap
 
     load_path(path_path);
 
+    //std::cout << "get_num_nodes " << get_num_nodes() << std::endl;
+    //std::cout << "get_num_nodes " << get_num_edges() << std::endl;
+
     add_start_end_node();
 
     if (get_num_nodes() <= 3)
@@ -76,6 +79,9 @@ void Sparse_flow_handler::process_one_graph_component(int graph_i,std::string & 
 
     //log_graph_struct(false);
     load_path(path_path);
+
+    //std::cout << "get_num_nodes " << get_num_nodes() << std::endl;
+    //std::cout << "get_num_nodes " << get_num_edges() << std::endl;
 
     add_start_end_node();
 #ifdef LOG_SF
@@ -200,7 +206,7 @@ bool Sparse_flow_handler::load_graph(std::string & node_file, std::string & edge
     else
     {
         shc_log_error("comp %d graph %d node file header read error: %s\n",
-                        comp_id, graph_id, header_str);
+                        comp_id, graph_id, header_str.c_str());
         return false;
     }
 
@@ -998,9 +1004,19 @@ void Sparse_flow_handler::modify_local_graph(vd_t v, std::vector<double> & flow,
                 std::vector<vd_t> & in_nodes, std::vector<vd_t> & out_nodes)
 {
     //shc_log_info(shc_logname, "Start modify graph\n");
+
     int num_in = boost::in_degree(v, graph);
     int num_out = boost::out_degree(v, graph);
     bundled_node_p & node_curr = graph[v];
+
+    //modify_writer << "modify vd: " << node_curr.node_id
+    //              << " in " << num_in << " out " << num_out << std::endl;
+    //for(int k=0; k<flow.size(); k++)
+    //{
+    //    int i, j;
+    //    get_i_j(k, num_out, i, j);
+    //    modify_writer << "f(" << i << "," << j << ") = " << std::setprecision(2) << flow.at(k) << std::endl;
+    //}
 
     for(int k=0; k<flow.size(); ++k)
     {

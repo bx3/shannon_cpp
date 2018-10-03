@@ -128,6 +128,8 @@ public:
         sf_setting.sparsity_factor = 0.4;
         //sf_setting.is_use_topo_reverse = is_use_reverse_;
         sf_setting.multiple_test = setting.sparse_flow_setup.multiple_test;
+
+        //modify_writer.open(setting.local_files.output_path+"/modify.log");
     }
 
     //used for multi-thread
@@ -280,6 +282,8 @@ private:
 
     std::normal_distribution<double> distribution;
     std::default_random_engine generator;
+
+    //std::ofstream modify_writer;
 };
 
 struct Sparse_flow_works {

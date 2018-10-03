@@ -148,7 +148,7 @@ class Progress_bar
     std::ostream& os;
     const std::size_t bar_width;
     std::string message;
-    const std::string full_bar;
+    std::string full_bar;
     struct Block_timer bt;
 
  public:

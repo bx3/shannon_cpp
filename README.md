@@ -18,8 +18,8 @@ This is a **C++** implementatin for the work **ShannonRNA: an Information-Optima
 - [Acknowledgments](#acknowledgments)
 ### Prerequisites
 
-* ubuntu 15.10 or higher
-* g++
+* ubuntu (tested on 15.10, or higher)
+* g++ (tested on 5.5.0, or higher, g++ 4.8.5 tested having issue to link boost.program_options)
 
 ### Installing
 * install python 
@@ -108,20 +108,22 @@ CMD\<shannon> takes raw reads (or Rcorrected reads) as its input.
 
 For a single-ended fasta read file at **path_to_single_ended_read**, with accepted 101 bases per read, Shannon processes and gives assembled transcriptome at **output_path**. 
 ```
-./Shannon_RNASeq_Cpp shannon -l 101 -s path_to_single_ended_read -o output_path -t 1 -g 0 -m 100G
+./Shannon_RNASeq_Cpp shannon -l 101 -s path_to_single_ended_read -o output_path -t 1 -g 0 -m 100G -u 4
 ```
 
 For pair-ended fasta read file at **path_to_pair_ended_read_1** and **path_to_pair_ended_read_2**, with corresponding accepted **76** and **76** bases per read, Shannon processes and gives output at **output_path**. 
 ```
-./Shannon_RNASeq_Cpp shannon -i 76 76 -p path_to_pair_ended_read_1 path_to_pair_ended_read_2 -o output_path -t 1 -g 0 -m 100G
+./Shannon_RNASeq_Cpp shannon -i 76 76 -p path_to_pair_ended_read_1 path_to_pair_ended_read_2 -o output_path -t 1 -g 0 -m 100G -u 4
 ```
 **-o** When processing a fasta file for the first time, it is suggested to set the output_path to a non-existant new directory while working with command line. However, if a user wants to re-run the assembly with the same input file but different parameters, it is fine to use the same output directory, Shannon can automatically detect previously generated jellyfish file and sorted kmer file and load them. However, when kmer length is the changed parameter, the jellyfish file becomes invalid and hence a new output directory is needed.
 
 **-t** specifies the number of running processes (1 threads per process). 
 
-**-g** controls the read subsampling at components partition step. It has a great impact on the running speed when input read files are large, since the partitioned reads are later used for multibridging. Setting it to 0 disables subsample operation; otherwise a higher **g** tends to keep more reads. For read i, the sampling is based on the formula P_i(KEEP) = min(1, g/read_count_for_read_i), if it is not known, using 50-100 to avoid lossing too much reads
+**-g** controls the read subsampling at components partition step. It has a great impact on the running speed when input read files are large, since the partitioned reads are later used for multibridging. Setting it to 0 disables subsample operation; otherwise a higher **g** tends to keep more reads. For read i, the sampling is based on the formula P_i(KEEP) = min(1, g/read_count_for_read_i), if it is not known, using 50-100 to avoid lossing too much reads (note it has same interpretation as trinity --normalize_max_read_cov inside in silico part)
 
 **-m** specifies max amount of memory allowed for Shannon in the multi-bridge step, to prevent process crushing due to memory overflow. User can indicate the memory value using number of byte (like 1234), or using a number with unit (1k,1M,1G,1T). Notice, this memory limit is only effective in the multi-bridge step, and it manages the number of working processes to prevent memory crashing due to too many processes working at the same time.
+
+**-u** number of parallel passed to linux sort function. Sorting a large file consumes a lot of memory, and linux kernel migth silently kill the process if the system is severely out of memory. Set the number to 8 if more than 100G is available. One way to check if the process is silently killed by system is to check if the file (kmer_unfiltered_sorted) is empty in the output directory.
 
 ### CMD\<partition>
 Given a large noisy fasta-reads, CMD\<partition> performs error correction, and partitions the reads into multiple components. Each component contains two files, a kmer file which holds all error-corrected kmer and read files which selectively include original input reads for that component depending on the partition algorithm. 

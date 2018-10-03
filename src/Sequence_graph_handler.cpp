@@ -484,6 +484,9 @@ void Sequence_graph_handler::build_kmer_graph_from_edges()
 
 
         graph[*it].prevalence = (in_sum_p+out_sum_p)/2;
+
+        //shc_log_info(shc_logname, "%s: %u\n", graph[*it].seq.c_str(),
+        //                            graph[*it].prevalence);
     }
     load_all_read(kmer_node_map);
 }
@@ -4698,6 +4701,15 @@ bool Sequence_graph_handler::remove_suspicious_nodes(uint64_t & node_removed)
     Node_count_sorter sorter;
     std::sort(suspicous_nodes.begin(), suspicous_nodes.end(), sorter);
 
+    //for(int i=0; i<suspicous_nodes.size() ; i++)
+    //{
+    //    Node_Count_Pair & node_count = suspicous_nodes[i];
+    //    rm_sus_writer << graph[node_count.first].seq << "\t"
+    //                  << node_count.second << "\t"
+    //                  << graph[node_count.first].prevalence << "\t"
+    //                  << graph[node_count.first].count << std::endl;
+    //}
+    //rm_sus_writer << std::endl;
 
     std::set<vd_t> vd_remove_set;
 

@@ -87,7 +87,7 @@ struct bundled_node_p {
     bundled_node_p(const std::string & seq_="",
                    const node_id_t & node_id_=IMPOSSIBLE_NODE_ID):
                    seq(seq_), node_id(node_id_), count(1), norm{1},
-                   copy_count(0) {}
+                   copy_count(0), prevalence(0) {}
 
     inline read_length_t seq_len(){return seq.size();}
     inline std::string to_string()
@@ -100,7 +100,7 @@ struct bundled_node_p {
     kmer_count_node_t prevalence;
     kmer_count_node_t copy_count;
     kmer_count_node_t norm;
-    
+
     std::vector<Bdg_read_info> reads_info;
     std::vector<Terminal_node_info> term_nodes_info;
     S_info s_info;

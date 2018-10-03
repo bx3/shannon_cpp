@@ -226,6 +226,8 @@ public:
         //graph_writer.open(setting.local_files.output_path+"/graph.log");
         //reads_writer.open(setting.local_files.output_path+"/reads.log");
         //cycle_writer.open(setting.local_files.output_path+"/cycle.log");
+
+        //rm_sus_writer.open(setting.local_files.output_path+"/sus.log");
     }
 
     // available public function
@@ -488,6 +490,8 @@ private:
     std::ofstream reads_writer;
     std::ofstream cycle_writer;
     std::ofstream nodes_struct_writer;
+
+    //std::ofstream rm_sus_writer;
     Block_timer resolve_pair_timer;
 
     uint64_t num_edge_added;
