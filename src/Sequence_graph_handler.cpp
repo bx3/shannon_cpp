@@ -4015,6 +4015,7 @@ void Sequence_graph_handler::break_all_cycles()
 void Sequence_graph_handler::simple_break_cycle(std::deque<vd_t> & cycle_path)
 {
     vd_t vd_remove = cycle_path[1]; //according to python implementation, take 1
+    //cycle_writer << graph[vd_remove].node_id << std::endl;
     //std::cout << graph[vd_remove].seq << std::endl;
     //shc_log_info(shc_logname, "rm %u\n", graph[vd_remove].node_id);
     //boost::remove_edge(cycle_path[0], cycle_path[1], graph);
@@ -4037,9 +4038,9 @@ find_cycle(std::set<vd_t> & acyclic_node_set, std::deque<vd_t> & cycle_path)
             if(is_node_inside_cycle(vd, acyclic_node_set, cycle_path))
             {
                 //shc_log_info(shc_logname, "finish find_cycle\n");
-                for(int i=0; i<cycle_path.size(); i++)
-                    cycle_writer << graph[cycle_path[i]].seq << "\t";
-                cycle_writer << std::endl;
+                //for(int i=0; i<cycle_path.size(); i++)
+                //    cycle_writer << graph[cycle_path[i]].seq << "\t";
+                //cycle_writer << std::endl;
                 return true;
             }
         }
@@ -5403,8 +5404,14 @@ void Sequence_graph_handler::log_graph_to_file(std::ofstream & writer, int id)
             vd_t vd_target = boost::target(*out_ei, graph);
             writer << id << "\t" << node_seq << "\t" << graph[vd_target].seq << "\t"
                    << in_degree << "\t" << out_degree << "\t"
-                   << graph[*out_ei].weight << std::endl;
+                   << graph[*out_ei].weight <<  std::endl;
         }
+        //std::vector<Bdg_read_info> & reads_info = graph[vd].reads_info;
+        //for(int i=0; i<reads_info.size(); i++)
+        //{
+        //    writer <<"\t" <<  reads_info[i].read_id << "\t" << reads_info[i].start << std::endl;
+        //}
+
 
         if( out_degree==0 && boost::in_degree(vd, graph)==0)
             writer << id << "\t" << node_seq << std::endl;

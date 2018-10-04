@@ -128,7 +128,7 @@ public:
         sf_setting.sparsity_factor = 0.4;
         //sf_setting.is_use_topo_reverse = is_use_reverse_;
         sf_setting.multiple_test = setting.sparse_flow_setup.multiple_test;
-
+        //generator.seed(31);
         //modify_writer.open(setting.local_files.output_path+"/modify.log");
     }
 
@@ -233,6 +233,7 @@ private:
              std::vector<double> & in_counts, std::vector<double> & out_counts);
     double get_norm_2(std::vector<double> & v);
     double get_norm_1(std::vector<double> & v);
+    int get_norm_0(std::vector<double> & v);
     int get_num_nonzero_flow(std::vector<double> & flow,
                                     std::vector<int> & sub_flow_indicator);
     int get_num_nonzero_flow(std::vector<double> & flow);

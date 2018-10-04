@@ -4,7 +4,7 @@ double norm_1_helper(double x, double y) {return x + abs(y);}
 
 template<class T1, class T2> double dot_product(T1 & v1, T2 & v2)
 {
-    return std::inner_product(v1.begin(), v1.end(), v2.begin(), 0);
+    return std::inner_product(v1.begin(), v1.end(), v2.begin(), 0.0);
 }
 
 void * Sparse_flow_handler::run_sparse_flow_handler_helper( Comp_graph comp_graph,
@@ -600,6 +600,11 @@ void Sparse_flow_handler::sparse_flow_on_all_nodes()
                 shc_log_info(shc_logname, "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE\n");
 #endif
 
+                //modify_writer << "vd " << graph[vd].node_id
+                //          << " num_in: " << in_counts.size()
+                //          << ", num_out: " << out_counts.size()
+                //          << " non zero flow " << get_norm_0(flow)
+                //          << std::endl;
                 modify_local_graph(vd, flow, in_nodes, out_nodes);
 
                 //link_leaf_node_to_terminal(in_nodes, out_nodes);
@@ -811,11 +816,37 @@ sparse_flow_on_one_node(vd_t vd, std::vector<double> & min_flow,
     for(std::vector<double>::iterator it=out_counts.begin(); it!=out_counts.end(); ++it)
         shc_log_info(shc_logname, "%f\n", *it);
 #endif
+
+    /*
+    modify_writer << "num_in: " << num_in <<  ", num_out: " << num_out << std::endl;
+    modify_writer << "in counts" << std::endl;
+    for(std::vector<double>::iterator it=in_counts.begin(); it!=in_counts.end(); ++it)
+        modify_writer <<  *it << std::endl;
+
+    modify_writer << "out counts:" << std::endl;
+    for(std::vector<double>::iterator it=out_counts.begin(); it!=out_counts.end(); ++it)
+        modify_writer << *it << std::endl;
+    modify_writer << "in sum " << sum_vector(in_counts)
+                  << ", out sum " << sum_vector(out_counts) << std::endl ;
+    */
     // make flow equal, and construct equal constraint
     make_in_out_flow_equal(in_counts, out_counts);
     std::vector<double> equ_constraint(in_counts);
     equ_constraint.insert(equ_constraint.end(),
                           out_counts.begin(), out_counts.end());
+
+
+    //modify_writer << "after net flow" << std::endl;
+    //modify_writer << "num_in: " << num_in <<  ", num_out: " << num_out << std::endl;
+    //modify_writer << "in counts" << std::endl;
+    //for(std::vector<double>::iterator it=in_counts.begin(); it!=in_counts.end(); ++it)
+    //  modify_writer <<  *it << std::endl;
+
+    //modify_writer << "out counts:" << std::endl;
+    //for(std::vector<double>::iterator it=out_counts.begin(); it!=out_counts.end(); ++it)
+    //  modify_writer << *it << std::endl;
+    //modify_writer << "in sum " << sum_vector(in_counts)
+    //            << ", out sum " << sum_vector(out_counts) << std::endl ;
 
 #ifdef LOG_LP_SUMMARY
     shc_log_info(shc_logname, "num_in: %d, num_out: %d\n", num_in, num_out);
@@ -827,6 +858,8 @@ sparse_flow_on_one_node(vd_t vd, std::vector<double> & min_flow,
         shc_log_info(shc_logname, "%f\n", *it);
     shc_log_info(shc_logname, "in sum %f, out sum %f\n", sum_vector(in_counts), sum_vector(out_counts));
 #endif
+
+
 
     int min_num_flow = num_in*num_out + 1;
     int flow_times = 0;
@@ -855,6 +888,7 @@ sparse_flow_on_one_node(vd_t vd, std::vector<double> & min_flow,
         for(int j=0; j<num_in*num_out; j++)
         {
             gamma.push_back(std::abs(distribution(generator)));
+            //shc_log_info(shc_logname, "g %f\n", gamma.back());
         }
 
         double obj_value = path_decompose(vd, gamma, equ_constraint,
@@ -880,12 +914,25 @@ sparse_flow_on_one_node(vd_t vd, std::vector<double> & min_flow,
             shc_log_info(shc_logname, "f(%d,%d) = %f\n", i,j, flow.at(k));
         }
 #endif
+
+
+        //modify_writer << "after trunc solution summary " << i << std::endl;
+        //for(int k=0; k<flow.size(); k++)
+        //{
+        //    int r, j;
+        //    get_i_j(k, num_out, r, j);
+
+            //<< std::setprecision(2)
+        //    modify_writer << "f(" << r << "," << j << ") = " << flow.at(k) << std::endl;
+        //}
+
         // update procedures
         int num_flow = get_num_nonzero_flow(flow_sol, sub_flow_indicator);
         //shc_log_info(shc_logname, "num non known_path flow %d\n", num_flow);
-
+        //modify_writer << "num_flow " << num_flow << " min_num_flow " << min_num_flow << std::endl;
         if(num_flow < min_num_flow)
         {
+            //modify_writer << "\t\tupdate less "  << graph[vd].node_id<< std::endl;
             min_num_flow = num_flow;
             min_flow = flow;
             //log_flow(flow, in_nodes, out_nodes);
@@ -901,14 +948,28 @@ sparse_flow_on_one_node(vd_t vd, std::vector<double> & min_flow,
             if(get_norm_2(diff_result) > sf_setting.tol)
                 flow_times++;
 
+            //modify_writer << "min_unknown_flow " << min_unknown_flow << std::endl;
             if(is_update_flow(flow, min_flow, sub_flow_indicator, min_unknown_flow))
             {
+                //modify_writer << "\t\tupdate equal " << graph[vd].node_id << std::endl;
                 min_flow = flow;
                 //log_flow(flow, in_nodes, out_nodes);
                 min_unknown_flow = dot_product(sub_flow_indicator, min_flow);
             }
         }
     }
+
+
+    //modify_writer << "middle check  vd: " << graph[vd].node_id
+    //              << " in " << num_in << " out " << num_out << std::endl;
+    //for(int k=0; k<min_flow.size(); k++)
+    //{
+    //    int i, j;
+    //    get_i_j(k, num_out, i, j);
+
+        //<< std::setprecision(2)
+    //    modify_writer << "f(" << i << "," << j << ") = " << min_flow.at(k) << std::endl;
+    //}
 
 
     //int num_flow_before_sparser = get_num_nonzero_flow(min_flow);
@@ -938,11 +999,18 @@ py_make_flow_sparser(int product, std::vector<double> & flow)
     if(product > sf_setting.path_sparsity)
     {
         std::vector<index_flow_t> index_flow;
-        for(int i=0; i<=flow.size(); i++)
+        for(int i=0; i<flow.size(); i++)
             index_flow.emplace_back(i, flow[i]);
 
         Index_flow_sorter if_sorter;
         std::sort(index_flow.begin(), index_flow.end(), if_sorter);
+
+        //for(int i=0; i<index_flow.size(); i++)
+        //{
+        //    modify_writer << index_flow[i].first << "\t" << index_flow[i].second << std::endl;
+        //}
+
+
         flow.assign(flow.size(), 0);
         for(int i=0; i<sf_setting.path_sparsity; i++)
         {
@@ -1015,7 +1083,8 @@ void Sparse_flow_handler::modify_local_graph(vd_t v, std::vector<double> & flow,
     //{
     //    int i, j;
     //    get_i_j(k, num_out, i, j);
-    //    modify_writer << "f(" << i << "," << j << ") = " << std::setprecision(2) << flow.at(k) << std::endl;
+        //<< std::setprecision(2)
+    //    modify_writer << "f(" << i << "," << j << ") = " << flow.at(k) << std::endl;
     //}
 
     for(int k=0; k<flow.size(); ++k)
@@ -1135,11 +1204,29 @@ is_update_flow(std::vector<double> & flow, std::vector<double> & min_flow,
                 std::vector<int>& sub_flow_indicator, double min_unknown_flow)
 {
     bool cond_1 = min_flow.size()==0;
-    bool cond_2 = get_flow_difference(flow, min_flow) < sf_setting.tol &&
-                  dot_product(sub_flow_indicator, flow) < min_unknown_flow;
-    bool cond_3 = std::accumulate(flow.begin(), flow.end(), 0.0) >
-                  std::accumulate(min_flow.begin(), min_flow.end(), 0.0);
-    return cond_1 || cond_2 || cond_3;
+    //bool cond_2 = get_flow_difference(flow, min_flow) < sf_setting.tol &&
+    //              dot_product(sub_flow_indicator, flow) < min_unknown_flow;
+    double flow_diff = get_flow_difference(flow, min_flow);
+    //double flow_dot_product = dot_product(sub_flow_indicator, flow);
+    //modify_writer << "flow_diff " << flow_diff << " flow_dot_product " << flow_dot_product << std::endl;
+    //modify_writer << "sf_setting.tol " << sf_setting.tol << "min_unknown_flow: " << min_unknown_flow << std::endl;
+    bool cond_2 =  flow_diff < sf_setting.tol;// &&
+                //flow_dot_product < min_unknown_flow;
+    //bool cond_3 = std::accumulate(flow.begin(), flow.end(), 0.0) >
+    //              std::accumulate(min_flow.begin(), min_flow.end(), 0.0);
+
+    //double a =    std::accumulate(flow.begin(), flow.end(), 0.0);
+    //double b =    std::accumulate(min_flow.begin(), min_flow.end(), 0.0);
+    /*
+    modify_writer << "a " << a << " b " << b << std::endl;
+    if(cond_1 )
+        modify_writer << "cond1" << std::endl;
+    if(cond_2 )
+        modify_writer << "cond2" << std::endl;
+    if(cond_3 )
+        modify_writer << "cond3" << std::endl;
+    */
+    return cond_1 || cond_2;
 }
 
 /**
@@ -1711,12 +1798,23 @@ get_in_out_edges(vd_t vd, std::vector<vd_t> & in_nodes, std::vector<vd_t> & out_
 
 double Sparse_flow_handler::get_norm_2(std::vector<double> & v)
 {
-    return std::sqrt(std::inner_product(v.begin(), v.end(), v.begin(), 0));
+    return std::sqrt(std::inner_product(v.begin(), v.end(), v.begin(), 0.0));
 }
 
 double Sparse_flow_handler::get_norm_1(std::vector<double> & v)
 {
     return std::accumulate(v.begin(), v.end(), 0.0, norm_1_helper);
+}
+
+int Sparse_flow_handler::get_norm_0(std::vector<double> & v)
+{
+    int count = 0;
+    for(int i=0; i<v.size(); i++)
+    {
+        if(v[i] != 0)
+            count++;
+    }
+    return count;
 }
 
 int Sparse_flow_handler::get_num_nonzero_flow(std::vector<double> & flow,
