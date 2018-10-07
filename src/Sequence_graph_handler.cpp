@@ -3601,9 +3601,9 @@ int Sequence_graph_handler::find_known_path(int max_hop)
                     //shc_log_info(shc_logname, "find matched path\n");
                     //read_known_path_map[i] = path;
 
-                    for(uint64_t i=0; i<path.size()-1; i++)
+                    for(uint64_t k=0; i<path.size()-1; i++)
                     {
-                        aer_t aer = boost::edge(path[i], path[i+1], graph);
+                        aer_t aer = boost::edge(path[k], path[k+1], graph);
                         assert(aer.second);
                         std::map<ed_t, uint64_t>::iterator e_it =
                                                   known_edges.find(aer.first);

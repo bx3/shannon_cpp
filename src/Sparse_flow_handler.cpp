@@ -909,9 +909,9 @@ sparse_flow_on_one_node(vd_t vd, std::vector<double> & min_flow,
         shc_log_info(shc_logname, "after trunc solution summary\n");
         for(int k=0; k<flow.size(); k++)
         {
-            int i, j;
-            get_i_j(k, num_out, i, j);
-            shc_log_info(shc_logname, "f(%d,%d) = %f\n", i,j, flow.at(k));
+            int r, j;
+            get_i_j(k, num_out, r, j);
+            shc_log_info(shc_logname, "f(%d,%d) = %f\n", r,j, flow.at(k));
         }
 #endif
 

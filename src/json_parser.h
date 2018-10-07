@@ -39,7 +39,7 @@ struct Duplicate_setting {
 
     void set_para(uint8_t rmer_length_, double threshold_,
            kmer_count_t min_count_, size_t min_len_, bool is_use_set_,
-           double load_factor_, int num_sort_thread_)
+           double load_factor_, int num_sort_thread_, std::string sort_tmp_dir_)
     {
         rmer_length = rmer_length_;
         threshold = threshold_;
@@ -48,6 +48,7 @@ struct Duplicate_setting {
         is_use_set = is_use_set_;
         load_factor = load_factor_;
         num_sort_thread = num_sort_thread_;
+        sort_tmp_dir = sort_tmp_dir_;
     }
 
     uint8_t rmer_length;
@@ -57,6 +58,7 @@ struct Duplicate_setting {
     bool is_use_set;
     double load_factor;
     int num_sort_thread;
+    std::string sort_tmp_dir;
 };
 
 struct Contig_graph_setup {

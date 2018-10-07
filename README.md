@@ -264,6 +264,11 @@ Allowed options:
                                         kmer dictionary load factor, control 
                                         memory usage
   -u [ --num_sort_thread ] arg (=1)     argument passing to linux sort function
+                                        option -parallel
+  --sort_tmp_dir arg                    argument passing to linux sort function
+                                        option -T which specifies a temporary
+                                        directory used by linux sort function,
+                                        /tmp wil be used if left empty
   --rmer_length arg (=15)               rmer length for error correction
   --threshold arg (=0.5)                ratio of common rmer between two 
                                         contigs for determing if two contifs 
@@ -312,7 +317,6 @@ Allowed options:
                                         specify max memory for running
                                         multi-graph multi-bridge
   -t [ --num_process ] arg (=1)         Specify number processs for multi graph
-  -t [ --num_process ] arg (=1)         Specify number processs for multi graph
                                         procedureswhere each process owns 
                                         one thread by default
   --max_hop_for_known_path arg (=30)    Max number of hops allowable for a read
@@ -340,6 +344,11 @@ Allowed options:
                                         kmer dictionary load factor, control 
                                         memory usage
   -u [ --num_sort_thread ] arg (=1)     argument passing to linux sort function
+                                        option -parallel
+  --sort_tmp_dir arg                    argument passing to linux sort function
+                                        option -T which specifies a temporary
+                                        directory used by linux sort function,
+                                        /tmp wil be used if left empty
   --rmer_length arg (=15)               rmer length for error correction
   --threshold arg (=0.5)                ratio of common rmer between two 
                                         contigs for determing if two contifs 
