@@ -87,7 +87,7 @@ struct bundled_node_p {
     bundled_node_p(const std::string & seq_="",
                    const node_id_t & node_id_=IMPOSSIBLE_NODE_ID):
                    seq(seq_), node_id(node_id_), count(1), norm{1},
-                   copy_count(0), prevalence(0) {}
+                   copy_count(0), prevalence(0), read_count(0) {}
 
     inline read_length_t seq_len(){return seq.size();}
     inline std::string to_string()
@@ -100,6 +100,7 @@ struct bundled_node_p {
     kmer_count_node_t prevalence;
     kmer_count_node_t copy_count;
     kmer_count_node_t norm;
+    read_count_t read_count;
 
     std::vector<Bdg_read_info> reads_info;
     std::vector<Terminal_node_info> term_nodes_info;
@@ -112,6 +113,16 @@ struct bundled_edge_p {
                         : weight(weight_), count(count_) {}
     edge_weight_t weight; // is overlap
     double count;   // is the count
+};
+
+typedef int64_t path_id_t;
+typedef int64_t location_t;
+typedef int64_t read_id_t;
+
+struct Path_info {
+    Path_info(path_id_t id_, location_t location_) : id(id_), location(location_) {}
+    path_id_t id;
+    location_t location; //start from 0, unit is number of vd
 };
 
 typedef boost::adjacency_list<boost::listS, boost::listS,

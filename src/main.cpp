@@ -18,11 +18,12 @@ void command_line_for_shannon(int argc, char** argv, Shannon_C_setting & setting
 void command_line_for_partition(int argc, char** argv, Shannon_C_setting & setting);
 void command_line_for_seq_graphs(int argc, char** argv, Shannon_C_setting & setting,
                         std::string& kmer_path, std::string& s_read_path,
-                        std::string& p1_read_path, std::string& p2_read_path);
+                        std::string& p1_read_path, std::string& p2_read_path,
+                        std::string& read_prob_path, std::string& read_pair_prob_path);
 void command_line_for_sparse_flow(int argc, char** argv,
             Shannon_C_setting & setting,
             std::string & node_path, std::string & edge_path,
-            std::string & path_path, std::string & output_path);
+            std::string & path_path, std::string & output_path, std::string & read_path);
 void command_line_for_multi_graph_both(int argc, char** argv, Shannon_C_setting & setting);
 void command_line_for_multi_graph_mb(int argc, char** argv, Shannon_C_setting & setting);
 void command_line_for_multi_graph_sf(int argc, char** argv, Shannon_C_setting & setting);
@@ -191,22 +192,24 @@ int main(int argc, char** argv) {
             std::string s_read_path;
             std::string p1_read_path;
             std::string p2_read_path;
+            std::string read_prob_path;
+            std::string read_pair_prob_path;
             command_line_for_seq_graphs(argc, argv, setting,
-                    kmer_path, s_read_path, p1_read_path, p2_read_path);
+                    kmer_path, s_read_path, p1_read_path, p2_read_path, read_prob_path, read_pair_prob_path);
             //profiler_pid = fork_mem_profiler(shannon_Cpp_pid, setting.local_files.mem_profiler.main_log_path);
 
             Sequence_graph_handler seq_graph_handler(setting);
 
             int comp_i = -1;
             seq_graph_handler.setup_input_file_path(kmer_path, s_read_path,
-                                                    p1_read_path, p2_read_path);
+                                p1_read_path, p2_read_path, read_prob_path, read_pair_prob_path);
             seq_graph_handler.run_it(comp_i, true);
         }
         else if(subcommand == "sparse-flow")
         {
-            std::string node_path, edge_path, path_path, output_path;
+            std::string node_path, edge_path, path_path, output_path, read_path;
             command_line_for_sparse_flow(argc, argv, setting,
-                        node_path, edge_path, path_path, output_path);
+                        node_path, edge_path, path_path, output_path,read_path);
             //profiler_pid = fork_mem_profiler(shannon_Cpp_pid, setting.local_files.mem_profiler.main_log_path);
 
             Comp_graph comp_graph(-1,-1);
@@ -216,7 +219,7 @@ int main(int argc, char** argv) {
 
             Sparse_flow_handler sparse_flow_handler(setting);
             sparse_flow_handler.run_sparse_flow_handler_helper( comp_graph,
-                node_path, edge_path, path_path,
+                node_path, edge_path, path_path, read_path,
                 &write_lock, output_path);
         }
         else if(subcommand == "find-rep")
@@ -537,7 +540,7 @@ void command_line_for_multi_graph_both(int argc, char** argv, Shannon_C_setting 
 void command_line_for_sparse_flow(
         int argc, char** argv, Shannon_C_setting & setting,
         std::string & node_path, std::string & edge_path,
-        std::string & path_path, std::string & output_path)
+        std::string & path_path, std::string & output_path, std::string & read_path)
 {
     namespace po = boost::program_options;
     po::options_description desc("Allowed options");
@@ -550,6 +553,8 @@ void command_line_for_sparse_flow(
                                         "input edges path to sparse flow")
             ("path_path", po::value<std::string>()->required(),
                                         "input path path to sparse flow")
+            ("read_path", po::value<std::string>()->required(),
+                                        "input read path to sparse flow")
             ("output_seq_min_len,e", po::value<int>()->default_value(200),
                       "minimal reconstructed output length")
             ("output_path", po::value<std::string>()->required(),
@@ -579,9 +584,11 @@ void command_line_for_sparse_flow(
         node_path = vm["node_path"].as<std::string>();
         edge_path = vm["edge_path"].as<std::string>();
         path_path = vm["path_path"].as<std::string>();
+        read_path = vm["read_path"].as<std::string>();
         if (!convert_to_abs_and_check_exist(node_path) ||
             !convert_to_abs_and_check_exist(edge_path) ||
-            !convert_to_abs_and_check_exist(path_path) )
+            !convert_to_abs_and_check_exist(path_path) ||
+            !convert_to_abs_and_check_exist(read_path))
         {
             exit(0);
         }
@@ -608,7 +615,8 @@ void command_line_for_sparse_flow(
 
 void command_line_for_seq_graphs(int argc, char** argv, Shannon_C_setting & setting,
         std::string& kmer_path, std::string& s_read_path,
-        std::string& p1_read_path, std::string& p2_read_path)
+        std::string& p1_read_path, std::string& p2_read_path,
+        std::string& read_prob_path, std::string& read_pair_prob_path)
 {
     namespace po = boost::program_options;
     po::options_description desc("Allowed options");
@@ -617,6 +625,12 @@ void command_line_for_seq_graphs(int argc, char** argv, Shannon_C_setting & sett
             ("help", "produce help message")
             ("kmer_path,f", po::value<std::string>()->required(),
                       "kmer path used as trusted debruijn graph edge")
+            ("read_prob_path,", po::value<std::string>()->default_value(""),
+                      "probabilities of single ended reads for estimating "
+                      "number of supportive read for the final output")
+            ("read_pair_prob_path,", po::value<std::string>()->default_value(""),
+                        "probabilities of paired ended reads for estimating "
+                        "number of supportive read for the final output")
         ;
 
         add_read_length_options(desc);
@@ -640,6 +654,8 @@ void command_line_for_seq_graphs(int argc, char** argv, Shannon_C_setting & sett
 
         parse_output_options(vm, setting);
         kmer_path = vm["kmer_path"].as<std::string>();
+        read_prob_path = vm["read_prob_path"].as<std::string>();
+        read_pair_prob_path = vm["read_pair_prob_path"].as<std::string>();
         if(!convert_to_abs_and_check_exist(kmer_path))
             exit(0);
         setting.kmer_length = get_kmer_length_from_kmer_file(kmer_path);
@@ -655,6 +671,8 @@ void command_line_for_seq_graphs(int argc, char** argv, Shannon_C_setting & sett
         print_and_log_read_length_setting(setting);
         std::cout << "\033[1;33m";
         std::cout << "kmer_path:                " << kmer_path << std::endl;
+        std::cout << "read_prob_path:           " << read_prob_path << std::endl;
+        std::cout << "read_pair_prob_path:           " << read_pair_prob_path << std::endl;
         std::cout << "\033[0m";
         print_and_log_read_length_setting(setting);
         print_and_log_input_path_setting(setting);

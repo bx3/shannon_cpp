@@ -11,7 +11,7 @@
 #define SAMPLE_SPACE 1000000
 
 struct Read_subsampler {
-    Read_subsampler( int read_sampler_k_)
+    Read_subsampler( int read_sampler_k_, unsigned int seed )
                     : read_sampler_k(read_sampler_k_),
                       k(0), is_always_pass(false), subsample_factor(0)
     {
@@ -27,20 +27,31 @@ struct Read_subsampler {
             k = read_sampler_k;
             is_use_prob_strategy = true;
         }
-
-        srand(time(NULL));
+        if(seed == 0 )
+        {
+            srand(time(NULL));
+        }
+        else
+        {
+            srand(seed);
+            std::cout << "read sampler set seed " << seed << std::endl;
+        }
     }
 
-    void setup(int num_comp)
+    void setup(int num_comp, unsigned int seed)
     {
         num_read_seen.assign(num_comp, 0);
         num_read_accepted.assign(num_comp, 0);
     }
 
-    inline bool simple_decider(const int & comp_i)
+    inline bool simple_decider(const int & comp_i, double & prob_to_sample_read)
     {
         if(is_always_pass)
+        {
+            prob_to_sample_read = 1;
             return true;
+        }
+        prob_to_sample_read = 1.0/subsample_factor;
         if(subsample_factor <= 0)
         {
             shc_log_error("simpler decider current subsample_factor %d, check for bug\n",
@@ -59,13 +70,20 @@ struct Read_subsampler {
     }
 
     //return true if want to keep comp
-    inline bool decide_to_keep_read(double & avg_count, const int & comp_i)
+    inline bool decide_to_keep_read(double & avg_count, const int & comp_i, double & prob_to_sample_read)
     {
         if(is_always_pass)
+        {
+            prob_to_sample_read = 1.0;
             return true;
+        }
+
         if(is_use_prob_strategy)
         {
-            double prob_to_sample_read = k/avg_count;
+            if (avg_count == 0)
+                return false;
+
+            prob_to_sample_read = k/avg_count;
             if(prob_to_sample_read >= 1.0)
                 return true;
             else
@@ -73,7 +91,7 @@ struct Read_subsampler {
         }
         else
         {
-            return  simple_decider(comp_i);
+            return  simple_decider(comp_i, prob_to_sample_read);
         }
     }
 

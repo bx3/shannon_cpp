@@ -106,12 +106,15 @@ Shannon performs denovo transcriptome assembly by first partitioning reads into 
 
 CMD\<shannon> takes raw reads (or Rcorrected reads) as its input.
 
-For a single-ended fasta read file at **path_to_single_ended_read**, with accepted 101 bases per read, Shannon processes and gives assembled transcriptome at **output_path**. 
+**-s** specifies a single-ended fasta file at **path_to_single_ended_read** 
+**-l** specifies the maximal length among all read, its main purpose is for accessing read efficiently since all reads are stored in array, -l has indexing role. Any reads with higher length are truncated, and the rest of the reads don't lose any information. If input reads have been preprocessed and trimmed, it is safe to set it to the raw length.
+
+Shannon processes and gives assembled transcriptome at **output_path**. 
 ```
 ./Shannon_RNASeq_Cpp shannon -l 101 -s path_to_single_ended_read -o output_path -t 1 -g 0 -m 100G -u 4
 ```
 
-For pair-ended fasta read file at **path_to_pair_ended_read_1** and **path_to_pair_ended_read_2**, with corresponding accepted **76** and **76** bases per read, Shannon processes and gives output at **output_path**. 
+For pair-ended fasta read file at **path_to_pair_ended_read_1** and **path_to_pair_ended_read_2**, with corresponding maximal **76** and **76** bases per read, Shannon processes and presents output at **output_path**. 
 ```
 ./Shannon_RNASeq_Cpp shannon -i 76 76 -p path_to_pair_ended_read_1 path_to_pair_ended_read_2 -o output_path -t 1 -g 0 -m 100G -u 4
 ```

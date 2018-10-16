@@ -239,6 +239,13 @@ int64_t Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
         lf.output_seq_graph_path + lf.edge_prefix + std::to_string(comp_i);
     std::string path_dir =
         lf.output_seq_graph_path + lf.path_prefix + std::to_string(comp_i);
+    std::string read_dir =
+        lf.output_seq_graph_path + lf.read_prefix + std::to_string(comp_i);
+
+    std::string dump_reads_path =
+                        setting.local_files.output_components_dump_read_dir
+                        + setting.local_files.comp_read_prefix + std::to_string(comp_i);
+
 
     //std::cout << "output node file " << node_dir << std::endl;
     //std::cout << "output edge file " << edge_dir << std::endl;
@@ -249,7 +256,8 @@ int64_t Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
     start_timer(&dump_timer);
     //log_classify_edge_types();
     //log_graph_to_file(graph_writer , 104);
-    output_components(node_dir, edge_dir, path_dir);
+    output_components(node_dir, edge_dir, path_dir, read_dir);
+    dump_reads(dump_reads_path);
 #ifdef PRINT_TIME
     std::cout << "output_components, " << std::endl;
     stop_timer(&dump_timer);
@@ -311,7 +319,8 @@ int64_t Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
 
 void Sequence_graph_handler::
 setup_input_file_path(std::string kmer_path_, std::string s_read_path_,
-                        std::string p1_read_path_, std::string p2_read_path_)
+                        std::string p1_read_path_, std::string p2_read_path_,
+                        std::string read_prob_path_, std::string read_pair_prob_path_)
 {
 #ifdef LOG_SEQ_GRAPH
     shc_log_info(shc_logname, "Start Custom file setup\n");
@@ -335,6 +344,38 @@ setup_input_file_path(std::string kmer_path_, std::string s_read_path_,
         coll_read_list.p2_reads.setup(
             get_num_seq(p2_read_path_));
     }
+
+    if(!read_prob_path_.empty())
+    {
+        read_prob_path = read_prob_path_;
+        if(!exist_path(read_prob_path.c_str()))
+        {
+            is_apply_read_prob = false;
+        }
+    }
+    else
+    {
+        read_prob_path ="";
+        is_apply_read_prob = true;
+    }
+
+    if(!read_pair_prob_path_.empty())
+    {
+        read_pair_prob_path = read_pair_prob_path_;
+        if(!exist_path(read_pair_prob_path.c_str()))
+        {
+            is_apply_read_pair_prob = false;
+            //std::string message ("pair read prob file not exist, assume all read are kept "
+            //                     "with prob 1.0, i.e. -g=0\n");
+            //print_yellow_cmd(message);
+        }
+    }
+    else
+    {
+        read_pair_prob_path ="";
+        is_apply_read_pair_prob = true;
+    }
+
 #ifdef LOG_SEQ_GRAPH
     shc_log_info(shc_logname, "Finish Custom file setup\n");
 #endif
@@ -362,9 +403,32 @@ void Sequence_graph_handler::setup_input_file_path(int comp_i)
     kmer_path = setting.local_files.output_components_kmer_dir
               + setting.local_files.comp_kmer_prefix
               + std::to_string(comp_i);
+
+    if(!exist_path(kmer_path.c_str()))
+    {
+        shc_log_error("kmer file not exist: %s\n", kmer_path.c_str());
+        exit(0);
+    }
+
+
     //std::cout << "kmer_path " << kmer_path << std::endl;
     if(has_single)
     {
+        read_prob_path = setting.local_files.output_components_read_prob_dir
+                       + setting.local_files.comp_read_prob_prefix
+                       + std::to_string(comp_i);
+        if(!exist_path(read_prob_path.c_str()))
+        {
+            is_apply_read_prob = false;
+            //std::string message ("read prob file not exist, assume all read are kept "
+            //                    "with prob 1.0, i.e. -g=0\n");
+            //print_yellow_cmd(message);
+        }
+        else
+        {
+            is_apply_read_prob = true;
+        }
+
         read_path_single_prefix = setting.local_files.output_components_read_dir
                          + setting.local_files.comp_read_prefix
                          + std::to_string(comp_i);
@@ -375,6 +439,22 @@ void Sequence_graph_handler::setup_input_file_path(int comp_i)
     }
     if(has_pair)
     {
+        read_pair_prob_path = setting.local_files.output_components_read_prob_dir
+                       + setting.local_files.comp_pair_read_prob_prefix
+                       + std::to_string(comp_i);
+        //std::cout << "read_pair_prob_path " << read_pair_prob_path << std::endl;
+        if(!exist_path(read_pair_prob_path.c_str()))
+        {
+            is_apply_read_pair_prob = false;
+            std::string message ("read prob file not exist, assume all read are kept "
+                               "with prob 1.0, i.e. -g=0\n");
+            print_yellow_cmd(message);
+        }
+        else
+        {
+            is_apply_read_pair_prob = true;
+        }
+
         read_path_p1_prefix = setting.local_files.output_components_read_dir
                      + setting.local_files.comp_read_prefix
                      + std::to_string(comp_i)+"_p1";
@@ -401,8 +481,9 @@ void Sequence_graph_handler::clear_seq_graph_mem()
     //p1_end.shrink_to_fit();
     p2_front.clear();
     //p2_front.shrink_to_fit();
-    known_path_set.clear();
+    known_path_map.clear();
     coll_read_list.clear();
+    node_support_map.clear();
 }
 
 
@@ -554,11 +635,17 @@ void Sequence_graph_handler::load_all_read(Kmer_Node_map & kmer_node_map)
 {
     if(has_single)
     {
+        std::ifstream read_prob_file_reader;
+        if(is_apply_read_prob)
+        {
+            read_prob_file_reader.open(read_prob_path);
+        }
         //std::cout << "read_path_single_prefix " << read_path_single_prefix << std::endl;
         if(exist_path(read_path_single_prefix)) //load direct path first
         {
             //std::cout << "load_all_single_read " << std::endl;
-            load_all_single_read(read_path_single_prefix, kmer_node_map);
+
+            load_all_single_read(read_path_single_prefix, read_prob_file_reader, kmer_node_map);
         }
         else
         {
@@ -567,11 +654,15 @@ void Sequence_graph_handler::load_all_read(Kmer_Node_map & kmer_node_map)
             while(exist_path(file_path))
             {
                 //std::cout << "load read " << read_path_single_prefix << std::endl;
-                load_all_single_read(file_path, kmer_node_map);
+                load_all_single_read(file_path, read_prob_file_reader, kmer_node_map);
                 i++;
                 file_path = read_path_single_prefix + "_" + std::to_string(i);
 
             }
+        }
+        if(is_apply_read_prob)
+        {
+            read_prob_file_reader.close();
         }
     }
     if(has_pair)
@@ -626,6 +717,7 @@ bool Sequence_graph_handler::trim_read(std::string & read, uint64_t i_read)
         }
     }
     if(read.size()<kmer_length+2)
+    //if(read.size()<kmer_length*3)
     {
         return false;
     }
@@ -641,6 +733,9 @@ load_all_paired_read_no_concat(
     std::string temp, read_base_p1, read_base_p2;
     std::ifstream reads_p1_reader(read_path_p1);
     std::ifstream reads_p2_reader(read_path_p2);
+    std::ifstream reads_prob_reader;
+    if(is_apply_read_pair_prob)
+        reads_prob_reader.open(read_pair_prob_path);
 
     uint64_t i_th_read = 0;
     uint64_t num_valid_pair = 0;
@@ -649,6 +744,8 @@ load_all_paired_read_no_concat(
 
     Kmer_counter_map temp_kmer_map;
     //Read_subsampler read_subsampler(subsample_factor);
+    std::string read_prob_str;
+    double read_prob = 1.0;
 
     while(true)
     {
@@ -667,6 +764,12 @@ load_all_paired_read_no_concat(
         if(!trim_read(read_base_p2, i_th_read))
             continue;
 
+        if(is_apply_read_pair_prob)
+        {
+            std::getline(reads_prob_reader, read_prob_str);
+            read_prob = boost::lexical_cast<double>(read_prob_str);
+        }
+
         bool is_valid_pair_vd = false;
         vd_t p1_vd_end = traverse_read_is_all_kmer_node_valid(read_base_p1,
                                         kmer_node_map, PAIR_1);
@@ -682,8 +785,8 @@ load_all_paired_read_no_concat(
         }
         // add reads
 
-        read_list_p1.add_read(read_base_p1, read_index_p1); //read index local to its dict
-        read_list_p2.add_read(read_base_p2, read_index_p2); //read index local to its dict
+        read_list_p1.add_read(read_base_p1, read_index_p1, read_prob); //read index local to its dict
+        read_list_p2.add_read(read_base_p2, read_index_p2, read_prob); //read index local to its dict
 
         // assign terminal nodes for each pair of read
         if(is_valid_pair_vd)
@@ -711,6 +814,8 @@ load_all_paired_read_no_concat(
 #ifdef LOG_SEQ_GRAPH
     shc_log_info(shc_logname, "finish load pair read\n");
 #endif
+    if(is_apply_read_pair_prob)
+        reads_prob_reader.close();
     reads_p1_reader.close();
     reads_p1_reader.clear();
     reads_p2_reader.close();
@@ -733,6 +838,12 @@ void Sequence_graph_handler::load_all_paired_read(Kmer_Node_map & kmer_node_map)
 
     std::ifstream reads_p1_reader(read_path_p1);
     std::ifstream reads_p2_reader(read_path_p2);
+
+    std::ifstream reads_prob_reader;
+    if(is_apply_read_pair_prob)
+        reads_prob_reader.open(read_pair_prob_path);
+    std::string read_prob_str;
+    double read_prob = 1.0;
 
     //std::ofstream p1_d(setting.local_files.output_path + "/read1");
     //std::ofstream p2_d(setting.local_files.output_path + "/read2");
@@ -806,6 +917,12 @@ void Sequence_graph_handler::load_all_paired_read(Kmer_Node_map & kmer_node_map)
         //read_base_p1.resize(setting.pair_1_read_length);
         //read_base_p2.resize(setting.pair_2_read_length);
 
+        if(is_apply_read_pair_prob)
+        {
+            std::getline(reads_prob_reader, read_prob_str);
+            read_prob = boost::lexical_cast<double>(read_prob_str);
+        }
+
         bool is_valid_pair_vd = false;
         vd_t p1_vd_end = traverse_read_is_all_kmer_node_valid(read_base_p1,
                                         kmer_node_map, PAIR_1);
@@ -823,8 +940,8 @@ void Sequence_graph_handler::load_all_paired_read(Kmer_Node_map & kmer_node_map)
 
         //if(read_subsampler.simple_decider())
         //{
-            read_list_p1.add_read(read_base_p1, read_index_p1); //read index local to its dict
-            read_list_p2.add_read(read_base_p2, read_index_p2); //read index local to its dict
+            read_list_p1.add_read(read_base_p1, read_index_p1, read_prob); //read index local to its dict
+            read_list_p2.add_read(read_base_p2, read_index_p2, read_prob); //read index local to its dict
 
             // assign terminal nodes for each pair of read
             if(is_valid_pair_vd)
@@ -853,6 +970,8 @@ void Sequence_graph_handler::load_all_paired_read(Kmer_Node_map & kmer_node_map)
 #ifdef LOG_SEQ_GRAPH
     shc_log_info(shc_logname, "finish load pair read\n");
 #endif
+    if(is_apply_read_pair_prob)
+        reads_prob_reader.close();
     reads_p1_reader.close();
     reads_p1_reader.clear();
     reads_p2_reader.close();
@@ -898,16 +1017,20 @@ traverse_read_is_all_kmer_node_valid(std::string & base,
 }
 
 void Sequence_graph_handler::
-load_all_single_read(std::string& read_path, Kmer_Node_map & kmer_node_map)
+load_all_single_read(std::string& read_path, std::ifstream & read_prob_file_reader, Kmer_Node_map & kmer_node_map)
 {
     Single_read_list & read_list = coll_read_list.s_reads;
     std::string kmer_base, temp, read_base;
     std::ifstream read_file_reader(read_path);
+
+    std::string prob_str;
+
     kmer_base.resize(kmer_length);
 
     int i = 0;
     int j = 0;
     read_num_t read_index;
+    double prob = 1.0;
 
     Kmer_counter_map temp_kmer_map;
     //Read_subsampler read_subsampler(subsample_factor);
@@ -921,14 +1044,23 @@ load_all_single_read(std::string& read_path, Kmer_Node_map & kmer_node_map)
         //update_edge_count_with_read(read_base, kmer_node_map);
         if(!trim_read(read_base, i))
             continue;
-        //if(read_subsampler.simple_decider())
-        //{
-            read_list.add_read(read_base, read_index);
-            j++;
-        //}
+
+        if(is_apply_read_prob)
+        {
+            std::getline(read_prob_file_reader, prob_str);
+            prob = boost::lexical_cast<double>(prob_str);
+        }
+
+        //shc_log_info(shc_logname, "read %s, prob %f\n", read_base.c_str(), prob);
+        read_list.add_read(read_base, read_index, prob);
+        headers.push_back(temp);
+        j++;
+
+
         i++;
     }
     read_file_reader.close();
+
 #ifdef LOG_SEQ_GRAPH
     shc_log_info(shc_logname, "load %d single reads\n", j);
 #endif
@@ -957,9 +1089,9 @@ use_pair_reads_to_build_edge(std::string& read_path_1, std::string& read_path_2,
         vd_t vd_front = process_one_read_to_build_graph(
                 kmer_node_map, read_base_p2, PAIR_FRONT_NODE);
         read_num_t read_index1, read_index2;
-        if(read_list_p1.add_read(read_base_p1, read_index1))
+        if(read_list_p1.add_read(read_base_p1, read_index1, 1.0))
             (*read_id_ptr)++;
-        if(read_list_p2.add_read(read_base_p2, read_index2))
+        if(read_list_p2.add_read(read_base_p2, read_index2, 1.0))
             (*read_id_ptr)++;
         //coll_read_list.link_two_reads(read_index1, read_index2);
 
@@ -1003,7 +1135,7 @@ use_reads_to_build_edge(std::string& read_path,
     {
         process_one_read_to_build_graph( kmer_node_map, read_base, NO_PAIR);
         read_num_t read_index;
-        if(read_list.add_read(read_base, read_index))
+        if(read_list.add_read(read_base, read_index, 1.0))
             (*read_id_ptr)++;
     }
     read_file_reader.close();
@@ -2823,12 +2955,12 @@ void Sequence_graph_handler::perform_bridging(vd_t vd)
         {
             //shc_log_info(shc_logname, "%s link to %s\n", graph[u].seq.c_str(), graph[w].seq.c_str());
             aer = boost::add_edge(u, w, graph);
-            graph[aer.first] = bundled_edge_p(curr_node.seq_len(), acc.read_count);
+            graph[aer.first] = bundled_edge_p(curr_node.seq_len(), acc.get_estimated_read_count());
             num_edge_added++;
         }
         else
         {
-            graph[aer.first].count+=acc.read_count;
+            graph[aer.first].count += acc.get_estimated_read_count();
         }
         matched_u.clear();
         matched_w.clear();
@@ -3490,10 +3622,13 @@ int Sequence_graph_handler::find_known_path(int max_hop)
 #endif
     uint64_t byte;
     vip_t vip = boost::vertices(graph);
+
     for(vi_t vi=vip.first; vi!=vip.second; ++vi)
     {
+        vd_t vd = *vi;
         bundled_node_p & curr_node = graph[*vi];
         std::string & node_seq = curr_node.seq;
+
         for(int i=0; i<curr_node.seq_len()-kmer_length+1; ++i)
         {
             encode_kmer(&node_seq.at(i), &byte, kmer_length);
@@ -3510,6 +3645,15 @@ int Sequence_graph_handler::find_known_path(int max_hop)
             }
         }
     }
+
+    //for(Kmer_ni_Map_iterator it=kmer_ni_map.begin();
+    //                         it!=kmer_ni_map.end(); it++)
+    //{
+    //    uint64_t & kmer = it->first;
+    //    std::vector<Node_index> & nodes_index = it.value();
+
+    //}
+
 
     int num_known_path = 0;
     int num_known_edge = 0;
@@ -3541,17 +3685,22 @@ int Sequence_graph_handler::find_known_path(int max_hop)
     }
     coll_read_list.declare_read_finish();
     */
-
+    //std::ofstream read_writer(setting.local_files.output_path + "/reads");
     //std::cout << "num reads " << coll_read_list.get_num_reads() << std::endl;
     for(read_num_t i=0; i<coll_read_list.get_num_reads(); i++)
     {
         //shc_log_info(shc_logname, "start new read\n");
         num_checked_read++;
         Read_acc acc = coll_read_list.get_read(i);
-        //std::string a_read(acc.read_ptr, acc.len);
-        //writer <<a_read << std::endl;
+        std::string a_read(acc.read_ptr, acc.len);
+        //read_writer <<a_read << std::endl;
         encode_kmer(acc.read_ptr, &start_byte, kmer_length);
         encode_kmer(acc.read_ptr+acc.len-kmer_length, &end_byte, kmer_length);
+
+        if (0==acc.get_estimated_read_count())
+        {
+            shc_log_info(shc_logname, "id%u %s\n", i, a_read.c_str());
+        }
 
 #ifdef LOG_SEQ_GRAPH
         char start_back[33];
@@ -3573,7 +3722,7 @@ int Sequence_graph_handler::find_known_path(int max_hop)
             continue;
 
 
-        int curr_hop = max_hop;
+        int curr_hop = 10000000;//max_hop;
 
         std::vector<Node_index> & nodes = start_it.value();
 
@@ -3585,7 +3734,7 @@ int Sequence_graph_handler::find_known_path(int max_hop)
             read_length_t val_node_index = nodes[j].start;
             bundled_node_p & start_node = graph[vd];
             char * val_node_ptr = &start_node.seq.at(val_node_index);
-            read_length_t val_node_len = start_node.seq_len() - val_node_index;
+            read_length_t val_node_len = start_node.seq_len() - val_node_index; //valid node len
 
             // if the first node matches the start of the read
             if(is_partial_match(acc.read_ptr, acc.len,
@@ -3600,28 +3749,132 @@ int Sequence_graph_handler::find_known_path(int max_hop)
                     // there is a full cover path
                     //shc_log_info(shc_logname, "find matched path\n");
                     //read_known_path_map[i] = path;
+                    //if(i==45306)
+                    //{
+                    //    std::string read_str(acc.read_ptr, acc.len);
+                    //    shc_log_info(shc_logname, "num node \n", path.size());
+                    //    shc_log_info(shc_logname, "read       %s\n", read_str.c_str());
+                    //    std::string re_seq ;
+                    //    re_seq = graph[path[0]].seq;
+                    //    for(int i=1; i<path.size();i++)
+                    //    {
+                    //        vd_t vd = path[i];
+                    //        aer_t aer = boost::edge(path[i-1],path[i], graph);
+                    //        assert(aer.second);
+                    //        bundled_edge_p edge_p = graph[aer.first];
+                    //        re_seq += graph[vd].seq.substr(edge_p.weight);
+                    //    }
+                    //    std::size_t found = re_seq.find(read_str);
+                    //    if (found==std::string::npos)
+                    //    {
+                    //        std::cout << "read does not align " << std::endl;
+                    //        std::cout << "read " << read_str << std::endl;
+                    //        std::cout << "seq  " << re_seq << std::endl;
+                    //        exit(1);
+                    //    }
+                    //}
 
-                    for(uint64_t i=0; i<path.size()-1; i++)
+
+                    for(uint64_t k=0; k<path.size()-1; k++)
                     {
-                        aer_t aer = boost::edge(path[i], path[i+1], graph);
+                        aer_t aer = boost::edge(path[k], path[k+1], graph);
                         assert(aer.second);
                         std::map<ed_t, uint64_t>::iterator e_it =
                                                   known_edges.find(aer.first);
                         if(e_it == known_edges.end())
                         {
                             //shc_log_info(shc_logname, "read count %d\n", acc.read_count);
-                            known_edges.insert(std::make_pair(aer.first, acc.read_count));
+                            known_edges.insert(std::make_pair(aer.first, acc.get_estimated_read_count()));
                             num_known_edge++ ;
                         }
                         else
                         {
-                            e_it->second += acc.read_count;
+                            e_it->second += acc.get_estimated_read_count();
                         }
                     }
 
                     if(path.size() > 2)
                     {
-                        known_path_set.insert(path);
+                        std::map<std::vector<vd_t>, Read_count_Read_id_pair >::iterator
+                                        path_it = known_path_map.find(path);
+
+                        // it is possible that two slightly different read1 (of num 10)
+                        // read2 (of num 20) map to the same path
+                        if(path_it == known_path_map.end())
+                        {
+                            std::vector<path_id_t> read_id_lists(1, i);
+                            known_path_map.insert(std::make_pair(path,
+                                    Read_count_Read_id_pair(
+                                        acc.get_estimated_read_count(), read_id_lists))
+                                );
+                            for(int n=0; n<path.size(); n++)
+                                temp_writer << graph[path[n]].node_id << "\t";
+                            temp_writer << std::endl;
+
+                        }
+                        else
+                        {
+                            std::vector<path_id_t> & read_id_lists = (path_it->second).second;
+                            if(std::find(read_id_lists.begin(), read_id_lists.end(), i) == read_id_lists.end())
+                            {
+                                read_id_lists.push_back(i);
+                                (path_it->second).first += acc.get_estimated_read_count();
+                            }
+                        }
+                        //shc_log_info(shc_logname, "vd %u %s\n", graph[vd].node_id, headers[i].c_str());
+                    }
+                    else if (path.size() ==1)
+                    {
+                        //shc_log_info(shc_logname, "vd %u %s\n", graph[vd].node_id, headers[i].c_str());
+                        //if(graph[path[0]].seq == "GTATTTGCAGGCGCTGAGAAACTTTCTCAACAGTAAGAACCAATCAGGCGCAGTGCGCAGGCGCCTTCAGTGGGTCCTGGGTCCGCCTCTTCCGCCCGGTGCGGGCGCCGATTGGTCCGCGTGGACACATAAGAGGCTGCGTATAGGCGCGAGAGCCCCTTTCCTCAGCTGCCGCCAAGGTGCTCGGTCCTTCCGAGGAAGCTAAGGCTGCGTTGGGGTGAGGCCCTCACTTCATCCGGCGACTAGCACCGCGTCCGGCAGCGCCAGCCCTACACTCGCCCGCGCCATGGCCTCTGTCTCCGAGCTCGCCTGCATCTACTCGGCCCTCATTCTGCACGACGATGAGGTGACAGTCACGG")
+                        //{
+                        //    shc_log_info(shc_logname, "read_count add %u, %u %f\n",
+                        //                acc.get_estimated_read_count(), acc.read_count, acc.read_prob);
+                        //    std::string seq(acc.read_ptr, acc.len);
+                        //    shc_log_info(shc_logname, "%s\n", seq.c_str());
+                        //    temp_writer << ">" << "seq_" << (temp_writer_index++) << std::endl;
+                        //    temp_writer << seq << std::endl;
+                        //}
+                        std::map<vd_t, std::set<read_num_t> >::iterator vd_reads_it =
+                                            node_support_map.find(path[0]);
+                        if (vd_reads_it == node_support_map.end())
+                        {
+                            std::set<read_num_t> read_set;
+                            read_set.insert(i);
+                            node_support_map.insert(std::make_pair(path[0], read_set));
+                        }
+                        else
+                        {
+                            (vd_reads_it->second).insert(i);
+                        }
+
+                        graph[path[0]].read_count += acc.get_estimated_read_count();
+                    }
+                    else //==2
+                    {
+
+                        Node_pair_adj node_pair(path[0], path[1]);
+                        std::map<Node_pair_adj, Read_count_Read_id_pair>::iterator two_node_it =
+                                                two_nodes_reads.find(node_pair);
+                        if(two_node_it == two_nodes_reads.end())
+                        {
+                            std::vector<path_id_t> read_id_list(1, i);
+                            Read_count_Read_id_pair read_count_id_pair(
+                                    acc.get_estimated_read_count(), read_id_list);
+                            two_nodes_reads.insert(
+                                    std::make_pair(node_pair, read_count_id_pair));
+                        }
+                        else
+                        {
+                            (two_node_it->second).first += acc.get_estimated_read_count();
+                            (two_node_it->second).second.push_back(i);
+                        }
+
+
+                        //shc_log_info(shc_logname, "path size %d\n", path.size());
+                        //std::string read(acc.read_ptr, acc.len);
+                        //shc_log_info(shc_logname, "read %s\n", read.c_str());
+
                     }
                 }
             }
@@ -3630,7 +3883,7 @@ int Sequence_graph_handler::find_known_path(int max_hop)
     //std::cout << "num_checked_read " << num_checked_read << std::endl;
     //std::cout << "num_searched_reads " << num_searched_reads << std::endl;
 
-    num_known_path = known_path_set.size();
+    num_known_path = known_path_map.size();
     //std::cout << "find " << num_known_path << " known paths\n";
     //std::cout << "find " << num_known_edge << " known edges\n";
 #ifdef LOG_SEQ_GRAPH
@@ -4416,7 +4669,7 @@ void Sequence_graph_handler::seq_graph_output_dir_setup_helper(std::string & dir
 }
 
 void Sequence_graph_handler::output_components(std::string & node_dir,
-                                std::string & edge_dir, std::string & path_dir)
+                std::string & edge_dir, std::string & path_dir, std::string & read_dir)
 {
 #ifdef LOG_SEQ_GRAPH
     shc_log_info(shc_logname, "Start output_components\n");
@@ -4426,9 +4679,13 @@ void Sequence_graph_handler::output_components(std::string & node_dir,
     seq_graph_output_dir_setup_helper(node_dir);
     seq_graph_output_dir_setup_helper(edge_dir);
     seq_graph_output_dir_setup_helper(path_dir);
+    seq_graph_output_dir_setup_helper(read_dir);
     std::string single_node_path(node_dir + "/single_node_" + std::to_string(curr_comp));
+    std::string node_s_path(node_dir + "/node_s");
     //std::cout << "write to " << single_node_path << std::endl;
     std::ofstream sinlge_node_writer(single_node_path);
+    std::ofstream node_s_writer(node_s_path);
+    node_s_writer << "VD\tBases(see single_node_x file)\tRead_count\tRead_id0, Read_id1 ... " << std::endl;
 
     typedef std::multimap<vd_t, std::vector<vd_t> > Paths_by_start_MMap;
     typedef std::multimap<vd_t, std::vector<vd_t> >::iterator
@@ -4436,10 +4693,10 @@ void Sequence_graph_handler::output_components(std::string & node_dir,
     typedef std::pair<Paths_by_start_MMap_iterator, Paths_by_start_MMap_iterator>
                                         Paths_by_start_MMap_iterator_pair;
     Paths_by_start_MMap paths_by_start_mmap;
-    for(std::set<std::vector<vd_t> >::iterator it= known_path_set.begin();
-                                               it!=known_path_set.end(); ++it)
+    for(std::map<std::vector<vd_t>, Read_count_Read_id_pair >::iterator
+                  it= known_path_map.begin(); it!=known_path_map.end(); ++it)
     {
-        paths_by_start_mmap.insert(std::make_pair(it->at(0),*it));
+        paths_by_start_mmap.insert(std::make_pair((it->first).at(0), it->first));
     }
 
     std::set<vd_t> black_nodes;
@@ -4478,30 +4735,100 @@ void Sequence_graph_handler::output_components(std::string & node_dir,
                 //                        graph[sorted_nodes.at(0)].seq.c_str());
 
                 black_nodes.insert(vd_curr);
+                bundled_node_p & curr_node = graph[vd_curr];
                 //std::cout << "graph[vd_curr].seq_len() " << graph[vd_curr].seq_len() << std::endl;
-                if(graph[vd_curr].seq_len() >
+                if(curr_node.seq_len() >
                                 setting.output_seq_min_len)
                 {
                     sinlge_node_writer << ">s_" << curr_comp << "_"
-                                 << (single_seq_i++) << std::endl;
-                    sinlge_node_writer << graph[vd_curr].seq << std::endl;
+                                 << (single_seq_i++) << "\t"
+                                 << "VD:" << curr_node.node_id
+                                 << "(" << curr_node.read_count << ")"
+                                 << std::endl;
+                    sinlge_node_writer << curr_node.seq << std::endl;
+
+                    // dump read id information
+                    node_s_writer << curr_node.node_id << "\t"
+                                  << "*" << "\t"
+                                  << curr_node.read_count << "\t";
+                    std::map<vd_t, std::set<read_num_t> >::iterator node_read_it =
+                              node_support_map.find(vd_curr);
+                    if(node_read_it != node_support_map.end())
+                    {
+
+                      std::set<read_num_t> & read_set = node_read_it->second;
+                      for(std::set<read_num_t>::iterator read_it=read_set.begin();
+                                          read_it!=read_set.end(); read_it++)
+                      {
+                          node_s_writer << *read_it << "\t";
+                      }
+                    }
+
+                    node_s_writer << std::endl;
+
+
                 }
                 continue;
             }
             std::ofstream node_file(node_dir + "/node" + std::to_string(i));
             std::ofstream edge_file(edge_dir + "/edge" + std::to_string(i));
             std::ofstream path_file(path_dir + "/path" + std::to_string(i));
+            std::ofstream read_file(read_dir + "/read" + std::to_string(i));
 
             // output nodes
-            node_file << "ID\tBases\tCount" << std::endl;
+            node_file << "ID\tBases\tCount\tRead_count\tRead_id0, Read_id1 ... " << std::endl;
             for(std::vector<vd_t>::iterator it= sorted_nodes.begin();
                                             it!=sorted_nodes.end(); ++it)
             {
-                node_file << graph[*it].node_id << "\t" + graph[*it].to_string() << std::endl;
+                node_file << graph[*it].node_id << "\t" + graph[*it].to_string()
+                          << "\t" << graph[*it].read_count << "\t";
+
+                std::map<vd_t, std::set<read_num_t> >::iterator node_read_it =
+                            node_support_map.find(*it);
+                if(node_read_it != node_support_map.end())
+                {
+
+                    std::set<read_num_t> & read_set = node_read_it->second;
+                    for(std::set<read_num_t>::iterator read_it=read_set.begin();
+                                        read_it!=read_set.end(); read_it++)
+                    {
+                        Read_acc acc = coll_read_list.get_read(*read_it);
+                        node_file << *read_it << "(" << acc.get_estimated_read_count() << ")" << "\t";
+                    }
+                }
+
+                node_file << std::endl;
                 black_nodes.insert(*it);
             }
 
-            path_file << "VD1\tVD2 ..." << std::endl;
+            read_file << "VD1\tVD2\tread_count\tread_id0, read_id1 ... " << std::endl;
+            for(std::set<ed_t>::iterator it=edges.begin(); it!=edges.end(); ++it)
+            {
+                vd_t source_vd = boost::source(*it, graph);
+                vd_t target_vd = boost::target(*it, graph);
+                Node_pair_adj node_pair_adj(source_vd, target_vd);
+                std::map<Node_pair_adj, Read_count_Read_id_pair>::iterator two_nodes_reads_it
+                                     = two_nodes_reads.find(node_pair_adj);
+                if(two_nodes_reads_it != two_nodes_reads.end())
+                {
+                    read_file << graph[node_pair_adj.first].node_id << "\t"
+                              << graph[node_pair_adj.second].node_id << "\t"
+                              << (two_nodes_reads_it->second).first << "\t";
+                    std::vector<path_id_t> two_node_pathes =
+                                        (two_nodes_reads_it->second).second;
+                    for(std::vector<path_id_t>::iterator
+                            path_id_it=two_node_pathes.begin();
+                            path_id_it!=two_node_pathes.end(); path_id_it++)
+                    {
+                        Read_acc acc = coll_read_list.get_read(*path_id_it);
+                        read_file << *path_id_it
+                                << "(" <<acc.get_estimated_read_count() <<  ")\t";
+                    }
+                    read_file << std::endl;
+                }
+            }
+
+            path_file << "num_node\tVD1\tVD2 ... read_counts\tread_id0\tread_id1 ... " << std::endl;
             // output path
 
             for(std::vector<vd_t>::iterator it= sorted_nodes.begin();
@@ -4515,8 +4842,22 @@ void Sequence_graph_handler::output_components(std::string & node_dir,
                 {
                     std::string path_string;
                     path_to_string(ps_it->second, path_string);
-                    path_file << path_string << std::endl;
+                    std::map<std::vector<vd_t>, Read_count_Read_id_pair >::iterator
+                            path_it = known_path_map.find(ps_it->second);
+                    assert(path_it != known_path_map.end());
+
+                    path_file << ((ps_it->second).size()) << "\t" << path_string
+                              << (path_it->second).first << "\t"; // read count
+
+                    std::vector<path_id_t> & read_id_lists = (path_it->second).second;
+                    for(int m=0; m<read_id_lists.size(); m++)
+                    {
+                        Read_acc acc = coll_read_list.get_read(read_id_lists[m]);
+                        path_file << read_id_lists[m] << "(" << acc.get_estimated_read_count() <<  ")"<< "\t";
+                    }
+                    path_file << std::endl;
                 }
+
             }
 
             // output edge
@@ -4540,6 +4881,7 @@ void Sequence_graph_handler::output_components(std::string & node_dir,
             node_file.close();
             edge_file.close();
             path_file.close();
+            read_file.close();
         }
     }
     //std::cout << "num_edge_skipped " << num_edge_skipped << std::endl;
@@ -5441,4 +5783,19 @@ void Sequence_graph_handler::log_all_nodes_reads_to_file(std::ofstream & writer)
             writer << "read " <<   read << std::endl;
         }
     }
+}
+
+void Sequence_graph_handler::dump_reads(std::string output_path)
+{
+    std::ofstream writer(output_path);
+    for(read_num_t i=0; i<coll_read_list.get_num_reads(); i++)
+    {
+        //shc_log_info(shc_logname, "start new read\n");
+        Read_acc acc = coll_read_list.get_read(i);
+        std::string a_read(acc.read_ptr, acc.len);
+        writer << ">seq" << i << "\t" << acc.read_count << "\t"
+               << acc.read_prob <<  std::endl;
+        writer << a_read << std::endl;
+    }
+    writer.close();
 }

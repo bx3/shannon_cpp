@@ -50,6 +50,18 @@ inline void encode_kmer(const char * base, uint64_t *byte, uint8_t length)
     }
 }
 
+inline bool encode_kmer_check_base(const char * base, uint64_t *byte, uint8_t length)
+{
+    (*byte) = 0;
+    for(int i=0; i<length; i++)
+    {
+        if(char_to_num[base[i]] >= 4)
+            return false;
+        *byte = (*byte)<< 2 | char_to_num[base[i]];
+    }
+    return true;
+}
+
 inline void encode_reverse_kmer(const char * base, uint64_t *byte, uint8_t length)
 {
     (*byte) = 0;
@@ -57,6 +69,18 @@ inline void encode_reverse_kmer(const char * base, uint64_t *byte, uint8_t lengt
     {
         *byte = (*byte)<< 2 | char_to_num[base[i]];
     }
+}
+
+inline bool encode_reverse_kmer_check_base(const char * base, uint64_t *byte, uint8_t length)
+{
+    (*byte) = 0;
+    for(int i=length-1; i>=0; i--)
+    {
+        if(char_to_num[base[i]] >= 4)
+            return false;
+        *byte = (*byte)<< 2 | char_to_num[base[i]];
+    }
+    return true;
 }
 
 inline void decode_kmer(char *base, const uint64_t *byte, uint8_t length)

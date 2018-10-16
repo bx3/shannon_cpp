@@ -24,23 +24,31 @@
 
 
 struct Read_acc {
-    Read_acc (char * s_p, read_length_t len_p, read_count_t read_count_p):
-            read_ptr(s_p), len(len_p), read_count(read_count_p) {}
+    Read_acc (char * s_p, read_length_t len_p, read_count_t read_count_p,
+                            double read_prob_):
+            read_ptr(s_p), len(len_p), read_count(read_count_p),
+            read_prob(read_prob_) {}
     Read_acc (const Read_acc & a)
     {
         read_ptr = a.read_ptr;
         len = a.len;
         read_count = a.read_count;
+        read_prob = a.read_prob;
     }
     Read_acc & operator = (const Read_acc & l)
     {
         read_ptr = l.read_ptr;
         len = l.len;
         read_count = l.read_count;
+        read_prob = l.read_prob;
     }
+
+    inline read_count_t get_estimated_read_count() {return std::ceil(read_count/read_prob);}
+
     char * read_ptr;
     read_length_t len;
     read_count_t read_count;
+    double read_prob;
 };
 
 struct Read_acc_pair {
@@ -83,22 +91,23 @@ struct Single_read_list {
     }
 
     // return if it is a new read, return on argument the local read index
-    bool add_read(std::string & base, read_num_t & read_index)
+    bool add_read(std::string & base, read_num_t & read_index, double read_prob)
     {
         total_num_read++;
-        
+
         if(base.size() > read_length)
         {
             base.resize(read_length);
         }
-        
+
         Read_Index_map_iterator it = read_index_map.find(base);
         if(it == read_index_map.end())
         {
             read_index = num_read;
             read_index_map.insert(std::make_pair(base, read_index));
             local_read_index.push_back(read_index);
-            read_counts.push_back(1);           
+            read_counts.push_back(1);
+            read_probs.push_back(read_prob);
 
             if(base.size() < read_length)
             {
@@ -123,6 +132,7 @@ struct Single_read_list {
         {
             read_index = it->second;
             read_counts[read_index]++;
+            //read_probs[read_index] += read_prob; since if read are equal prob are equal
             local_read_index.push_back(read_index);
             return false;
         }
@@ -164,12 +174,12 @@ struct Single_read_list {
             if(read_len_map[i]==0)
             {
                 return Read_acc((char*)&(read_list.at(i*read_length)),
-                            read_length, read_counts[i]);
+                            read_length, read_counts[i], read_probs[i]);
             }
             else
             {
                 return Read_acc((char*)&(read_list.at(i*read_length)),
-                            read_len_map[i], read_counts[i]);
+                            read_len_map[i], read_counts[i], read_probs[i]);
             }
 
             //Read_len_map_iterator it = read_len_map.find(i);
@@ -254,6 +264,7 @@ private:
     // store mapping from align read index to local read index
     std::vector<read_num_t> local_read_index;
     std::vector<read_count_t> read_counts;
+    std::vector<double> read_probs;
 
     std::vector<read_length_t> read_len_map;
     std::string curr_read;

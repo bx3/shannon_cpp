@@ -318,11 +318,71 @@ struct Single_dumper {
         file_man.offset += len;
     }
 
+    inline void reverse_complement(char * start_ptr, int len, char * write_ptr)
+    {
+        int j =0;
+        for(int i=len-1; i>= 0; i--)
+        {
+            if (*(start_ptr+i)=='A')
+                *(write_ptr + j++) = 'T';
+            else if (*(start_ptr+i)=='T')
+                *(write_ptr + j++) = 'A';
+            else if (*(start_ptr+i)=='C')
+                *(write_ptr + j++) = 'G';
+            else if (*(start_ptr+i)=='G')
+                *(write_ptr + j++) = 'C';
+            else
+            {
+                printf("unknown nucleotide %c\n", *(start_ptr+i));
+                *(write_ptr + j++) = *(start_ptr+i);
+                //exit(1);
+            }
+        }
+    }
+
+    inline char complement(char base)
+    {
+        if (base=='A')
+            return 'T';
+        else if ((base)=='T')
+            return 'A';
+        else if ((base)=='C')
+            return 'G';
+        else if ((base)=='G')
+            return 'C';
+        else
+        {
+            printf("error unknown nucleotide %c\n", (base));
+            return base;
+        }
+
+    }
+
+    // len does not include \n
+    inline void reverse_complement_local(char * start_ptr, int len)
+    {
+        char * s_ptr = start_ptr;
+        char * e_ptr = start_ptr + len;
+        while((s_ptr != e_ptr))
+        {
+            if (s_ptr!=--e_ptr)
+            {
+                char rc_base = complement(*s_ptr);
+                *s_ptr = complement(*e_ptr);
+                *e_ptr = rc_base;
+                s_ptr++;
+            }
+            else
+                *s_ptr = complement(*s_ptr);
+        }
+    }
+
     //len cover next line
     inline void mmap_reverse_write(uint64_t len, char * start, File_man & file_man)
     {
         char * write_ptr = ((char*)file_man.dst+file_man.offset);
-        std::reverse_copy(start, start+len-1, write_ptr); // do not copy next line char
+        reverse_complement(start, len-1, write_ptr);
+        //std::reverse_copy(start, start+len-1, write_ptr); // do not copy next line char
 
         *(write_ptr+len-1) = *(start+len-1);
         //memcpy(temp, start, len);
@@ -443,7 +503,8 @@ struct Single_dumper {
                 std::string header(header_ptr, seq_ptr-header_ptr); // include next line
                 file_man.seq += header;
                 std::string seq(seq_ptr, seq_len);
-                std::reverse(seq.begin(), seq.end());
+                reverse_complement_local(seq_ptr, seq_len);
+                //std::reverse(seq.begin(), seq.end());
                 file_man.seq += seq + '\n';
             }
         }
@@ -779,11 +840,11 @@ struct Kmer_man {
 struct KMER_dumper {
     KMER_dumper() {}
 
-    void setup_dump_files (std::vector<uint64_t> & component_size)
+    void setup_dump_files (std::vector<uint64_t> & component_size, int num_allowed_comp_)
     {
         shc_log_info(shc_logname, "setup dump kmer\n");
         num_component = component_size.size();
-        int num_allowed_comp = NUM_OPEN_FILE;
+        int num_allowed_comp = num_allowed_comp_;
         int num_disk_comps = 0;
         if(num_component > num_allowed_comp)
         {
@@ -862,6 +923,28 @@ struct KMER_dumper {
         }
     }
 
+    void dump_read_prob(comp_num_t comp_i, double prob)
+    {
+        std::string tab("\t");
+        std::map<int, Kmer_man>::iterator it = comp_kmer_map.find(comp_i);
+        if(it != comp_kmer_map.end())
+        {
+            Kmer_man & kmer_man = it->second;
+            if(kmer_man.is_disk)
+                kmer_man.file_writer << prob << std::endl;
+            else
+            {
+                kmer_man.mem_writer +=
+                            (std::to_string(prob) + "\n");
+            }
+        }
+        else
+        {
+            std::cerr << "cannot find kmer dump" << std::endl;
+            exit(1);
+        }
+    }
+
     void write_mem_to_disk()
     {
         deallocate_mmap();
@@ -928,6 +1011,14 @@ struct KMER_dumper {
                 kmer_man.file_writer.close();
             }
         }
+    }
+
+    void reset()
+    {
+        num_component = 0;
+        comp_kmer_map.clear();
+        disk_comps.clear();
+        mem_comps.clear();
     }
 
     int num_component;

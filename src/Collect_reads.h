@@ -248,7 +248,7 @@ struct Collect_reads {
 
             read_count_t sr_count = (ra1.read_count + ra2.read_count)/2;
             last_sr = sr;
-            return Read_acc(&curr_sr.at(0), curr_sr.size(), sr_count);
+            return Read_acc(&curr_sr.at(0), curr_sr.size(), sr_count, (ra1.read_prob + ra2.read_prob)/2);
         //}
     }
 

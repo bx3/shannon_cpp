@@ -134,6 +134,15 @@ public:
         read_length_t start;
     };
 
+    struct Two_Nodes_read_info {
+        Two_Nodes_read_info() : vd1(NULL), vd2(NULL), read_count(0) {}
+        Two_Nodes_read_info(vd_t vd1_, vd_t vd2_, read_count_t read_count_) :
+                vd1(vd1_), vd2(vd2_), read_count(read_count_) {}
+        vd_t vd1;
+        vd_t vd2;
+        read_count_t read_count;
+    };
+
     struct Node_pair {
         Node_pair(vd_t vd_start_, vd_t vd_stop_):
                        vd_start(vd_start_), vd_stop(vd_stop_){}
@@ -166,10 +175,13 @@ public:
         int out_d;
     };
 
+    typedef std::pair<vd_t, vd_t> Node_pair_adj;
     typedef std::map<Node_pair, std::vector<vd_t>,
              equ_node_pair> Node_pair_path_map;
     typedef std::map<Node_pair, std::vector<vd_t>,
              equ_node_pair>::iterator Node_pair_path_map_iterator;
+
+    typedef std::pair<read_count_t, std::vector<path_id_t>> Read_count_Read_id_pair;
 
     Sequence_graph_handler(Shannon_C_setting & setting_) :
                 setting(setting_),
@@ -183,6 +195,8 @@ public:
         max_hop_pair = setting_.seq_graph_setup.max_hop_pair;
         max_hop_path = setting_.seq_graph_setup.max_hop_path;
         special_input = false;
+        is_apply_read_prob = false;
+        is_apply_read_pair_prob = false;
 
 
         glob_node_id = NODE_ID_NORMAL_START;
@@ -228,13 +242,16 @@ public:
         //cycle_writer.open(setting.local_files.output_path+"/cycle.log");
 
         //rm_sus_writer.open(setting.local_files.output_path+"/sus.log");
+        temp_writer.open(setting.local_files.output_path+"/temp.log");
+        temp_writer_index = 0;
     }
 
     // available public function
     int64_t run_it(int comp_i, bool is_single_component);
     void setup_input_file_path(int comp_i);
     void setup_input_file_path(std::string kmer_path, std::string s_read_path,
-                            std::string p1_read_path, std::string p2_read_path);
+                            std::string p1_read_path, std::string p2_read_path,
+                            std::string read_prob_path_, std::string read_pair_prob_path_);
     void build_kmer_graph_from_reads();
     void build_kmer_graph_from_edges();
     void load_all_read(Kmer_Node_map & kmer_node_map);
@@ -251,7 +268,8 @@ public:
     uint64_t resolve_all_pair_reads(int search_hop, std::set<vd_t> & check_vd);
     void output_components(std::string & node_output_path,
                            std::string & edge_output_path,
-                           std::string & path_output_path);
+                           std::string & path_output_path,
+                           std::string & read_output_path);
     void collapse_all();
     void remove_all_suspicious_nodes();
     uint64_t find_all_simple_pair();
@@ -291,7 +309,8 @@ public:
 private:
 
     //load reads
-    void load_all_single_read(std::string& read_path, Kmer_Node_map & kmer_node_map);
+    void load_all_single_read(std::string& read_path,
+                std::ifstream & read_prob_file_reader, Kmer_Node_map & kmer_node_map);
     void load_all_paired_read(Kmer_Node_map & kmer_node_map);
     void load_all_paired_read_no_concat(std::string read_path_p1,
                     std::string read_path_p2, Kmer_Node_map & kmer_node_map);
@@ -390,6 +409,8 @@ private:
     // preprocess
     void pre_process_read();
 
+    void dump_reads(std::string ouput_path);
+
 
     void remove_nodes_edges_if_not_cover_by_reads();
 
@@ -434,13 +455,17 @@ private:
     std::set<vd_t> xnode_set;
     std::set<vd_t> paired_node_set;
 
+    std::map<vd_t, std::set<read_num_t> > node_support_map;
+
     //specify the node which serves as i th read terminal reads
     std::vector<vd_t> p1_end;
     std::vector<vd_t> p2_front;
 
     //store known path
-    std::set<std::vector<vd_t> > known_path_set;
+    std::map<std::vector<vd_t>, Read_count_Read_id_pair > known_path_map;
     std::map<ed_t, uint64_t> known_edges;
+    std::map<Node_pair_adj, Read_count_Read_id_pair> two_nodes_reads;
+    std::vector<std::string> headers;
 
     // should be updated
     node_id_t glob_node_id;
@@ -450,6 +475,11 @@ private:
     std::string read_path_single_prefix;
     std::string read_path_p1_prefix;
     std::string read_path_p2_prefix;
+
+    std::string read_prob_path;
+    std::string read_pair_prob_path;
+    bool is_apply_read_prob;
+    bool is_apply_read_pair_prob;
 
     Block_timer timer;
 
@@ -490,6 +520,8 @@ private:
     std::ofstream reads_writer;
     std::ofstream cycle_writer;
     std::ofstream nodes_struct_writer;
+    std::ofstream temp_writer;
+    uint64_t temp_writer_index;
 
     //std::ofstream rm_sus_writer;
     Block_timer resolve_pair_timer;

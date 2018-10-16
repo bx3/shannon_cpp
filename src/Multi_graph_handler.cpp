@@ -430,6 +430,10 @@ void Multi_graph_handler::process_multi_seq_graph(int num_parallel, int num_comp
     //exit(0);
     add_or_overwrite_directory(setting.local_files.output_seq_graph_path,
                                setting.local_files.output_path);
+    std::cout <<  "setting.local_files.output_components_dump_read_dir " <<
+                setting.local_files.output_components_dump_read_dir << std::endl;
+    add_or_overwrite_directory(setting.local_files.output_components_dump_read_dir,
+                               setting.local_files.output_path);
     if(!setting.local_files.single_node_dir.empty())
     {
         //std::cout <<"single_node_dir " << setting.local_files.single_node_dir << std::endl;

@@ -257,7 +257,7 @@ public:
          fasta_dumper(INIT_SIZE, THRESH, setting_.has_single, setting_.has_pair),
          kmer_dumper(), conn_contig_set(chp->num_contig),
          is_assign_best(setting_.contig_graph_setup.is_assign_best),
-         read_sampler(setting_.contig_graph_setup.read_sampler_k),
+         read_sampler(setting_.contig_graph_setup.read_sampler_k, setting_.random_seed),
          compress_ratio(khp->compress_ratio)
     {
         //explorable_contig_set.set_empty_key(chp->num_contig+2);
@@ -401,6 +401,7 @@ private:
 
     struct FASTA_dumper fasta_dumper;
     struct KMER_dumper kmer_dumper;
+    struct KMER_dumper read_prob_dumper;
 
 
     // capture mapping from contig index to component index, the comp in

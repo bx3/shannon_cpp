@@ -9,6 +9,7 @@ template<class T1, class T2> double dot_product(T1 & v1, T2 & v2)
 
 void * Sparse_flow_handler::run_sparse_flow_handler_helper( Comp_graph comp_graph,
             std::string node_path, std::string edge_path, std::string path_path,
+            std::string read_path,
             pthread_mutex_t * write_lock_ptr, std::string output_path)
 {
     comp_id = comp_graph.comp_i;
@@ -20,7 +21,7 @@ void * Sparse_flow_handler::run_sparse_flow_handler_helper( Comp_graph comp_grap
     }
 
     load_path(path_path);
-
+    load_read(read_path);
     //std::cout << "get_num_nodes " << get_num_nodes() << std::endl;
     //std::cout << "get_num_nodes " << get_num_edges() << std::endl;
 
@@ -51,6 +52,14 @@ void Sparse_flow_handler::clear()
     known_paths.shrink_to_fit();
     paths_for_node.clear();
     vd_contains_map.clear();
+    known_paths_read_count.clear();
+    node_pair_read_count_map.clear();
+    sparse_flowed_vds.clear();
+    start_node_IDset_map.clear();
+    read_id_count_map.clear();
+    path_id_to_read_ids.clear();
+    vd_pair_to_read_ids.clear();
+    vd_to_read_ids.clear();
 
     vd_start = NULL;
     vd_end = NULL;
@@ -58,8 +67,8 @@ void Sparse_flow_handler::clear()
 }
 
 // process one component
-void Sparse_flow_handler::process_one_graph_component(int graph_i,std::string & node_path,
-                        std::string & edge_path, std::string & path_path)
+void Sparse_flow_handler::process_one_graph_component(int comp_i, int graph_i,std::string & node_path,
+                        std::string & edge_path, std::string & path_path, std::string & read_path)
 {
     std::cout << "process_one_graph_component, not multithread" << std::endl;
     if(!load_graph(node_path, edge_path))
@@ -72,13 +81,14 @@ void Sparse_flow_handler::process_one_graph_component(int graph_i,std::string & 
               << get_num_edges() << std::endl;
 #endif
 
-    comp_id = 3000;
+    comp_id = comp_i;
     graph_id = graph_i;
 
     //exit(0);
 
     //log_graph_struct(false);
     load_path(path_path);
+    load_read(read_path);
 
     //std::cout << "get_num_nodes " << get_num_nodes() << std::endl;
     //std::cout << "get_num_nodes " << get_num_edges() << std::endl;
@@ -98,6 +108,7 @@ void Sparse_flow_handler::process_one_graph_component(int graph_i,std::string & 
     //log_all_node(true);
 
     sparse_flow_on_all_nodes();
+    //log_graph_struct(false);
 #ifdef LOG_SF
     std::cout << "after SF, node num " << get_num_nodes() << " num edges "
               << get_num_edges() << std::endl;
@@ -140,21 +151,28 @@ void Sparse_flow_handler::process_all_graph(int comp_i)
     std::string path_path_prefix(lf.output_seq_graph_path +
                                  lf.path_prefix + std::to_string(comp_i) +
                                  "/path");
+    std::string read_path_prefix(lf.output_seq_graph_path +
+                                 lf.read_prefix + std::to_string(comp_i) +
+                                 "/read");
     bool flag = boost::filesystem::exists(node_path_prefix + std::to_string(i)) &&
                 boost::filesystem::exists(edge_path_prefix + std::to_string(i)) &&
-                boost::filesystem::exists(path_path_prefix + std::to_string(i));
+                boost::filesystem::exists(path_path_prefix + std::to_string(i)) &&
+                boost::filesystem::exists(read_path_prefix + std::to_string(i));
     while(flag)
     {
         std::string graph_node_path = lf.node_prefix + std::to_string(i);
         std::string graph_edge_path = lf.edge_prefix + std::to_string(i);
         std::string graph_path_path = lf.path_prefix + std::to_string(i);
+        std::string graph_read_path = lf.read_prefix + std::to_string(i);
 
-        process_one_graph_component(i, graph_node_path, graph_edge_path, graph_path_path);
+        process_one_graph_component(comp_i, i,
+                    graph_node_path, graph_edge_path, graph_path_path, graph_read_path);
 
         i++;
         flag = boost::filesystem::exists(node_path_prefix + std::to_string(i)) &&
                boost::filesystem::exists(edge_path_prefix + std::to_string(i)) &&
-               boost::filesystem::exists(path_path_prefix + std::to_string(i));
+               boost::filesystem::exists(path_path_prefix + std::to_string(i)) &&
+               boost::filesystem::exists(read_path_prefix + std::to_string(i));
     }
 #ifdef LOG_SF
     shc_log_info(shc_logname, "Finish processing %d seq graph components\n", i);
@@ -183,16 +201,20 @@ bool Sparse_flow_handler::load_graph(std::string & node_file, std::string & edge
         return false;
     }
 
-    std::ifstream node_file_reader(node_file);
-    std::string header_str;
-    std::getline(node_file_reader, header_str);
-    std::vector<std::string> strs;
-    boost::split(strs, header_str, boost::is_any_of("\t"));
-    node_file_reader.close();
+    //std::ifstream node_file_reader(node_file);
+    //std::string header_str;
+    //std::getline(node_file_reader, header_str);
+    //std::vector<std::string> strs;
+    //boost::split(strs, header_str, boost::is_any_of("\t"));
+    //node_file_reader.close();
 
     bool is_valid_node = false;
     bool is_valid_edge = false;
 
+    is_valid_node = load_node(node_file);
+    is_valid_edge = load_edge(edge_file);
+
+    /*
     if(strs.size()== 3)
     {
         is_valid_node = load_node(node_file);
@@ -209,6 +231,7 @@ bool Sparse_flow_handler::load_graph(std::string & node_file, std::string & edge
                         comp_id, graph_id, header_str.c_str());
         return false;
     }
+    */
 
     if(!is_valid_node)
     {
@@ -239,29 +262,87 @@ bool Sparse_flow_handler::load_graph(std::string & node_file, std::string & edge
 bool Sparse_flow_handler::load_node(std::string & node_file)
 {
     std::ifstream file_reader(node_file);
-    std::string node_id_str, bases, count_str;
-    node_id_t node_id;
-    kmer_count_node_t count;
+    std::string node_id_str, bases, count_str, read_count_str;
+    node_id_t node_id  = 0;
+    kmer_count_node_t count = 0;
+    read_count_t read_count = 0;
 
     int num_node = 0;
 
-    std::getline(file_reader, node_id_str); // get first line
-    while(  std::getline(file_reader, node_id_str, '\t') &&
-            std::getline(file_reader, bases, '\t') &&
-            std::getline(file_reader, count_str))
+    std::string line;
+    std::getline(file_reader, line);
+    while(std::getline(file_reader, line) )
     {
+        //shc_log_info(shc_logname, "new line\n");
+        boost::trim(line);
+        std::vector<std::string> tokens;
+        std::vector<vd_t> nodes_in_path;
+        std::vector<read_id_t> read_ids;
+        boost::algorithm::split(tokens, line, boost::is_any_of("\t"));
+        node_id_str = tokens[0];
         node_id = boost::lexical_cast<node_id_t>(node_id_str);
+        bases = tokens[1];
+
+        count_str = tokens[2];
         count = boost::lexical_cast<kmer_count_node_t>(count_str);
+
+        read_count_str = tokens[3];
+        read_count = boost::lexical_cast<read_count_t>(read_count_str);
+
+        for(int i=4; i<tokens.size(); i++)
+        {
+            read_id_t read_id;
+            read_count_t rc;
+            get_readID_count(tokens[i], read_id, rc);
+            Read_id_count_map_iterator it = read_id_count_map.find(read_id);
+            read_ids.push_back(read_id);
+            if(it == read_id_count_map.end())
+                read_id_count_map.insert(std::make_pair(read_id, rc));
+            else
+                assert(it->second == rc);
+        }
+
+
+        //std::cout << "num_node " << num_node << std::endl;
+        //std::vector<std::string> reads_id(tokens.begin()+1, tokens.begin()+num_node+1);
         vd_t vd = boost::add_vertex(graph);
         sorted_vds.push_back(vd);
         //shc_log_info(shc_logname, "VD: %d\n", node_id);
         graph[vd] = bundled_node_p(bases, node_id);
+        graph[vd].read_count = read_count;
+        nodeId_vd_map.insert(std::make_pair(node_id, vd));
+        if (glob_node_id < node_id)
+            glob_node_id = node_id;
+
+
+        vd_to_read_ids[vd] = read_ids;
+        num_node++;
+    }
+
+
+
+    /*
+    std::getline(file_reader, node_id_str); // get first line
+    while(  std::getline(file_reader, node_id_str, '\t') &&
+            std::getline(file_reader, bases, '\t') &&
+            std::getline(file_reader, count_str, '\t') &&
+            std::getline(file_reader, read_count_str))
+    {
+        node_id = boost::lexical_cast<node_id_t>(node_id_str);
+        count = boost::lexical_cast<kmer_count_node_t>(count_str);
+        read_count = boost::lexical_cast<kmer_count_node_t>(read_count_str);
+        vd_t vd = boost::add_vertex(graph);
+        sorted_vds.push_back(vd);
+        //shc_log_info(shc_logname, "VD: %d\n", node_id);
+        graph[vd] = bundled_node_p(bases, node_id);
+        graph[vd].read_count = read_count;
         nodeId_vd_map.insert(std::make_pair(node_id, vd));
         if (glob_node_id < node_id)
             glob_node_id = node_id;
 
         num_node++;
     }
+    */
     glob_node_id++;
     //std::cout << "glob_node_id is " <<glob_node_id << std::endl;
     file_reader.close();
@@ -367,29 +448,174 @@ bool Sparse_flow_handler::load_py_edge(std::string & edge_file)
     return num_edge > 0 ;
 }
 
+void Sparse_flow_handler::load_read(std::string & read_file)
+{
+
+    //std::cout << "read_file " << read_file << std::endl;
+    std::ifstream file_reader(read_file);
+    std::string vd1_str, vd2_str, read_count_str, line;
+
+    std::getline(file_reader, line);
+    node_id_t node1_id, node2_id;
+    read_count_t read_count;
+    int line_num = 0;
+
+    while(std::getline(file_reader, line) )
+    {
+        boost::trim(line);
+        //shc_log_info(shc_logname, "new line\n");
+        std::vector<std::string> tokens;
+        std::vector<vd_t> nodes_in_path;
+        std::vector<read_id_t> read_ids;
+        boost::algorithm::split(tokens, line, boost::is_any_of("\t"));
+
+        vd1_str = tokens[0];
+        vd2_str = tokens[1];
+        read_count_str =tokens[2];
+        node1_id = boost::lexical_cast<node_id_t>(vd1_str);
+        node2_id = boost::lexical_cast<node_id_t>(vd2_str);
+        read_count = boost::lexical_cast<read_count_t>(read_count_str);
+
+        std::vector<std::string> reads_str(tokens.begin()+3, tokens.end());
+        for(int j=0; j<reads_str.size(); j++)
+        {
+            read_id_t read_id;
+            read_count_t rc;
+            get_readID_count(reads_str[j], read_id, rc);
+            Read_id_count_map_iterator it = read_id_count_map.find(read_id);
+            read_ids.push_back(read_id);
+            if(it == read_id_count_map.end())
+                read_id_count_map.insert(std::make_pair(read_id, rc));
+            else
+                assert(it->second == rc);
+        }
+
+        vd_t vd_1 = nodeId_vd_map[node1_id];
+        vd_t vd_2 = nodeId_vd_map[node2_id];
+
+        Node_pair node_pair(vd_1, vd_2);
+        Two_node_path_info two_node_path_info(line_num, read_count);
+        node_pair_read_count_map.insert(
+                   std::make_pair(node_pair, two_node_path_info));
+
+        vd_pair_to_read_ids[node_pair] = read_ids;
+
+        line_num++;
+    }
+    /*
+    while(std::getline(file_reader, vd1_str, '\t') &&
+          std::getline(file_reader, vd2_str, '\t') &&
+          std::getline(file_reader, read_count_str)           )
+    {
+         node1_id = boost::lexical_cast<node_id_t>(vd1_str);
+         read_count = boost::lexical_cast<read_count_t>(read_count_str);
+         node2_id = boost::lexical_cast<node_id_t>(vd2_str);
+         //std::cout << node1_id << "\t "<< node2_id << std::endl;
+
+
+         vd_t vd_1 = nodeId_vd_map[node1_id];
+         vd_t vd_2 = nodeId_vd_map[node2_id];
+
+         Node_pair node_pair(vd_1, vd_2);
+         Two_node_path_info two_node_path_info(line_num, read_count);
+         node_pair_read_count_map.insert(
+                    std::make_pair(node_pair, two_node_path_info));
+         line_num++;
+    }
+    */
+
+    //std::cout << "load pair node " << node_pair_read_count_map.size() << std::endl;
+}
+
+void Sparse_flow_handler::
+get_readID_count(std::string & token, read_id_t & read_id, read_count_t & rc)
+{
+    std::size_t found = token.find("(");
+    std::size_t r_found = token.find(")");
+    //std::cout << "token " << token << std::endl;
+    if (found!=std::string::npos && r_found!=std::string::npos)
+    {
+        std::string read_id_str = token.substr(0, found);
+        //std::cout << "read_id_str " << read_id_str << std::endl;
+        read_id = boost::lexical_cast<read_id_t>(read_id_str);
+        std::string rc_str = token.substr(found+1, r_found-found-1);
+        //std::cout << "rc_str " << rc_str << std::endl;
+        rc = boost::lexical_cast<read_count_t>(rc_str);
+    }
+    else
+    {
+        shc_log_error("file error, read_id(count)\n");
+        exit(1);
+    }
+
+}
+
 void Sparse_flow_handler::load_path(std::string & path_file)
 {
 #ifdef LOG_SF
     shc_log_info(shc_logname, "load_path\n");
 #endif
+    known_paths_read_count.clear();
+    known_paths.clear();
+    start_node_IDset_map.clear();
     std::ifstream file_reader(path_file);
     std::string line;
     std::getline(file_reader, line);
     node_id_t node_id;
-    int i = 0;
+    path_id_t i = 0;
     while(std::getline(file_reader, line) )
     {
         //shc_log_info(shc_logname, "new line\n");
+        boost::trim(line);
         std::vector<std::string> tokens;
         std::vector<vd_t> nodes_in_path;
+        std::vector<read_id_t> read_ids;
         boost::algorithm::split(tokens, line, boost::is_any_of("\t"));
         //for(int i=0; i< tokens.size(); i++)
         //{
         //    shc_log_info(shc_logname, "print string %d: %s\n", i, tokens[i].c_str());
         //}
+        int num_node = boost::lexical_cast<int>(tokens.front());
+        //std::cout << "num_node " << num_node << std::endl;
+        std::vector<std::string> nodes_str(tokens.begin()+1, tokens.begin()+num_node+1);
 
-        int location = 0;
-        for(std::string & node_id_str: tokens)
+        std::string read_count_str = *(tokens.begin()+num_node+1);
+        //std::cout << "read_count_str " << read_count_str << std::endl;
+        read_count_t read_count = boost::lexical_cast<read_count_t>(read_count_str);
+        //std::cout << "read_count_str " << read_count << std::endl;
+
+        std::vector<std::string> reads_id_str(tokens.begin()+num_node+2, tokens.end());
+
+        for(int j=0; j<reads_id_str.size(); j++)
+        {
+            read_id_t read_id;
+            read_count_t rc;
+            get_readID_count(reads_id_str[j], read_id, rc);
+            Read_id_count_map_iterator it = read_id_count_map.find(read_id);
+            read_ids.push_back(read_id);
+            if(it == read_id_count_map.end())
+                read_id_count_map.insert(std::make_pair(read_id, rc));
+            else
+                assert(it->second == rc);
+        }
+
+        //tokens.pop_back();
+        location_t location = 0;
+
+
+        node_id_t start_node_id = boost::lexical_cast<node_id_t>(nodes_str[0]);
+        //std::cout << "start_node_id " << start_node_id << std::endl;
+        vd_t start_vd = nodeId_vd_map[start_node_id];
+
+
+        Node_pathID_MMap_iterator_pair start_np_it_pair =
+                        start_node_IDset_map.equal_range(start_vd);
+
+        start_node_IDset_map.insert(std::make_pair(start_vd, i));
+
+
+        // storing path
+        for(std::string & node_id_str: nodes_str)
         {
             if(node_id_str.empty() || node_id_str[0]==' ')
                 continue;
@@ -400,6 +626,7 @@ void Sparse_flow_handler::load_path(std::string & path_file)
             nodes_in_path.push_back(vd);
             Node_path_MMap_iterator_pair np_it_pair =
                     paths_for_node.equal_range(vd);
+
             if(np_it_pair.first == np_it_pair.second) // no such entry
             {
                 //shc_log_info(shc_logname, "path for node location %d\n", location);
@@ -419,6 +646,8 @@ void Sparse_flow_handler::load_path(std::string & path_file)
         }
         i++;
         known_paths.push_back(nodes_in_path);
+        known_paths_read_count.push_back(read_count);
+        path_id_to_read_ids.push_back(read_ids);
     }
     file_reader.close();
 }
@@ -532,25 +761,25 @@ void Sparse_flow_handler::sparse_flow_on_all_nodes()
 
             //node_i++;
 
-            if(boost::out_degree(vd, graph) ==1)
+            if(boost::out_degree(vd, graph) ==1 )
             {
                 //shc_log_info(shc_logname, "Y node modify\n");
-                std::vector<vd_t> surround_nodes;
-                out_eip_t out_eip = boost::out_edges(vd,graph);
-                vd_t vd_target = boost::target(*out_eip.first, graph);
-                in_eip_t in_eip = boost::in_edges(vd,graph);
-                for(in_ei_t in_ei=in_eip.first; in_ei!=in_eip.second; in_ei++)
-                {
-                    vd_t vd_source = boost::source(*in_ei, graph);
+                //std::vector<vd_t> surround_nodes;
+                //out_eip_t out_eip = boost::out_edges(vd,graph);
+                //vd_t vd_target = boost::target(*out_eip.first, graph);
+                //in_eip_t in_eip = boost::in_edges(vd,graph);
+                //for(in_ei_t in_ei=in_eip.first; in_ei!=in_eip.second; in_ei++)
+                //{
+                //    vd_t vd_source = boost::source(*in_ei, graph);
                     //if (vd_source != vd_start)
                     //{
                     //    shc_log_info(shc_logname, "%d -> %d\n",
                     //            graph[vd_source].node_id, graph[vd_target].node_id);
                     //}
-                }
-
-
+                //}
                 link_Y_path(vd);
+
+
                 //condense_nodes(surround_nodes, remove_vd);
             }
             else
@@ -579,6 +808,7 @@ void Sparse_flow_handler::sparse_flow_on_all_nodes()
                 //log_local_node(vd, false);
                 bool is_unique = sparse_flow_on_one_node(vd, flow,
                                    in_counts, out_counts, sub_flow_indicator, in_nodes, out_nodes);
+                sparse_flowed_vds.insert(vd);
                 //if(!is_unique)
                 //    shc_log_warning("non unique flow\n");
 #ifdef LOG_SF
@@ -626,7 +856,7 @@ void Sparse_flow_handler::sparse_flow_on_all_nodes()
         //else
             update_sorted_vds(false);
 
-        remove_decomposed_node(remove_vd);
+        //remove_decomposed_node(remove_vd);
 
 #ifdef LOG_SF
         shc_log_info(shc_logname, "\t\t%d SF run, %d node remain to process\n",
@@ -734,7 +964,7 @@ void Sparse_flow_handler::link_all_Y_path(std::set<vd_t> & remove_vd)
             }
 
 #endif
-
+            /*
             if(link_Y_path(vd))
             {
 #ifdef LOG_SF
@@ -752,6 +982,7 @@ void Sparse_flow_handler::link_all_Y_path(std::set<vd_t> & remove_vd)
                 shc_log_info(shc_logname, "connected to source or sink\n");
 #endif
             }
+            */
         }
     }
 }
@@ -1054,9 +1285,11 @@ void Sparse_flow_handler::update_sorted_vds(bool is_reverse)
             {
                 if (in_degree<=1)
                     continue;
+                if (out_degree<=1)
+                    continue;
                 new_sorted_vds.push_back(vd);
                 //shc_log_info(shc_logname, "vd %d is kept\n", graph[vd].node_id);
-                log_local_node(vd, false);
+                //log_local_node(vd, false);
             }
         }
     }
@@ -1467,8 +1700,9 @@ dump_SF_seq(std::string & out_file)
     stack_vd.push_back(vd_start);
 
     std::ofstream file_writer(out_file);
-    std::cout << "vd end in degree " << boost::in_degree(vd_end, graph)  << std::endl;
-    std::cout << "vd start out degree " << boost::out_degree(vd_start, graph)  << std::endl;
+    //std::cout << "vd end in degree " << boost::in_degree(vd_end, graph)  << std::endl;
+    //std::cout << "vd start out degree " << boost::out_degree(vd_start, graph)  << std::endl;
+    /*
     vip_t vip = boost::vertices(graph);
     //walk through the graph list, and update if
     for(vi_t it=vip.first; it!=vip.second; it++)
@@ -1484,8 +1718,9 @@ dump_SF_seq(std::string & out_file)
             }
         }
     }
+    */
 
-    log_all_node(true);
+    //log_all_node(true);
 
     output_seq_helper(file_writer, curr_seq, delimit, stack_vd);
 
@@ -1505,8 +1740,9 @@ dump_SF_seq(std::string & out_file, pthread_mutex_t * writer_lock_ptr)
 
     std::ofstream file_writer;
     file_writer.open(out_file, std::ofstream::out | std::ofstream::app);
-
-    output_seq_helper_mt(file_writer, writer_lock_ptr, curr_seq, delimit, stack_vd);
+    read_count_t num_support_read = 0;
+    output_seq_helper_mt(file_writer, writer_lock_ptr, curr_seq, delimit,
+                        stack_vd);
 
     file_writer.close();
 }
@@ -1523,9 +1759,47 @@ output_seq_helper(std::ofstream & file_writer, std::string & curr_seq,
         std::string out_seq = curr_seq.substr(0, delimit.at(delimit.size()-2));
         if(out_seq.size() > setting.output_seq_min_len)
         {
-            file_writer << ">comp_" << comp_id << "_graph_" << graph_id << "_"
-                        << (num_out_seq++) << std::endl;
-            file_writer << out_seq << std::endl;
+            std::vector<path_id_t> path2_ids;
+            std::vector<path_id_t> path3_ids;
+            read_count_t reads_1_node, reads_2_node, reads_3_node;
+            std::vector<vd_t> simple_vd_path;
+            convert_composite_vds_to_vds(stack_vd, simple_vd_path);
+            assert(simple_vd_path.size() > 0);
+
+            read_count_t total_read_count =
+                    get_num_supportive_read(simple_vd_path, reads_1_node,
+                            reads_2_node, reads_3_node, path2_ids, path3_ids);
+
+           uint64_t num_sf_node = get_num_sparse_flowed_node(simple_vd_path);
+
+           file_writer << ">comp_" << comp_id << "_graph_" << graph_id << "_"
+                       << (num_out_seq++) << "\t"
+                       << "num_sf_node:" << num_sf_node << "\t"
+                       << "sum_rc:" << total_read_count << "\t"
+                       << "rc_1_node:" << reads_1_node << "\t"
+                       << "rc_2_node:" << reads_2_node << "\t"
+                       << "rc_3_node:" << reads_3_node << "\t";
+           file_writer << "VD_path:";
+           for(int i=0; i<simple_vd_path.size()-1; i++)
+           {
+               file_writer << graph[simple_vd_path[i]].node_id
+                           << "(" << graph[simple_vd_path[i]].read_count << ")" << "->";
+           }
+           file_writer << graph[simple_vd_path[simple_vd_path.size()-1]].node_id
+                       << "(" << graph[simple_vd_path[simple_vd_path.size()-1]].read_count << ")"
+                       <<  "\t";
+           file_writer << "Path2_id:";
+           for(int i=0; i<path2_ids.size(); i++)
+           {
+               file_writer << path2_ids[i] << ",";
+           }
+           file_writer << "\tPath3_id:";
+           for(int i=0; i<path3_ids.size(); i++)
+           {
+               file_writer << path3_ids[i] << ",";
+           }
+           file_writer << std::endl;
+           file_writer << out_seq << std::endl;
         }
     }
     else
@@ -1548,21 +1822,311 @@ output_seq_helper(std::ofstream & file_writer, std::string & curr_seq,
     }
 }
 
+/*
+input curr_giant_i, int & curr_little_i, when requesting this void
+return the next possible index pair
+*/
+
+/*
+vd_t Sparse_flow_handler::
+get_next_vd(std::vector<vd_t> & vd_path, int & curr_giant_i, int & curr_little_i)
+{
+    if (curr_giant_i >= vd_path.size())
+        return NULL;
+    std::deque<vd_t> & node_path = vd_path[curr_giant_i];
+
+    if (curr_little_i < node_path.size())
+    {
+        return node_path[curr_little_i++];
+    }
+    else
+    {
+        curr_giant_i++;
+        curr_little_i = 0;
+        return get_next_vd(vd_path, curr_giant_i, curr_little_i);
+    }
+}
+*/
+bool Sparse_flow_handler::
+convert_composite_vds_to_vds(std::vector<vd_t> & vd_path, std::vector<vd_t> & simple_vd_path)
+{
+    simple_vd_path.clear();
+    // first is start, last is end
+    for(int i=1; i<vd_path.size()-1; i++)
+    {
+        vd_t vd = vd_path[i];
+        Vd_Vds_map_iterator vd_conatins_it = vd_contains_map.find(vd);
+        if(vd_conatins_it == vd_contains_map.end())
+        {
+            shc_log_warning("contain map does not conatin\n");
+            exit(0);
+        }
+        std::deque<vd_t> & node_path = vd_conatins_it->second;
+
+        for(int j=0; j<node_path.size(); j++)
+        {
+            simple_vd_path.push_back(node_path[j]);
+        }
+    }
+}
+
+uint64_t Sparse_flow_handler::
+get_num_sparse_flowed_node(std::vector<vd_t> & vd_path)
+{
+    uint64_t num_sf_node = 0;
+    for(int i=0; i<vd_path.size(); i++)
+    {
+        vd_t vd = vd_path[i];
+        std::set<vd_t>::iterator it = sparse_flowed_vds.find(vd);
+        if(it != sparse_flowed_vds.end())
+        {
+            num_sf_node++;
+        }
+    }
+    return num_sf_node;
+}
+
+read_count_t Sparse_flow_handler::
+sum_read_ids_set(std::set<read_id_t> & read_id_set)
+{
+    //shc_log_info(shc_logname, "****************\n");
+    read_count_t sum_rc = 0;
+    for(std::set<read_id_t>::iterator it=read_id_set.begin();
+                    it!=read_id_set.end(); it++)
+    {
+        Read_id_count_map_iterator read_id_it = read_id_count_map.find(*it);
+        if(read_id_it!=read_id_count_map.end())
+        {
+            //shc_log_info(shc_logname, "id:%u count:%u\n", *it ,read_id_it->second);
+            sum_rc += read_id_it->second;
+        }
+    }
+    return sum_rc;
+}
+
+void Sparse_flow_handler::
+get_union_set(std::set<read_id_t> & set1, std::set<read_id_t> & set2,
+                   std::set<read_id_t> & set3, std::set<read_id_t> & union_set)
+{
+    union_set.insert(set1.begin(), set1.end());
+    union_set.insert(set2.begin(), set2.end());
+    union_set.insert(set3.begin(), set3.end());
+}
+
+read_count_t Sparse_flow_handler::
+get_num_supportive_read(std::vector<vd_t> & simple_vd_path,
+                read_count_t & reads_1_node, read_count_t & reads_2_node,
+                read_count_t & reads_3_node, std::vector<path_id_t> & path2_ids,
+                std::vector<path_id_t> & path3_ids)
+{
+    //shc_log_info(shc_logname, "get_num_supportive_read begin\n");
+    int support_read = 0;
+    reads_1_node = 0;
+    reads_2_node = 0;
+    reads_3_node = 0;
+
+    std::set<read_id_t> read1_ids_set;
+    std::set<read_id_t> read2_ids_set;
+    std::set<read_id_t> read3_ids_set;
+
+    //shc_log_info(shc_logname, "simple_vd_path size %d\n", simple_vd_path.size());
+
+    //for(int i=0; i<simple_vd_path.size(); i++)
+    //{
+    //    shc_log_info(shc_logname, "vd %u\n", graph[simple_vd_path[i]].node_id);
+    //}
+
+    //std::cout << "************" << (vd_path.size()-2) <<  std::endl;
+    //shc_log_info(shc_logname, "*****\n");
+    vd_t curr_vd;
+    vd_t prev_vd = NULL;
+    int k=0;
+
+    //std::string simple_vd_str;
+    //for(int i=0; i<simple_vd_path.size();i++)
+    //    simple_vd_str += std::to_string(graph[simple_vd_path[i]].node_id) + "\t";
+    //shc_log_info(shc_logname, "simple_vd_path %s\n", simple_vd_str.c_str());
+
+    while(k<simple_vd_path.size())
+    {
+        //count 3 or more supportive read count
+        curr_vd = simple_vd_path[k];
+        //Node_path_MMap_iterator_pair path_it_pair =
+        //                            paths_for_node.equal_range(curr_vd);
+        Node_pathID_MMap_iterator_pair start_np_it_pair =
+                        start_node_IDset_map.equal_range(curr_vd);
+
+        for(Node_pathID_MMap_iterator vd_id_it = start_np_it_pair.first;
+                                    vd_id_it!= start_np_it_pair.second; vd_id_it++)
+        {
+            path_id_t path_id = vd_id_it->second;
+            //shc_log_info(shc_logname, "path  id     %u\n", path_id);
+            std::vector<vd_t> & known_path = known_paths[path_id];
+            int path_size = known_path.size();
+            if(path_size <= simple_vd_path.size()-k)
+            {
+                // path are equal
+                bool is_equal = true;
+                for(int j=0; j<path_size; j++)
+                {
+                    if (known_path[j] !=simple_vd_path[j+k])
+                    {
+                        is_equal = false;
+                        break;
+                    }
+
+                }
+
+                if(is_equal)//memcmp(&path.at(0), &simple_vd_path.at(k), path_size) == 0)
+                {
+                    //shc_log_info(shc_logname, "k         %d\n", k);
+                    //shc_log_info(shc_logname, "path size %d\n", path_size);
+                    //std::string vd_list_str;
+                    //for(int i=0; i<path_size;i++)
+                    //    vd_list_str += std::to_string(graph[known_path[i]].node_id) + "\t";
+                    //shc_log_info(shc_logname, "path %s\n", vd_list_str.c_str());
+
+                    //std::string part_simple_vd_str;
+                    //for(int i=k; i<simple_vd_path.size();i++)
+                    //    part_simple_vd_str += std::to_string(graph[simple_vd_path[i]].node_id) + "\t";
+                    //shc_log_info(shc_logname, "part simple_vd_path %s\n", simple_vd_str.c_str());
+
+                    std::vector<read_id_t> & read_ids = path_id_to_read_ids[path_id];
+                    read3_ids_set.insert(read_ids.begin(), read_ids.end());
+
+                    //shc_log_info(shc_logname, "simple_vd_path size %d\n", simple_vd_path.size());
+                    path3_ids.push_back(path_id);
+                    read_count_t read_count = known_paths_read_count[path_id];
+                    reads_3_node += read_count;
+                }
+            }
+        }
+        /*
+        for(std::set<path_id_t>::iterator id_it = path_ids_set.begin();
+                                id_it != path_ids_set.end(); id_it++)
+        {
+            path_id_t path_id = *id_it;
+            std::cout << "path_id " << path_id << std::endl;
+            std::cout << "known_paths " << known_paths.size() << std::endl;
+            std::vector<vd_t> & path = known_paths[path_id];
+            if(path.size() <= simple_vd_path.size()-k)
+            {
+                // path are equal
+                if(memcmp(&path.at(0), &simple_vd_path.at(k), path.size()) == 0)
+                {
+                    path3_ids.push_back(path_id);
+                    read_count_t read_count = known_paths_read_count[path_id];
+                    reads_3_node += read_count;
+                }
+            }
+        }
+        */
+
+        // count 2 node supportive read count
+        if(prev_vd != NULL)
+        {
+            Node_pair node_pair(prev_vd, curr_vd);
+            Node_pair_read_count_map_iterator node_pair_it =
+                                        node_pair_read_count_map.find(node_pair);
+            if(node_pair_it != node_pair_read_count_map.end())
+            {
+                //shc_log_info(shc_logname, "+%u %d\n",
+                //            (node_pair_it->second).read_count,
+                //            (node_pair_it->second).path_id);
+                reads_2_node += (node_pair_it->second).read_count;
+                path2_ids.push_back((node_pair_it->second).path_id);
+            }
+            std::map<Node_pair, std::vector<read_id_t> >::iterator
+                        vd_pair_read_it = vd_pair_to_read_ids.find(node_pair);
+            if(vd_pair_read_it != vd_pair_to_read_ids.end())
+            {
+                read2_ids_set.insert((vd_pair_read_it->second).begin(),
+                                      (vd_pair_read_it->second).end());
+            }
+        }
+
+        //count 1 node supportive read
+        std::map<vd_t, std::vector<read_id_t> >::iterator vd_it =
+                        vd_to_read_ids.find(curr_vd);
+
+        if(vd_it != vd_to_read_ids.end())
+        {
+            read1_ids_set.insert((vd_it->second).begin(), (vd_it->second).end());
+        }
+        //std::cout << graph[curr_vd].node_id << "\t" << graph[curr_vd].read_count << std::endl;
+
+        prev_vd = curr_vd;
+        k++;
+    }
+    reads_1_node = sum_read_ids_set(read1_ids_set);
+    reads_2_node = sum_read_ids_set(read2_ids_set);
+    reads_3_node = sum_read_ids_set(read3_ids_set);
+
+    std::set<read_id_t> union_set;
+    get_union_set(read1_ids_set, read2_ids_set, read3_ids_set, union_set);
+
+    //shc_log_info(shc_logname, "get_num_supportive_read end\n");
+    return sum_read_ids_set(union_set);
+}
+
 void Sparse_flow_handler::
 output_seq_helper_mt(std::ofstream & file_writer, pthread_mutex_t * writer_lock_ptr,
-        std::string & curr_seq, std::vector<int> & delimit, std::vector<vd_t> & stack_vd)
+        std::string & curr_seq, std::vector<int> & delimit,
+        std::vector<vd_t> & stack_vd)
 {
     vd_t vd = stack_vd.back();
     //std::cout << "VD: " << graph[vd].node_id << std::endl;
     //shc_log_info(shc_logname, "VD: %u\n", graph[vd].node_id);
+
     if( vd == vd_end)
     {
         std::string out_seq = curr_seq.substr(0, delimit.at(delimit.size()-2));
         if(out_seq.size() > setting.output_seq_min_len)
         {
+            std::vector<path_id_t> path2_ids;
+            std::vector<path_id_t> path3_ids;
+            read_count_t reads_1_node, reads_2_node, reads_3_node;
+            std::vector<vd_t> simple_vd_path;
+            convert_composite_vds_to_vds(stack_vd, simple_vd_path);
+            assert(simple_vd_path.size() > 0);
+
+            read_count_t total_read_count =
+                    get_num_supportive_read(simple_vd_path, reads_1_node,
+                                reads_2_node, reads_3_node, path2_ids, path3_ids);
+            uint64_t num_sf_node = get_num_sparse_flowed_node(simple_vd_path);
+
+
             pthread_mutex_lock(writer_lock_ptr);
             file_writer << ">comp_" << comp_id << "_graph_" << graph_id << "_"
-                        << (num_out_seq++) << std::endl;
+                        << (num_out_seq++) << "\t"
+                        << "num_sf_node:" << num_sf_node << "\t"
+                        << "sum_rc:" << total_read_count << "\t"
+                        << "rc_1_node:" << reads_1_node << "\t"
+                        << "rc_2_node:" << reads_2_node << "\t"
+                        << "rc_3_node:" << reads_3_node << "\t";
+            file_writer << "VD_path:";
+            for(int i=0; i<simple_vd_path.size()-1; i++)
+            {
+                file_writer << graph[simple_vd_path[i]].node_id
+                            << "(" << graph[simple_vd_path[i]].read_count << ")" << "->";
+            }
+            file_writer << graph[simple_vd_path[simple_vd_path.size()-1]].node_id
+                        << "(" << graph[simple_vd_path[simple_vd_path.size()-1]].read_count << ")"
+                        <<  "\t";
+            file_writer << "Path2_id:";
+            for(int i=0; i<path2_ids.size(); i++)
+            {
+                file_writer << path2_ids[i] << ",";
+            }
+            file_writer << "\tPath3_id:";
+            for(int i=0; i<path3_ids.size(); i++)
+            {
+                file_writer << path3_ids[i] << ",";
+            }
+            file_writer << std::endl;
+
+
+
             file_writer << (curr_seq.substr(0, delimit.at(delimit.size()-2))) << std::endl;
             pthread_mutex_unlock(writer_lock_ptr);
         }
@@ -1580,7 +2144,12 @@ output_seq_helper_mt(std::ofstream & file_writer, pthread_mutex_t * writer_lock_
                 delimit.push_back(curr_seq.size());
                 stack_vd.push_back(vd_target);
 
-                output_seq_helper_mt(file_writer, writer_lock_ptr, curr_seq, delimit, stack_vd);
+                read_count_t read_from_one_node = graph[vd_target].read_count;
+
+                //num_support_read
+
+                output_seq_helper_mt(file_writer, writer_lock_ptr,
+                                curr_seq, delimit, stack_vd);
 
                 stack_vd.pop_back();
                 delimit.pop_back();
@@ -1671,6 +2240,7 @@ is_subflow_on_vd_unknown(vd_t vd, vd_t u, vd_t w, int b_dist, int a_dist)
         //shc_log_info(shc_logname, "Path %d, location %d\n", path_info.id, path_info.location);
 
         std::vector<vd_t> & path = known_paths[path_info.id];
+
         if ( path_info.location-b_dist<0 ||
              path_info.location+a_dist >=path.size()-1 )
         {
@@ -1881,14 +2451,26 @@ int Sparse_flow_handler::sum_vector(std::vector<int> & v)
  *  x -  x - x but not[ x -  x -  x ]
  *  x /                        \  x
  *  merge middle nodes to the left nodes or right nodes respectively
- * return if delete this node
+ * return if node is linked to any
  */
 bool Sparse_flow_handler::link_Y_path(vd_t vd)
 {
-    //shc_log_info(shc_logname, "\t\t link Y path\n");
+
     int in_degree = boost::in_degree(vd, graph);
     int out_degree = boost::out_degree(vd, graph);
     assert((out_degree==1 && in_degree>1));
+
+    in_eip_t in_eip = boost::in_edges(vd,graph);
+    for(in_ei_t in_ei=in_eip.first; in_ei!=in_eip.second; in_ei++)
+    {
+        vd_t in_vd = boost::source(*in_ei, graph);
+        int in_vd_out_degree = boost::out_degree(in_vd, graph);
+        if(in_vd_out_degree > 1)
+        {
+            return false; //cannot link Y
+        }
+    }
+
 
     bundled_node_p & curr_node = graph[vd];
     // link in to out
@@ -1901,7 +2483,7 @@ bool Sparse_flow_handler::link_Y_path(vd_t vd)
     //    return false;
 
     double sum_in_count = 0;
-    in_eip_t in_eip = boost::in_edges(vd,graph);
+    in_eip = boost::in_edges(vd,graph);
     for(in_ei_t in_ei=in_eip.first; in_ei!=in_eip.second; in_ei++)
     {
         bundled_edge_p & edge_p = graph[*in_ei];
@@ -1917,11 +2499,15 @@ bool Sparse_flow_handler::link_Y_path(vd_t vd)
         bundled_node_p & source_node = graph[vd_source];
         bundled_edge_p & edge_p = graph[*in_ei];
         source_node.seq = source_node.seq + curr_node.seq.substr(edge_p.weight);
+        //source_node.read_count += curr_node.read_count;
         aer_t aer = boost::add_edge(vd_source, vd_target, graph);
         graph[aer.first] = bundled_edge_p(out_edge_p.weight, edge_p.count*scale); //out_edge_p;
 
         //for path indicator
+
         update_contain_map(vd_source, vd);
+        //shc_log_info(shc_logname, "%u -> %u\n", graph[vd_source].node_id, graph[vd_target].node_id);
+
     }
 
     //clean vertex
@@ -1934,6 +2520,7 @@ bool Sparse_flow_handler::link_Y_path(vd_t vd)
 
 void Sparse_flow_handler::update_contain_map(vd_t vd_containing, vd_t vd_contained)
 {
+    //shc_log_info(shc_logname, "%u contains %u\n", graph[vd_containing].node_id, graph[vd_contained].node_id);
     //for path indicator
     Vd_Vds_map_iterator vd_conatins_it = vd_contains_map.find(vd_containing);
     if(vd_conatins_it !=  vd_contains_map.end())
@@ -1946,10 +2533,28 @@ void Sparse_flow_handler::update_contain_map(vd_t vd_containing, vd_t vd_contain
         }
         else
         {
+            std::deque<vd_t> & vec_of_contains = vd_conatins_it->second;
             std::deque<vd_t> & vec_of_contained = vd_contained_it->second;
-            std::deque<vd_t>::iterator it_of_containing = vd_conatins_it->second.begin();
+
+            for(int i=0; i<vec_of_contains.size(); i++)
+            {
+                vd_t vd = vec_of_contains[i];
+                //shc_log_info(shc_logname, "%u\n", graph[vd].node_id);
+            }
+
+            // it has an order
+            //shc_log_info(shc_logname, "after\n");
+
+
+            std::deque<vd_t>::iterator it_of_containing = vd_conatins_it->second.end();
             vd_conatins_it->second.insert(it_of_containing,
                             vec_of_contained.begin(), vec_of_contained.end());
+
+            for(int i=0; i<vec_of_contains.size(); i++)
+            {
+                vd_t vd = vec_of_contains[i];
+                //shc_log_info(shc_logname, "%u\n", graph[vd].node_id);
+            }
         }
     }
     else
@@ -1987,6 +2592,18 @@ void Sparse_flow_handler::log_graph_struct (bool show_seq){
             vd_t vd_target = boost::target(*out_ei, graph);
             shc_log_info(shc_logname, "OUT VD: %6u, weight %6d, count %4.2f\n",
                 graph[vd_target].node_id, graph[*out_ei].weight, graph[*out_ei].count);
+        }
+
+        Vd_Vds_map_iterator c_vd_it = vd_contains_map.find(vd);
+        if(c_vd_it != vd_contains_map.end())
+        {
+            std::string contain_vd_list;
+            std::deque<vd_t> & contains_vd = c_vd_it->second;
+            for(int m=0; m<contains_vd.size(); m++)
+            {
+                contain_vd_list += std::to_string(graph[contains_vd[m]].node_id) + "\t";
+            }
+            shc_log_info(shc_logname, "VDs: %s\n", contain_vd_list.c_str());
         }
     }
 }

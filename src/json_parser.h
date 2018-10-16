@@ -221,7 +221,7 @@ struct Shannon_C_setting {
             pair_2_read_length(0), has_single(false), has_pair(false),
             is_double_stranded(true), is_compress(false), num_parallel(1),
             take_single_node_seq(true), take_contig_seq(true), rmer_length(24),
-            is_log_mem(true), avail_mem(0) {}
+            is_log_mem(true), avail_mem(0), random_seed(0) {}
 
     bool has_single;
     uint8_t kmer_length;
@@ -248,6 +248,8 @@ struct Shannon_C_setting {
     bool is_log_mem;
 
     int64_t avail_mem;
+
+    int random_seed;
 
     Local_files local_files;
 

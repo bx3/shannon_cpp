@@ -58,6 +58,8 @@ void Contig_graph_handler::run_contig_graph_handler()
     dump_component_array(setting.local_files.output_comp_path);
 
     add_or_overwrite_directory(lf.output_components_read_dir, lf.output_path);
+    add_or_overwrite_directory(lf.output_components_read_prob_dir, lf.output_path);
+
 
 
     dump_filtered_contig();
@@ -68,15 +70,19 @@ void Contig_graph_handler::run_contig_graph_handler()
     comp_total_kmer_count.assign(curr_component_num, std::vector<uint64_t>());
     comp_num_reads.assign(curr_component_num, 0);
     comp_num_kmers.assign(curr_component_num, 0);
-    read_sampler.setup(curr_component_num);
+    read_sampler.setup(curr_component_num, setting.random_seed);
 
 
     // assigning reads
     if(setting.has_single)
     {
+        read_prob_dumper.setup_dump_files(component_size, 0);
+        read_prob_dumper.setup_disk_dumper(lf.output_components_read_prob_dir, lf.comp_read_prob_prefix);
         start_timer(&cgh_main_timer);
         //assign_reads_to_components(setting.local_files.input_read_path);
         assign_reads_to_components_mmap(setting.local_files.input_read_path);
+        read_prob_dumper.write_mem_to_disk();
+        read_prob_dumper.reset();
         shc_log_info(shc_logname, "finish assigning single read\n");
         log_stop_timer(&cgh_main_timer);
 #ifdef SHOW_PROGRESS
@@ -85,9 +91,12 @@ void Contig_graph_handler::run_contig_graph_handler()
     if(setting.has_pair)
     {
         start_timer(&cgh_timer);
+        read_prob_dumper.setup_dump_files(component_size, 0);
+        read_prob_dumper.setup_disk_dumper(lf.output_components_read_prob_dir, lf.comp_pair_read_prob_prefix);
         assign_paired_read_to_components_mmap(
                             setting.local_files.input_read_path_1,
                             setting.local_files.input_read_path_2);
+        read_prob_dumper.write_mem_to_disk();
         //assign_paired_read_to_components(
         //                    setting.local_files.input_read_path_1,
         //                    setting.local_files.input_read_path_2);
@@ -98,9 +107,10 @@ void Contig_graph_handler::run_contig_graph_handler()
     }
     fasta_dumper.finalize_dump_files();
 
+
     // dumping kmers
     start_timer(&cgh_timer);
-    kmer_dumper.setup_dump_files(component_size);
+    kmer_dumper.setup_dump_files(component_size, NUM_OPEN_FILE);
     assign_kmer_to_components();
     shc_log_info(shc_logname, "finish assigning kmer\n");
     log_stop_timer(&cgh_timer);
@@ -632,7 +642,7 @@ void Contig_graph_handler::run_metis_and_assign_comp(graph_t & graph, std::vecto
           NULL, NULL, &metis_input.adjwgt.at(0), &metis_setup.num_partition,
           NULL, NULL, metis_setup.options, &metis_setup.objval, &part.at(0));
     //shc_log_info(shc_logname, "after running metis\n");
-    
+
     if(ret == METIS_ERROR_INPUT)
         shc_log_error("METIS_ERROR_INPUT\n");
     if(ret == METIS_ERROR_MEMORY)
@@ -1013,7 +1023,11 @@ update_comp_count(std::vector<comp_num_t> & components,
         if(is_forward)
             encode_kmer(seq+i*interval, &byte, kmer_length);
         else
+        {
             encode_reverse_kmer(seq+len-i*interval-1, &byte, kmer_length);
+            complement_num(&byte, kmer_length);
+        }
+
 
         Kmer_counter_map_iterator it = kh->kmer_counter.find(byte);
         if(it != kh->kmer_counter.end())
@@ -1044,30 +1058,70 @@ update_comp_map(std::map<comp_num_t, int> & comp_map, bool is_forward,
                 double & avg_count)
 {
     avg_count = 0; // default min count
-    double num_valid_test = 0;
+    int num_valid_test = 0;
     int interval = (len-kmer_length+1)/num_test;
+    int num_tested = 0;
     uint64_t byte;
-    for(int i=0; i<num_test; i++)
-    {
-        if(is_forward)
-            encode_kmer(seq+i*interval, &byte, kmer_length);
-        else
-            encode_reverse_kmer(seq+len-i*interval-1, &byte, kmer_length);
+    int offset = 0;
 
-        Kmer_counter_map_iterator it = kh->kmer_counter.find(byte);
-        if(it != kh->kmer_counter.end())
+    //std::string seq_str(seq, len);
+    //shc_log_info(shc_logname, "seq %s\n", seq_str.c_str());
+    //shc_log_info(shc_logname, "is_forward %s\n", (is_forward)?("yes"):("no"));
+    //shc_log_info(shc_logname, "interval %s\n", interval);
+
+    //char de_kmer[33];
+    //de_kmer[kmer_length] = '\0';
+
+    //while(offset < interval)
+    //{
+        for(int i=0; i<num_test; i++)
         {
-            contig_num_t contig_num_for_kmer = it->second.contig;
-            comp_num_t comp_num_for_contig = comp_array[contig_num_for_kmer];
-            if(comp_num_for_contig < curr_component_num) // if equal, then it
+            if(is_forward)
             {
-                comp_map[comp_num_for_contig]++;
+                int forward_i = offset + i*interval;
+                if(forward_i >= len)
+                    continue;
+                if(!encode_kmer_check_base(seq+forward_i, &byte, kmer_length))
+                    continue;
             }
-            avg_count += get_count(it->second.count, compress_ratio);
-            num_valid_test += 1.0;
+            else
+            {
+                int rc_i = len-i*interval-1-offset;
+                if(rc_i < 0)
+                    continue;
+                if(!encode_reverse_kmer_check_base(seq+rc_i, &byte, kmer_length))
+                    continue;
+                complement_num(&byte, kmer_length);
+            }
+
+            //decode_kmer(de_kmer, &byte, kmer_length);
+            //shc_log_info(shc_logname, "kmer %s\n", de_kmer);
+
+            Kmer_counter_map_iterator it = kh->kmer_counter.find(byte);
+            if(it != kh->kmer_counter.end())
+            {
+                contig_num_t contig_num_for_kmer = it->second.contig;
+                comp_num_t comp_num_for_contig = comp_array[contig_num_for_kmer];
+                if(comp_num_for_contig < curr_component_num) // if equal, then it
+                {
+                    comp_map[comp_num_for_contig]++;
+                }
+
+                avg_count += get_count(it->second.count, compress_ratio);
+                //shc_log_info(shc_logname, "count %u\n", get_count(it->second.count, compress_ratio));
+                num_valid_test ++;
+            }
         }
-    }
-    avg_count = avg_count/num_valid_test; //
+    //    offset ++;
+    //    if (num_valid_test >= num_test)
+    //        break;
+    //}
+    // it is ok to miss, since they are erroreous kmer, the ream
+    if (num_valid_test > 0)
+        avg_count = avg_count/static_cast<double>(num_valid_test);
+    else
+        avg_count = 0;
+    //shc_log_info(shc_logname, "avg_count %f\n", avg_count);
 }
 
 void Contig_graph_handler::
@@ -1081,7 +1135,11 @@ update_comp_set(std::set<comp_num_t> & comp_set, bool is_forward,
         if(is_forward)
             encode_kmer(seq+i*interval, &byte, kmer_length);
         else
+        {
             encode_reverse_kmer(seq+len-i*interval-1, &byte, kmer_length);
+            complement_num(&byte, kmer_length);
+        }
+
 
         Kmer_counter_map_iterator it = kh->kmer_counter.find(byte);
         if(it != kh->kmer_counter.end())
@@ -1429,12 +1487,16 @@ assign_pair_best_comp(struct Single_dumper & mfs_p1,
                 double & avg_count_p1, double & avg_count_p2)
 {
     comp_num_t comp_i;
+    double prob_to_sample_1 = -1;
+    double  prob_to_sample_2 = -1;
     if(decide_best_comp(comp_count, comp_i))
     {
-        if(read_sampler.decide_to_keep_read(avg_count_p1, comp_i) ||
-           read_sampler.decide_to_keep_read(avg_count_p2, comp_i))
+        bool is_read1_keep =
+            read_sampler.decide_to_keep_read(avg_count_p1, comp_i, prob_to_sample_1);
+        bool is_read2_keep =
+            read_sampler.decide_to_keep_read(avg_count_p2, comp_i, prob_to_sample_2);
+        if( is_read1_keep || is_read2_keep )
         {
-
             if(is_forward)
             {
                 mfs_p1.write_fasta(comp_i, seq_ptr_p1, header_ptr_p1, seq_len_p1);
@@ -1451,6 +1513,20 @@ assign_pair_best_comp(struct Single_dumper & mfs_p1,
                     seq_len_p2);
                 */
             }
+
+            if((prob_to_sample_1==0.0 || prob_to_sample_2==0.0))
+            {
+                shc_log_info(shc_logname, "prob %f %f\n", prob_to_sample_1, prob_to_sample_2);
+                shc_log_info(shc_logname, "ave count %f %f\n", avg_count_p1, avg_count_p2);
+                std::string seq1(seq_ptr_p1, seq_len_p1);
+                std::string seq2(seq_ptr_p2, seq_len_p2);
+                shc_log_info(shc_logname, "%s\n", seq1.c_str());
+                shc_log_info(shc_logname, "%s\n", seq2.c_str());
+            }
+
+            read_prob_dumper.dump_read_prob(comp_i,
+                                  std::min(std::max(prob_to_sample_1, prob_to_sample_2), 1.0) );
+
             if(comp_i !=curr_component_num)
             {
                 if(avg_count_p1<=kmer_count_thresh && avg_count_p2<=kmer_count_thresh)
@@ -1541,12 +1617,31 @@ assign_single_best_comp(struct Single_dumper & mfs,
     comp_num_t comp_i;
     if(decide_best_comp(comp_count, comp_i))
     {
-        if(read_sampler.decide_to_keep_read(avg_count, comp_i))
+        double prob_to_sample;
+        if(read_sampler.decide_to_keep_read(avg_count, comp_i, prob_to_sample))
         {
             if (is_forward)
                 mfs.write_fasta(comp_i, seq_ptr, header_ptr, seq_len);
             else
                 mfs.write_reverse_fasta(comp_i, seq_ptr, header_ptr, seq_len);
+
+            if((prob_to_sample==0.0))
+            {
+                shc_log_info(shc_logname, "prob %f\n",
+                            prob_to_sample);
+                std::string seq1(seq_ptr, seq_len);
+                shc_log_info(shc_logname, "%s\n",
+                            seq1.c_str());
+            }
+            read_prob_dumper.dump_read_prob(comp_i, std::min(prob_to_sample, 1.0) );
+            //char read_out[1000];
+            //uint64_t len = seq_ptr-header_ptr;
+            //memcpy(read_out, header_ptr, len);
+            //read_out[len] = '\0';
+            //shc_log_info(shc_logname, "%s", read_out);
+            //memcpy(read_out, seq_ptr, seq_len);
+
+
             // collect stat
             if(avg_count < kmer_count_thresh)
             {

@@ -652,8 +652,12 @@ void test_sparse_flow(Shannon_C_setting * setting)
     std::string path_path(lf.output_seq_graph_path +
                                  lf.path_prefix + std::to_string(comp_i) +
                                  "/path" + std::to_string(graph_i));
+    std::string read_path(lf.output_seq_graph_path +
+                          lf.read_prefix + std::to_string(comp_i) +
+                          "/read" + std::to_string(graph_i));
 
-    sparse_flow_handler.process_one_graph_component(graph_i, node_path, edge_path, path_path);
+    sparse_flow_handler.process_one_graph_component(comp_i, graph_i, node_path,
+                        edge_path, path_path, read_path);
 }
 
 
