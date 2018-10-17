@@ -141,8 +141,9 @@ void parser_setting_file(std::string & file_path, Shannon_C_setting & setting)
     bool is_use_set = dup_correction.get<bool>("is_use_set");
     double load_factor = dup_correction.get<double>("load_factor");
     int num_sort_thread = dup_correction.get<int>("num_sort_thread");
+    std::string sort_tmp_dir = dup_correction.get<std::string>("sort_tmp_dir");
     setting.dup_setting.set_para(rmer_length, threshold, min_count, min_length,
-        is_use_set, load_factor, num_sort_thread);
+        is_use_set, load_factor, num_sort_thread, sort_tmp_dir);
 
     // contig setup
     ptree contig_graph_setup = pt.get_child("contig_graph_setup");

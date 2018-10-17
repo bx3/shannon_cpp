@@ -804,7 +804,11 @@ void add_partition_options(boost::program_options::options_description & desc)
         ("load_factor", po::value<double>()->default_value(0.8),
                                 "kmer dictionary load factor, control memory usage")
         ("num_sort_thread,u",po::value<int>()->default_value(1),
-                        "argument passing to linux sort function")
+                        "argument passing to linux sort function option -parallel ")
+        ("sort_tmp_dir",po::value<std::string>()->default_value(""),
+                        "argument passing to linux sort function option -T "
+                        "which specifies a temporary directory used by linux "
+                        "sort function, /tmp wil be used if left empty")
         ("rmer_length", po::value<int>()->default_value(15),
                         "rmer length for error correction")
         ("threshold", po::value<double>()->default_value(0.5),
@@ -1011,6 +1015,7 @@ void parse_partition_option(
     setting.output_seq_min_len = vm["output_seq_min_len"].as<int>();
     // dup setting
     setting.dup_setting.num_sort_thread = vm["num_sort_thread"].as<int>();
+    setting.dup_setting.sort_tmp_dir = vm["sort_tmp_dir"].as<std::string>();
 
     setting.dup_setting.rmer_length = vm["rmer_length"].as<int>();
 

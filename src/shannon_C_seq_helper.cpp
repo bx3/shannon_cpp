@@ -866,6 +866,7 @@ void print_and_log_partition_setting(Shannon_C_setting & setting)
     std::cout << "threshold                : " << setting.dup_setting.threshold << std::endl;
     std::cout << "is_use_set               : " << ((setting.dup_setting.is_use_set)?("Yes"):("No")) << std::endl;
     std::cout << "num_sort_thread          : " << ((setting.dup_setting.num_sort_thread)) << std::endl;
+    std::cout << "sort_tmp_dir           : " << ((setting.dup_setting.sort_tmp_dir)) << std::endl;
     std::cout << std::endl;
 
     std::cout << "\033[1;31m";  //34 blue, 31 red, 35 purple

@@ -3746,34 +3746,6 @@ int Sequence_graph_handler::find_known_path(int max_hop)
                               vd,
                               val_node_index, curr_hop, path))
                 {
-                    // there is a full cover path
-                    //shc_log_info(shc_logname, "find matched path\n");
-                    //read_known_path_map[i] = path;
-                    //if(i==45306)
-                    //{
-                    //    std::string read_str(acc.read_ptr, acc.len);
-                    //    shc_log_info(shc_logname, "num node \n", path.size());
-                    //    shc_log_info(shc_logname, "read       %s\n", read_str.c_str());
-                    //    std::string re_seq ;
-                    //    re_seq = graph[path[0]].seq;
-                    //    for(int i=1; i<path.size();i++)
-                    //    {
-                    //        vd_t vd = path[i];
-                    //        aer_t aer = boost::edge(path[i-1],path[i], graph);
-                    //        assert(aer.second);
-                    //        bundled_edge_p edge_p = graph[aer.first];
-                    //        re_seq += graph[vd].seq.substr(edge_p.weight);
-                    //    }
-                    //    std::size_t found = re_seq.find(read_str);
-                    //    if (found==std::string::npos)
-                    //    {
-                    //        std::cout << "read does not align " << std::endl;
-                    //        std::cout << "read " << read_str << std::endl;
-                    //        std::cout << "seq  " << re_seq << std::endl;
-                    //        exit(1);
-                    //    }
-                    //}
-
 
                     for(uint64_t k=0; k<path.size()-1; k++)
                     {
