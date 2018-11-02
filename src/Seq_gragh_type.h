@@ -86,7 +86,7 @@ struct S_info {
 struct bundled_node_p {
     bundled_node_p(const std::string & seq_="",
                    const node_id_t & node_id_=IMPOSSIBLE_NODE_ID):
-                   seq(seq_), node_id(node_id_), count(1), norm{1},
+                   seq(seq_), node_id(node_id_), count(1), norm(1),
                    copy_count(0), prevalence(0), read_count(0) {}
 
     inline read_length_t seq_len(){return seq.size();}

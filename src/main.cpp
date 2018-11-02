@@ -824,7 +824,7 @@ void add_partition_options(boost::program_options::options_description & desc)
         ("is_use_set", po::value<bool>()->default_value(false),
                         "use accummulating set for error correction, "
                         "it would reduce memory usage, but give less performance")
-        ("read_num_test", po::value<int>()->default_value(3),
+        ("read_num_feature", po::value<int>()->default_value(3),
                         "number test for a read to decide which components "
                         "the read should go to")
         ("is_assign_best",po::value<bool>()->default_value(true),
@@ -876,10 +876,10 @@ void command_line_for_shannon(int argc, char** argv, Shannon_C_setting  & settin
         desc.add_options()
             ("reference,r", po::value<std::string>(),
                                      "Reference path for the output to compare with")
-            ("rmer_length", po::value<int>()->default_value(24),
-                     "rmer size used to check duplicates")
             ("avail_mem,m", po::value<std::string>()->default_value(machine_mem_limit_str),
                      "specify available memory for running multi-graph multi-bridge")
+            ("duplicate_rmer_length", po::value<int>()->default_value(24),
+                      "rmer size used to check duplicates")
         ;
 
         add_multi_graph_options(desc);
@@ -903,7 +903,7 @@ void command_line_for_shannon(int argc, char** argv, Shannon_C_setting  & settin
         parse_read_len_and_path(vm, setting);
         parse_partition_option(vm, setting);
 
-        setting.rmer_length = vm["rmer_length"].as<int>();
+        setting.rmer_length = vm["duplicate_rmer_length"].as<int>();
         setting.num_parallel = vm["num_process"].as<int>();
         setting.seq_graph_setup.max_hop_path = vm["max_hop_for_known_path"].as<int>();
         setting.sparse_flow_setup.multiple_test = vm["multiple_test"].as<int>();
@@ -1030,7 +1030,7 @@ void parse_partition_option(
     setting.dup_setting.load_factor = vm["load_factor"].as<double>();
 // contig graph dup_setting
 
-    setting.contig_graph_setup.num_test = vm["read_num_test"].as<int>();
+    setting.contig_graph_setup.num_feature = vm["read_num_feature"].as<int>();
 
     setting.contig_graph_setup.is_assign_best = vm["is_assign_best"].as<bool>();
 

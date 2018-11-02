@@ -380,21 +380,29 @@ struct Sparse_flow_works {
     {
         Sparse_flow_works sparse_flow_work =
             (*static_cast<Sparse_flow_works * >(sparse_flow_work_ptr));
-        Sparse_flow_handler * sparse_flow_ptr =
-                new Sparse_flow_handler(sparse_flow_work.setting);
+
         while(1)
         {
+            Sparse_flow_handler * sparse_flow_ptr =
+                    new Sparse_flow_handler(sparse_flow_work.setting);
             // take the work
             pthread_mutex_lock(sparse_flow_work.work_lock_ptr);
             if(sparse_flow_work.work_list->empty())
             {
                 //std::cout <<"releasing a thread " << std::endl;
                 pthread_mutex_unlock(sparse_flow_work.work_lock_ptr);
+                delete sparse_flow_ptr;
                 return ((void*) 0);
             }
             Comp_graph comp_graph = sparse_flow_work.work_list->front();
             sparse_flow_work.work_list->pop_front();
             int num_comp_left = sparse_flow_work.work_list->size();
+            sparse_flow_work.output_path =
+                        sparse_flow_work.setting.local_files.output_seq_graph_result_path +
+                        "/comp_" + std::to_string(comp_graph.comp_i) +
+                        "_graph_" + std::to_string(comp_graph.graph_i) +
+                        ".fasta";
+
             pthread_mutex_unlock(sparse_flow_work.work_lock_ptr);
 
             if(num_comp_left%SF_WORK_STEP_UPDATE==0)
@@ -425,6 +433,8 @@ struct Sparse_flow_works {
             sparse_flow_ptr->run_sparse_flow_handler_helper( comp_graph,
                 node_path, edge_path, path_path, read_path,
                 sparse_flow_work.write_lock_ptr, sparse_flow_work.output_path);
+
+            delete sparse_flow_ptr;
         }
 
         return NULL;

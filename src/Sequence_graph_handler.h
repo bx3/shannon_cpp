@@ -9,6 +9,7 @@
 
 #include <pthread.h>
 #include <boost/algorithm/string/trim.hpp>
+#include <boost/algorithm/string/split.hpp>
 #include <vector>
 #include <string.h>
 #include <iostream>
@@ -128,6 +129,58 @@ public:
         }
     };
 
+    struct Vd_graph_pair{
+        Vd_graph_pair () {}
+        Vd_graph_pair (vd_t vd_, seq_graph_t * graph_ptr_) : vd(vd_), graph_ptr(graph_ptr_) {}
+
+        bool operator <(const Vd_graph_pair& x) const
+        {
+            return (*graph_ptr)[vd].seq < (*graph_ptr)[x.vd].seq;
+        }
+
+        vd_t vd;
+        seq_graph_t * graph_ptr;
+    };
+
+    struct Ed_graph_pair{
+        Ed_graph_pair () {}
+        Ed_graph_pair (ed_t ed_, seq_graph_t * graph_ptr_) : ed(ed_), graph_ptr(graph_ptr_) {}
+
+        bool operator <(const Ed_graph_pair& x) const
+        {
+            vd_t x_vd_target = boost::target(x.ed, *graph_ptr);
+            vd_t x_vd_source = boost::source(x.ed, *graph_ptr);
+
+            vd_t vd_target = boost::target(ed, *graph_ptr);
+            vd_t vd_source = boost::source(ed, *graph_ptr);
+
+            std::string seq = (*graph_ptr)[vd_source].seq + (*graph_ptr)[vd_target].seq;
+            std::string x_seq = (*graph_ptr)[x_vd_source].seq + (*graph_ptr)[x_vd_target].seq;
+
+            return seq < x_seq;
+
+        }
+
+        ed_t ed;
+        seq_graph_t * graph_ptr;
+    };
+
+    /*
+    struct Edge_graph_pair{
+        Vd_graph_pair () {}
+        Vd_graph_pair (out_ei_t out_edge_, seq_graph_t * graph_ptr_) :
+                    out_edge(out_edge_), graph_ptr(graph_ptr_) {}
+
+        bool operator <(const Vd_graph_pair& x) const
+        {
+            return (*graph_ptr)[vd].seq < (*graph_ptr)[x.vd].seq;
+        }
+
+        out_ei_t out_edge;
+        seq_graph_t * graph_ptr;
+    };
+    */
+
     struct Node_index {
         Node_index(vd_t vd_, read_length_t start_) : vd(vd_), start(start_) {}
         vd_t vd;
@@ -183,6 +236,11 @@ public:
 
     typedef std::pair<read_count_t, std::vector<path_id_t>> Read_count_Read_id_pair;
 
+    typedef google::dense_hash_map<std::string, read_count_t,
+                   std::hash<std::string>, eqstr> Read_count_map;
+    typedef google::dense_hash_map<std::string, read_count_t,
+                std::hash<std::string>, eqstr>::iterator Read_count_map_iterator;
+
     Sequence_graph_handler(Shannon_C_setting & setting_) :
                 setting(setting_),
                 coll_read_list(setting_.has_pair, setting_.has_single,
@@ -213,7 +271,7 @@ public:
             exit(1);
 
 
-        prevalence_threshold = 1;
+        prevalence_threshold = 1.0;
         hamming_frac = 0.1;
         peak_mem = 0;
 
@@ -236,6 +294,8 @@ public:
             min_read_len = std::min(min_read_len, setting.pair_2_read_length);
         }
 
+        num_iter =0;
+
         //bridge_nodes_writer.open(setting.local_files.output_path+"/bridge_node.log");
         //graph_writer.open(setting.local_files.output_path+"/graph.log");
         //reads_writer.open(setting.local_files.output_path+"/reads.log");
@@ -244,6 +304,16 @@ public:
         //rm_sus_writer.open(setting.local_files.output_path+"/sus.log");
         temp_writer.open(setting.local_files.output_path+"/temp.log");
         temp_writer_index = 0;
+
+        if(setting.random_seed == 0 )
+        {
+            srand(time(NULL));
+        }
+        else
+        {
+            srand(setting.random_seed);
+            //std::cout << "read sampler set seed " << setting.random_seed << std::endl;
+        }
     }
 
     // available public function
@@ -305,15 +375,19 @@ public:
     void log_classify_edge_types();
     void log_classify_node_types(std::ofstream & writer, int id);
 
+    vd_t get_only_in_vd(vd_t vd);
+    vd_t get_only_out_vd(vd_t vd);
+
 
 private:
 
     //load reads
     void load_all_single_read(std::string& read_path,
-                std::ifstream & read_prob_file_reader, Kmer_Node_map & kmer_node_map);
-    void load_all_paired_read(Kmer_Node_map & kmer_node_map);
+                Kmer_Node_map & kmer_node_map, Read_count_map & read_count_map);
+    void load_all_paired_read(Kmer_Node_map & kmer_node_map, Read_count_map & read_count_map);
     void load_all_paired_read_no_concat(std::string read_path_p1,
-                    std::string read_path_p2, Kmer_Node_map & kmer_node_map);
+                    std::string read_path_p2,
+                    Kmer_Node_map & kmer_node_map, Read_count_map & read_count_map);
     vd_t update_edge_count_with_read(std::string & base, Kmer_Node_map & kmer_node_map);
     vd_t traverse_read_is_all_kmer_node_valid(std::string & base,
                               Kmer_Node_map & kmer_node_map, uint8_t node_type);
@@ -386,6 +460,13 @@ private:
                      vd_t vd, read_length_t start,
                      int curr_hop, std::vector<vd_t> & path);
     //break cycles
+    void sort_vds_by_node_ids(std::vector<Vd_graph_pair> & vds);
+    void sort_out_iterator(std::vector<Vd_graph_pair> & vds, out_eip_t & out_eip);
+    void sort_in_iterator(std::vector<Vd_graph_pair> & vds, in_eip_t & in_eip);
+    void sort_stack_vd(std::stack<vd_t> & vd_set);
+    void sort_set_vd(std::set<vd_t> & vd_set, std::vector<Vd_graph_pair> & vds);
+    void sort_edges_based_on_node(std::set<ed_t> & edges, std::vector<Ed_graph_pair> & edges_array);
+
     bool find_cycle(std::set<vd_t> & acyclic_node_set, std::deque<vd_t> & cycle_path);
     bool is_node_inside_cycle(vd_t vd, std::set<vd_t> & acyclic_node_set, std::deque<vd_t> & cycle_path);
     void simple_break_cycle(std::deque<vd_t> & cycle_path);
@@ -406,6 +487,7 @@ private:
     bool is_all_predecessors_included(vd_t vd_root, std::set<vd_t> & added_nodes);
     void path_to_string(std::vector<vd_t> & path, std::string & out_string);
     std::string edge_to_string(ed_t ed);
+
     // preprocess
     void pre_process_read();
 
@@ -437,6 +519,12 @@ private:
     void special_condense_self_loop();
     bool is_contain_self_loop(vd_t vd, ed_t & self_edge);
     size_t get_total_num_reads(std::string file_path_prefix);
+    inline bool sampler(double & prob_to_sample_read)
+    {
+        if (prob_to_sample_read == 1.0)
+            return true;
+        return (rand() % SAMPLE_SPACE < SAMPLE_SPACE*prob_to_sample_read);
+    }
 
     inline double average_prevalence(vd_t vd)
     {
@@ -490,8 +578,8 @@ private:
     bool has_pair;
     bool has_single;
 
-    int size_threshold;
-    int prevalence_threshold;
+    read_length_t size_threshold;
+    double prevalence_threshold;
     float hamming_frac;
 
     bool is_multi_thread;
@@ -503,6 +591,8 @@ private:
     Bdg_read_info read_delete;
 
     bool is_run_single_component;
+
+    int num_iter;
 
     //debug
     uint64_t curr_align_index;
@@ -522,6 +612,7 @@ private:
     std::ofstream nodes_struct_writer;
     std::ofstream temp_writer;
     uint64_t temp_writer_index;
+    //std::ofstream thrown_read_writer;
 
     //std::ofstream rm_sus_writer;
     Block_timer resolve_pair_timer;

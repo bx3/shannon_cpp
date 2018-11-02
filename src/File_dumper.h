@@ -333,7 +333,7 @@ struct Single_dumper {
                 *(write_ptr + j++) = 'C';
             else
             {
-                printf("unknown nucleotide %c\n", *(start_ptr+i));
+                //printf("unknown nucleotide %c\n", *(start_ptr+i));
                 *(write_ptr + j++) = *(start_ptr+i);
                 //exit(1);
             }
@@ -352,7 +352,7 @@ struct Single_dumper {
             return 'C';
         else
         {
-            printf("error unknown nucleotide %c\n", (base));
+            //printf("error unknown nucleotide %c\n", (base));
             return base;
         }
 
@@ -925,7 +925,6 @@ struct KMER_dumper {
 
     void dump_read_prob(comp_num_t comp_i, double prob)
     {
-        std::string tab("\t");
         std::map<int, Kmer_man>::iterator it = comp_kmer_map.find(comp_i);
         if(it != comp_kmer_map.end())
         {
@@ -936,6 +935,104 @@ struct KMER_dumper {
             {
                 kmer_man.mem_writer +=
                             (std::to_string(prob) + "\n");
+            }
+        }
+        else
+        {
+            std::cerr << "cannot find kmer dump" << std::endl;
+            exit(1);
+        }
+    }
+
+    void dump_read_features(comp_num_t comp_i, kmer_count_t * kmer_feat_array, int num_kmer)
+    {
+        std::string tab("\t");
+        std::map<int, Kmer_man>::iterator it = comp_kmer_map.find(comp_i);
+        if(it != comp_kmer_map.end())
+        {
+            Kmer_man & kmer_man = it->second;
+            if(kmer_man.is_disk)
+            {
+                kmer_man.file_writer << kmer_feat_array[0];
+                for(int i=1; i<num_kmer; i++)
+                {
+                    kmer_man.file_writer << tab  << (kmer_feat_array[i]);
+                }
+                kmer_man.file_writer << std::endl;
+            }
+            else
+            {
+                kmer_man.mem_writer +=  std::to_string(kmer_feat_array[0]);
+                for(int i=1; i<num_kmer; i++)
+                {
+                    kmer_man.mem_writer += tab + std::to_string(kmer_feat_array[i]);
+                }
+                kmer_man.mem_writer += "\n";
+            }
+        }
+        else
+        {
+            std::cerr << "cannot find kmer dump" << std::endl;
+            exit(1);
+        }
+    }
+
+    void dump_paired_read_features(comp_num_t comp_i,
+                kmer_count_t * kmer_feat_array_1, int num_kmer1,
+                kmer_count_t * kmer_feat_array_2, int num_kmer2)
+    {
+        std::string tab("\t");
+        std::map<int, Kmer_man>::iterator it = comp_kmer_map.find(comp_i);
+        if(it != comp_kmer_map.end())
+        {
+            Kmer_man & kmer_man = it->second;
+            if(kmer_man.is_disk)
+            {
+                kmer_man.file_writer << kmer_feat_array_1[0];
+                for(int i=1; i<num_kmer1; i++)
+                {
+                    kmer_man.file_writer << tab  << (kmer_feat_array_1[i]);
+                }
+                for(int i=0; i<num_kmer2; i++)
+                {
+                    kmer_man.file_writer << tab  << (kmer_feat_array_2[i]);
+                }
+                kmer_man.file_writer << std::endl;
+            }
+            else
+            {
+                kmer_man.mem_writer +=  std::to_string(kmer_feat_array_1[0]);
+                for(int i=1; i<num_kmer1; i++)
+                {
+                    kmer_man.mem_writer += tab + std::to_string(kmer_feat_array_1[i]);
+                }
+                for(int i=0; i<num_kmer2; i++)
+                {
+                    kmer_man.mem_writer += tab + std::to_string(kmer_feat_array_2[i]);
+                }
+                kmer_man.mem_writer += "\n";
+            }
+        }
+        else
+        {
+            std::cerr << "cannot find kmer dump" << std::endl;
+            exit(1);
+        }
+    }
+
+    void dump_read_count(comp_num_t comp_i, uint32_t count)
+    {
+        std::string tab("\t");
+        std::map<int, Kmer_man>::iterator it = comp_kmer_map.find(comp_i);
+        if(it != comp_kmer_map.end())
+        {
+            Kmer_man & kmer_man = it->second;
+            if(kmer_man.is_disk)
+                kmer_man.file_writer << count << std::endl;
+            else
+            {
+                kmer_man.mem_writer +=
+                            (std::to_string(count) + "\n");
             }
         }
         else

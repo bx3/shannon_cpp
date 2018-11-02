@@ -5,9 +5,9 @@ import math
 import run_parallel_cmds
 
 def cut_file(in_name,out_name,line_start,line_end):
-	os.system('awk \'NR > ' + str(line_end) + ' { exit } NR >= ' + str(line_start) +  '\' '+ in_name + ' > ' + out_name )
+	os.system('gawk \'NR > ' + str(line_end) + ' { exit } NR >= ' + str(line_start) +  '\' '+ in_name + ' > ' + out_name )
 
-def parallel_blat(target_fasta,query_fasta,out_file,QUERY_SPLIT,nJobs=30):
+def parallel_blat(target_fasta,query_fasta,out_file,QUERY_SPLIT,nJobs=60):
 	'''Function takes in target,query and output file. parallelizes blat by running GNU parallel
 	- Currently only parallelizes on query space
 	- Also assumes that query fasta file takes two lines per sequence (not wrapped)'''
@@ -32,21 +32,22 @@ def parallel_blat(target_fasta,query_fasta,out_file,QUERY_SPLIT,nJobs=30):
 		print('Cannot parallelize on query. Running Vanilla Blat')
 		os.system('./blat -noHead ' + target_fasta + ' ' +  query_fasta + ' ' + out_file)	
 		return'''
+	query_size = int(query_length / QUERY_SPLIT)
+	if query_size%2 != 0:
+		query_size += 1
 
-	for n in range(QUERY_SPLIT):
-		if n==QUERY_SPLIT-1:
-                	cut_file(query_fasta,query_fasta+'_'+str(n+1),2*(n)*split_size+1,2*query_length)
-		else:
-			cut_file(query_fasta,query_fasta+'_'+str(n+1),2*(n)*split_size+1,2*(n+1)*split_size)
-	#pdb.set_trace()
-	q_range = range(QUERY_SPLIT)
-	x = [int(i)+1 for i in q_range]
-	q_str = " ".join(map(str,x))
-	os.system('rm ' + out_file + '_*' )
+	split_dir = out_file[:-1] + '_split'
+	if not os.path.exists(split_dir):
+		os.makedirs(split_dir)
+	subprocess.call(['split', '-dl', str(query_size), query_fasta, split_dir + '/split'])
+	n = 0
 	cmds = []
-	for a in x:
-		cmds.append('./blat -noHead '+ target_fasta + ' ' + query_fasta + '_' + str(a)+ ' ' + out_file + '_' + str(a))
-		#print('blat -noHead '+ target_fasta + ' ' + query_fasta + '_' + str(a)+ ' ' +out_file + '_' + str(a))
+	split_files = os.listdir(split_dir)
+	for f in split_files:
+		cmds.append('./blat -noHead '+ target_fasta + ' ' + split_dir+'/'+f + ' ' + out_file + '_' + str(n))
+		print('blat -noHead '+ target_fasta + ' ' + split_dir+'/'+f + ' ' +out_file + '_' + str(n))
+		n += 1
+
 	cmds = tuple(cmds)
 	run_parallel_cmds.run_cmds(cmds,nJobs)
 
@@ -55,13 +56,14 @@ def parallel_blat(target_fasta,query_fasta,out_file,QUERY_SPLIT,nJobs=30):
 	#os.system('parallel blat ' + target_fasta + ' ' + query_fasta + '_{} ' +out_file + '_{} ::: {1..' + str(QUERY_SPLIT) + '}' )
 	#os.system('sort -k 10 ' + out_file + '_* > ' + out_file)
 	os.system('cat ' + out_file + '_* > ' + out_file)
+	os.system('rm ' + split_dir + '/*')
 	os.system('rm ' + out_file + '_*' )
 	os.system('rm ' + query_fasta + '_*' )
 
 def main():
     import sys
     args = sys.argv[1:]
-    nJobs=30
+    nJobs=60
     if '--nJobs' in args:
     	ind1 = args.index('--nJobs')
     	nJobs = int(args[ind1+1])

@@ -11,9 +11,11 @@
 #define SAMPLE_SPACE 1000000
 
 struct Read_subsampler {
-    Read_subsampler( int read_sampler_k_, unsigned int seed )
+    Read_subsampler( bool is_store_all_reads_and_features_,
+        int read_sampler_k_, unsigned int seed )
                     : read_sampler_k(read_sampler_k_),
-                      k(0), is_always_pass(false), subsample_factor(0)
+                      k(0), is_always_pass(false), subsample_factor(0),
+                      is_store_all_reads_and_features(is_store_all_reads_and_features_)
     {
         if(read_sampler_k_ == 0)
             is_always_pass = true;
@@ -44,14 +46,13 @@ struct Read_subsampler {
         num_read_accepted.assign(num_comp, 0);
     }
 
-    inline bool simple_decider(const int & comp_i, double & prob_to_sample_read)
+    inline bool simple_decider(const int & comp_i)
     {
         if(is_always_pass)
         {
-            prob_to_sample_read = 1;
             return true;
         }
-        prob_to_sample_read = 1.0/subsample_factor;
+
         if(subsample_factor <= 0)
         {
             shc_log_error("simpler decider current subsample_factor %d, check for bug\n",
@@ -67,6 +68,35 @@ struct Read_subsampler {
             return true;
         }
         return false;
+    }
+
+    inline bool decide_to_keep_read(const int & comp_i,
+                            kmer_count_t * kmer_counts, int num_kmer)
+    {
+        if(is_always_pass)
+        {
+            return true;
+        }
+
+        if(is_use_prob_strategy)
+        {
+            double avg_count = 0;
+            for(int i=0; i<num_kmer; i++)
+                avg_count += kmer_counts[i];
+            avg_count /= num_kmer;
+
+            if (avg_count == 0)
+                return false;
+            double prob_to_sample_read = k/avg_count;
+            if(prob_to_sample_read >= 1.0)
+                return true;
+            else
+                return (rand() % SAMPLE_SPACE < SAMPLE_SPACE*prob_to_sample_read);
+        }
+        else
+        {
+            return  simple_decider(comp_i);
+        }
     }
 
     //return true if want to keep comp
@@ -91,13 +121,16 @@ struct Read_subsampler {
         }
         else
         {
-            return  simple_decider(comp_i, prob_to_sample_read);
+            return  simple_decider(comp_i);
         }
     }
 
     double k;
     bool is_always_pass;
     bool is_use_prob_strategy;
+
+    bool is_store_all_reads_and_features;
+
     int read_sampler_k;
     int subsample_factor;
 

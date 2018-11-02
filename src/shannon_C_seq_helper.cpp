@@ -880,7 +880,7 @@ void print_and_log_partition_setting(Shannon_C_setting & setting)
 
     std::cout << "\033[1;31m";  //34 blue, 31 red, 35 purple
     std::cout << "Contig graph setup       *********** " << std::endl;
-    std::cout << "num_test                 : " << setting.contig_graph_setup.num_test << std::endl;
+    std::cout << "num_feature                 : " << setting.contig_graph_setup.num_feature << std::endl;
     std::cout << "is_assign_best           : " << ((setting.contig_graph_setup.is_assign_best)?("Yes"):("No")) << std::endl;
     std::cout << "read_sampler_k           : " << setting.contig_graph_setup.read_sampler_k << std::endl;
     std::cout << "\033[0m" << std::endl;
@@ -905,7 +905,7 @@ void print_and_log_partition_setting(Shannon_C_setting & setting)
     shc_log_info(shc_logname, "\n");
 
     shc_log_info(shc_logname, "Contig graph setup       *********** \n");
-    shc_log_info(shc_logname, "num_test                 : %d\n", setting.contig_graph_setup.num_test);
+    shc_log_info(shc_logname, "num_feature                 : %d\n", setting.contig_graph_setup.num_feature);
     shc_log_info(shc_logname, "is_assign_best           : %s\n", ((setting.contig_graph_setup.is_assign_best)?("Yes"):("No")));
     shc_log_info(shc_logname, "read_sampler_k           : %d\n", setting.contig_graph_setup.read_sampler_k);
 

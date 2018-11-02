@@ -64,23 +64,29 @@ struct Duplicate_setting {
 struct Contig_graph_setup {
     Contig_graph_setup ()
     {
-        num_test = 3;
+        num_feature = 3;
         is_assign_best = true;
         read_sampler_k = 0;
+        is_store_all_reads_and_features = false;
     }
-    Contig_graph_setup(int num_test_, bool is_assign_best_, int read_sampler_k_) :
-                       num_test(num_test_), is_assign_best(is_assign_best_),
-                       read_sampler_k(read_sampler_k_) {}
-    void set_para(int num_test_, bool is_assign_best_, int read_sampler_k_)
+    Contig_graph_setup(int num_feature_, bool is_assign_best_, int read_sampler_k_,
+                       bool is_store_all_reads_and_features_) :
+                       num_feature(num_feature_), is_assign_best(is_assign_best_),
+                       read_sampler_k(read_sampler_k_),
+                       is_store_all_reads_and_features(is_store_all_reads_and_features_) {}
+    void set_para(int num_feature_, bool is_assign_best_, int read_sampler_k_,
+            bool is_store_all_reads_and_features_)
     {
-        num_test=num_test_;
+        num_feature=num_feature_;
         is_assign_best = is_assign_best_;
         read_sampler_k = read_sampler_k_;
+        is_store_all_reads_and_features = is_store_all_reads_and_features_;
     }
 
-    int num_test;
+    int num_feature;
     bool is_assign_best;
     int read_sampler_k;
+    bool is_store_all_reads_and_features;
 };
 
 struct Metis_setup {

@@ -43,7 +43,7 @@ struct Read_acc {
         read_prob = l.read_prob;
     }
 
-    inline read_count_t get_estimated_read_count() {return std::ceil(read_count/read_prob);}
+    inline read_count_t get_estimated_read_count() {return std::ceil(read_count);} // without prob /read_prob
 
     char * read_ptr;
     read_length_t len;
@@ -160,6 +160,18 @@ struct Single_read_list {
         return read_counts[i];
     }
 
+    void correct_read_count(std::string & base, read_count_t & read_count)
+    {
+        Read_Index_map_iterator it = read_index_map.find(base);
+        assert(it != read_index_map.end());
+        read_counts[it->second] = read_count;
+    }
+
+    void correct_read_count(read_num_t i, read_count_t read_count)
+    {
+        read_counts[i] = read_count;
+    }
+
     // input read index local to this collection
     Read_acc get_read(read_num_t i)
     {
@@ -253,6 +265,8 @@ struct Single_read_list {
     inline read_length_t get_read_length() {return read_length;}
 
     inline void set_comp_id(int i) {comp_id = i;}
+
+    inline read_num_t get_num_read() {return  num_read; }
 
 private:
     uint8_t read_type;

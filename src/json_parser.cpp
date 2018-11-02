@@ -147,10 +147,13 @@ void parser_setting_file(std::string & file_path, Shannon_C_setting & setting)
 
     // contig setup
     ptree contig_graph_setup = pt.get_child("contig_graph_setup");
-    int num_test = contig_graph_setup.get<idx_t>("num_test");
+    int num_feature = contig_graph_setup.get<idx_t>("num_feature");
     bool is_assign_best = contig_graph_setup.get<bool>("is_assign_best");
     int read_sampler_k = contig_graph_setup.get<int>("read_sampler_k");
-    setting.contig_graph_setup.set_para(num_test, is_assign_best, read_sampler_k);
+    bool is_store_all_reads_and_features =
+                contig_graph_setup.get<bool>("is_store_all_reads_and_features");
+    setting.contig_graph_setup.set_para(num_feature, is_assign_best,
+                        read_sampler_k, is_store_all_reads_and_features);
 
     //metis_setup
     ptree metis_setup = pt.get_child("metis_setup");

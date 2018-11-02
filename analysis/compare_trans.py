@@ -2,7 +2,9 @@ import sys
 import tester
 import os
 
-os.chdir('./analysis')
+
+
+os.chdir('./analysis')#abs_path)
 
 python_path = 'python'
 

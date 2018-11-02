@@ -14,19 +14,22 @@ void * Sparse_flow_handler::run_sparse_flow_handler_helper( Comp_graph comp_grap
 {
     comp_id = comp_graph.comp_i;
     graph_id = comp_graph.graph_i;
+
     if(!load_graph(node_path, edge_path))
     {
         clear();
+        //std::cout << "load graph error" << std::endl;
         return NULL;
     }
 
-    load_path(path_path);
-    load_read(read_path);
     //std::cout << "get_num_nodes " << get_num_nodes() << std::endl;
     //std::cout << "get_num_nodes " << get_num_edges() << std::endl;
 
-    add_start_end_node();
+    load_path(path_path);
+    load_read(read_path);
 
+    add_start_end_node();
+    num_out_seq = 0;
     if (get_num_nodes() <= 3)
     {
         dump_SF_seq(output_path, write_lock_ptr);
@@ -187,6 +190,7 @@ bool Sparse_flow_handler::load_graph(std::string & node_file, std::string & edge
 #ifdef LOG_SF
     shc_log_info(shc_logname, "Start load graph files\n");
 #endif
+    //std::cout << "laod graph " << graph_id << std::endl;
     if(!boost::filesystem::exists(node_file))
     {
         std::cout << "input comp " << comp_id << " graph " << graph_id
@@ -200,6 +204,7 @@ bool Sparse_flow_handler::load_graph(std::string & node_file, std::string & edge
         std::cout << edge_file << std::endl;
         return false;
     }
+
 
     //std::ifstream node_file_reader(node_file);
     //std::string header_str;
@@ -262,6 +267,7 @@ bool Sparse_flow_handler::load_graph(std::string & node_file, std::string & edge
 bool Sparse_flow_handler::load_node(std::string & node_file)
 {
     std::ifstream file_reader(node_file);
+    //std::cout << "node_file " << node_file <<  std::endl;
     std::string node_id_str, bases, count_str, read_count_str;
     node_id_t node_id  = 0;
     kmer_count_node_t count = 0;
@@ -318,6 +324,8 @@ bool Sparse_flow_handler::load_node(std::string & node_file)
         vd_to_read_ids[vd] = read_ids;
         num_node++;
     }
+
+    //std::cout << "num node " << (boost::num_vertices(graph)) << std::endl;
 
 
 
@@ -634,13 +642,13 @@ void Sparse_flow_handler::load_path(std::string & path_file)
             }
             else
             {
-                int diff = std::distance(np_it_pair.first, np_it_pair.second);
+                //int diff = std::distance(np_it_pair.first, np_it_pair.second);
                 //shc_log_info(shc_logname, "diff %d\n", diff);
-                if(diff < sf_setting.path_sparsity)
-                {
+                //if(diff < sf_setting.path_sparsity)
+                //{
                 //    shc_log_info(shc_logname, "path for node location %d\n", location);
                     paths_for_node.insert(std::make_pair(vd, Path_info(i, location)));
-                }
+                //}
             }
             location++;
         }
@@ -777,6 +785,8 @@ void Sparse_flow_handler::sparse_flow_on_all_nodes()
                     //            graph[vd_source].node_id, graph[vd_target].node_id);
                     //}
                 //}
+                shc_log_info(shc_logname, "Y vd: %s\n", graph[vd].seq.c_str());
+
                 link_Y_path(vd);
 
 
@@ -786,6 +796,10 @@ void Sparse_flow_handler::sparse_flow_on_all_nodes()
             {
 
                 //shc_log_info(shc_logname, "X node modify\n");
+                shc_log_info(shc_logname, "SF vd: %s\n", graph[vd].seq.c_str());
+                
+
+
                 node_iter++;
                 std::vector<double> flow;
                 std::vector<vd_t> in_nodes, out_nodes;
@@ -1035,10 +1049,10 @@ sparse_flow_on_one_node(vd_t vd, std::vector<double> & min_flow,
 #ifdef LOG_LP_SUMMARY
     shc_log_info(shc_logname, "in nodes order:\n");
     for(int i=0; i<in_nodes.size(); i++)
-        shc_log_info(shc_logname, "%u:\n", graph[in_nodes[i]].node_id);
+        shc_log_info(shc_logname, "%u: %s\n", graph[in_nodes[i]].node_id, graph[in_nodes[i]].seq.c_str());
     shc_log_info(shc_logname, "out nodes order:\n");
     for(int i=0; i<out_nodes.size(); i++)
-        shc_log_info(shc_logname, "%u:\n", graph[out_nodes[i]].node_id);
+        shc_log_info(shc_logname, "%u: %s\n", graph[out_nodes[i]].node_id, graph[in_nodes[i]].seq.c_str());
 
     shc_log_info(shc_logname, "BEFORE in counts:\n");
     for(std::vector<double>::iterator it=in_counts.begin(); it!=in_counts.end(); ++it)

@@ -58,7 +58,7 @@ void Contig_graph_handler::run_contig_graph_handler()
     dump_component_array(setting.local_files.output_comp_path);
 
     add_or_overwrite_directory(lf.output_components_read_dir, lf.output_path);
-    add_or_overwrite_directory(lf.output_components_read_prob_dir, lf.output_path);
+    add_or_overwrite_directory(lf.output_components_read_features_dir, lf.output_path);
 
 
 
@@ -76,13 +76,21 @@ void Contig_graph_handler::run_contig_graph_handler()
     // assigning reads
     if(setting.has_single)
     {
-        read_prob_dumper.setup_dump_files(component_size, 0);
-        read_prob_dumper.setup_disk_dumper(lf.output_components_read_prob_dir, lf.comp_read_prob_prefix);
+        if(read_sampler.is_store_all_reads_and_features)
+        {
+            single_read_features_dumper.setup_dump_files(component_size, 0);
+            single_read_features_dumper.setup_disk_dumper(lf.output_components_read_features_dir,
+                                                          lf.comp_read_features_prefix);
+        }
+
         start_timer(&cgh_main_timer);
         //assign_reads_to_components(setting.local_files.input_read_path);
         assign_reads_to_components_mmap(setting.local_files.input_read_path);
-        read_prob_dumper.write_mem_to_disk();
-        read_prob_dumper.reset();
+        if(read_sampler.is_store_all_reads_and_features)
+        {
+            single_read_features_dumper.write_mem_to_disk();
+            single_read_features_dumper.reset();
+        }
         shc_log_info(shc_logname, "finish assigning single read\n");
         log_stop_timer(&cgh_main_timer);
 #ifdef SHOW_PROGRESS
@@ -91,12 +99,20 @@ void Contig_graph_handler::run_contig_graph_handler()
     if(setting.has_pair)
     {
         start_timer(&cgh_timer);
-        read_prob_dumper.setup_dump_files(component_size, 0);
-        read_prob_dumper.setup_disk_dumper(lf.output_components_read_prob_dir, lf.comp_pair_read_prob_prefix);
+        if(read_sampler.is_store_all_reads_and_features)
+        {
+            paired_read_features_dumper.setup_dump_files(component_size, 0);
+            paired_read_features_dumper.setup_disk_dumper(lf.output_components_read_features_dir,
+                                                          lf.comp_pair_read_features_prefix);
+        }
         assign_paired_read_to_components_mmap(
                             setting.local_files.input_read_path_1,
                             setting.local_files.input_read_path_2);
-        read_prob_dumper.write_mem_to_disk();
+        if(read_sampler.is_store_all_reads_and_features)
+        {
+            paired_read_features_dumper.write_mem_to_disk();
+            paired_read_features_dumper.reset();
+        }
         //assign_paired_read_to_components(
         //                    setting.local_files.input_read_path_1,
         //                    setting.local_files.input_read_path_2);
@@ -968,7 +984,7 @@ void Contig_graph_handler::dump_component_array(std::string & filename)
     shc_log_info(shc_logname, "Start dumping: %u component \n", curr_component_num);
     std::ofstream outfile(filename);
     outfile << curr_component_num
-      << " components, this number also denotes unmmapped contig to components"
+      << " components, this number also denotes unmmapped contig to components, each row is a contig"
       << std::endl;
 
     //int comp_type_i = 0;
@@ -1016,9 +1032,9 @@ update_comp_count(std::vector<comp_num_t> & components,
                   std::vector<comp_num_t> & counts, bool is_forward,
                   std::vector<comp_num_t> & comp_array,  char * seq,  int len)
 {
-    int interval = (len-kmer_length+1)/num_test;
+    int interval = (len-kmer_length+1)/num_feature;
     uint64_t byte;
-    for(int i=0; i<num_test; i++)
+    for(int i=0; i<num_feature; i++)
     {
         if(is_forward)
             encode_kmer(seq+i*interval, &byte, kmer_length);
@@ -1055,30 +1071,31 @@ update_comp_count(std::vector<comp_num_t> & components,
 void Contig_graph_handler::
 update_comp_map(std::map<comp_num_t, int> & comp_map, bool is_forward,
                 std::vector<comp_num_t> & comp_array,  char * seq,  int len,
-                double & avg_count)
+                kmer_count_t * kmer_counts, int & num_kmer)
 {
-    avg_count = 0; // default min count
-    int num_valid_test = 0;
-    int interval = (len-kmer_length+1)/num_test;
-    int num_tested = 0;
+    int interval = (len-kmer_length+1)/num_feature;
+    num_kmer = 0;
+    //int num_featureed = 0;
     uint64_t byte;
-    int offset = 0;
+
+    //bool is_set_min_kmer = false;
+    //kmer_count_t min_kmer_count;
 
     //std::string seq_str(seq, len);
     //shc_log_info(shc_logname, "seq %s\n", seq_str.c_str());
     //shc_log_info(shc_logname, "is_forward %s\n", (is_forward)?("yes"):("no"));
-    //shc_log_info(shc_logname, "interval %s\n", interval);
+    //shc_log_info(shc_logname, "num_feature %s\n", interval);
 
     //char de_kmer[33];
     //de_kmer[kmer_length] = '\0';
 
     //while(offset < interval)
     //{
-        for(int i=0; i<num_test; i++)
+        for(int i=0; i<num_feature; i++)
         {
             if(is_forward)
             {
-                int forward_i = offset + i*interval;
+                int forward_i = i*interval;
                 if(forward_i >= len)
                     continue;
                 if(!encode_kmer_check_base(seq+forward_i, &byte, kmer_length))
@@ -1086,9 +1103,7 @@ update_comp_map(std::map<comp_num_t, int> & comp_map, bool is_forward,
             }
             else
             {
-                int rc_i = len-i*interval-1-offset;
-                if(rc_i < 0)
-                    continue;
+                int rc_i =  len-i*interval-1; //i*interval
                 if(!encode_reverse_kmer_check_base(seq+rc_i, &byte, kmer_length))
                     continue;
                 complement_num(&byte, kmer_length);
@@ -1106,10 +1121,30 @@ update_comp_map(std::map<comp_num_t, int> & comp_map, bool is_forward,
                 {
                     comp_map[comp_num_for_contig]++;
                 }
+                //kmer_count_t kmer_count = ;
+                //if(!is_set_min_kmer)
+                //{
+                //    is_set_min_kmer = true;
+                //    min_kmer_count = kmer_count;
+                //}
+                //else
+                //{
+                //    if (kmer_count < min_kmer_count )
+                //        min_kmer_count = kmer_count;
+                //}
+                assert(NUM_FEAT_RESERVED > num_kmer);
+                kmer_counts[num_kmer++] = get_count(it->second.count, compress_ratio);
 
-                avg_count += get_count(it->second.count, compress_ratio);
+                //kmer_counts.push_back(get_count(it->second.count, compress_ratio));
+
+                //avg_count += get_count(it->second.count, compress_ratio);
                 //shc_log_info(shc_logname, "count %u\n", get_count(it->second.count, compress_ratio));
-                num_valid_test ++;
+                //num_valid_test ++;
+            }
+            else
+            {
+                comp_map.clear();
+                return;
             }
         }
     //    offset ++;
@@ -1117,10 +1152,36 @@ update_comp_map(std::map<comp_num_t, int> & comp_map, bool is_forward,
     //        break;
     //}
     // it is ok to miss, since they are erroreous kmer, the ream
-    if (num_valid_test > 0)
-        avg_count = avg_count/static_cast<double>(num_valid_test);
-    else
-        avg_count = 0;
+    /*
+    if (kmer_counts.size() > 0)
+    {
+        if(num_feature%2 == 1)
+        {
+            int median_i = num_feature/2;
+            const auto median_it  = kmer_counts.begin()+median_i;
+            std::nth_element (kmer_counts.begin(),
+                            median_it, kmer_counts.end());
+            avg_count = *median_it;
+        }
+        else
+        {
+            const auto median_it1 = kmer_counts.begin() + kmer_counts.size() / 2 - 1;
+            const auto median_it2 = kmer_counts.begin() + kmer_counts.size() / 2;
+
+            std::nth_element(kmer_counts.begin(), median_it1 , kmer_counts.end());
+            const auto e1 = *median_it1;
+
+            std::nth_element(kmer_counts.begin(), median_it2 , kmer_counts.end());
+            const auto e2 = *median_it2;
+
+            avg_count = (e1 + e2) / 2;
+        }
+    }
+    */
+    //if(is_set_min_kmer)
+    //    avg_count = min_kmer_count;
+    //else
+    //    avg_count = 0;
     //shc_log_info(shc_logname, "avg_count %f\n", avg_count);
 }
 
@@ -1128,9 +1189,9 @@ void Contig_graph_handler::
 update_comp_set(std::set<comp_num_t> & comp_set, bool is_forward,
         std::vector<comp_num_t> & comp_array, char * seq,  int len)
 {
-    int interval = (len-kmer_length+1)/num_test;
+    int interval = (len-kmer_length+1)/num_feature;
     uint64_t byte;
-    for(int i=0; i<num_test; i++)
+    for(int i=0; i<num_feature; i++)
     {
         if(is_forward)
             encode_kmer(seq+i*interval, &byte, kmer_length);
@@ -1168,6 +1229,7 @@ decide_best_comp(std::map<comp_num_t, int> & comp_count, comp_num_t & best_comp)
         best_comp =  max_iter->first;
         return true;
     }
+    best_comp = curr_component_num;
     return false;
 }
 
@@ -1423,126 +1485,132 @@ assign_pair_read_to_file_mmap_helper(struct Single_dumper & mfs_p1,
              char * header_ptr_p2, char * seq_ptr_p1, char * seq_ptr_p2,
              int seq_len_p1, int seq_len_p2, bool is_forward)
 {
-    if(is_assign_best)
-    {
-        double avg_count_p1, avg_count_p2;
-        std::map<comp_num_t, int> comp_count_map;
-        update_comp_map(comp_count_map, is_forward, component_array,
-                        seq_ptr_p1, seq_len_p1, avg_count_p1);
-        update_comp_map(comp_count_map, is_forward, component_array,
-                        seq_ptr_p2, seq_len_p2, avg_count_p2);
-        bool skip_first = false;
-        comp_num_t best_comp;
+    //if(is_assign_best)
+    //{
+        int num_kmer1, num_kmer2;
+        std::map<comp_num_t, int> comp_count_map_p1;
+        std::map<comp_num_t, int> comp_count_map_p2;
 
-        best_comp = assign_pair_best_comp(mfs_p1, mfs_p2,
-            comp_count_map, seq_ptr_p1, seq_ptr_p2, header_ptr_p1,
-            header_ptr_p2, seq_len_p1, seq_len_p2, is_forward, avg_count_p1, avg_count_p2);
+        // read p1 update and dump
+        update_comp_map(comp_count_map_p1, is_forward, component_array,
+                        seq_ptr_p1, seq_len_p1, (kmer_count_t*)pair_1_kmer_counts, num_kmer1);
+        update_comp_map(comp_count_map_p2, is_forward, component_array,
+                        seq_ptr_p2, seq_len_p2, (kmer_count_t*)pair_2_kmer_counts, num_kmer2);
+        comp_num_t best_comp_p1, best_comp_p2;
 
-
-
-        if (metis_setup.is_multiple_partition)
+        if(decide_best_comp(comp_count_map_p1, best_comp_p1))
         {
-            if((best_comp!=curr_component_num && complex_comp_indicator[best_comp])) // is complex component
-            {
-                double re_avg_count_p1, re_avg_count_p2;
-                std::map<comp_num_t, int> re_comp_count_map;
-                update_comp_map(re_comp_count_map, is_forward,
-                  component_array_aux, seq_ptr_p1, seq_len_p1, re_avg_count_p1);
-                update_comp_map(re_comp_count_map, is_forward,
-                  component_array_aux, seq_ptr_p2, seq_len_p2, re_avg_count_p2);
+            assign_pair_best_comp(mfs_p1, mfs_p2,
+               best_comp_p1, seq_ptr_p1, seq_ptr_p2, header_ptr_p1,
+               header_ptr_p2, seq_len_p1, seq_len_p2, is_forward, num_kmer1, num_kmer2);
+        }
 
-                best_comp = assign_pair_best_comp(mfs_p1, mfs_p2, re_comp_count_map,
-                    seq_ptr_p1, seq_ptr_p2, header_ptr_p1, header_ptr_p2,
-                    seq_len_p1, seq_len_p2, is_forward, re_avg_count_p1, re_avg_count_p2);
+        if(decide_best_comp(comp_count_map_p2, best_comp_p2))
+        {
+            if(best_comp_p1 != best_comp_p2)
+            {
+                assign_pair_best_comp(mfs_p1, mfs_p2,
+                   best_comp_p2, seq_ptr_p1, seq_ptr_p2, header_ptr_p1,
+                   header_ptr_p2, seq_len_p1, seq_len_p2, is_forward, num_kmer1, num_kmer2);
             }
         }
-    }
-    else
-    {
-        double avg_count_p1, avg_count_p2;
-        std::map<comp_num_t, int> comp_count_map;
-        update_comp_map(comp_count_map, is_forward, component_array,
-                        seq_ptr_p1, seq_len_p1, avg_count_p1);
-        update_comp_map(comp_count_map, is_forward, component_array,
-                        seq_ptr_p2, seq_len_p2, avg_count_p2);
+
         if (metis_setup.is_multiple_partition)
         {
-            update_comp_map(comp_count_map, is_forward, component_array_aux,
-                            seq_ptr_p1, seq_len_p1, avg_count_p1);
-            update_comp_map(comp_count_map, is_forward, component_array_aux,
-                            seq_ptr_p2, seq_len_p2, avg_count_p2);
-        }
+            if((best_comp_p1!=curr_component_num && complex_comp_indicator[best_comp_p1])) // is complex component
+            {
+                int re_num_kmer1;
+                comp_count_map_p1.clear();
+                update_comp_map(comp_count_map_p1, is_forward,
+                              component_array_aux, seq_ptr_p1, seq_len_p1,
+                              (kmer_count_t*)pair_1_kmer_counts, re_num_kmer1);
 
-        assign_pair_all_comp(mfs_p1, mfs_p2, comp_count_map,
-                seq_ptr_p1, seq_ptr_p2, header_ptr_p1, header_ptr_p2, seq_len_p1, seq_len_p2, is_forward);
-    }
+
+                if(decide_best_comp(comp_count_map_p1, best_comp_p1))
+                {
+                    assign_pair_best_comp(mfs_p1, mfs_p2,
+                         best_comp_p1, seq_ptr_p1, seq_ptr_p2, header_ptr_p1,
+                         header_ptr_p2, seq_len_p1, seq_len_p2, is_forward, num_kmer1, num_kmer2);
+                }
+            }
+
+            if((best_comp_p2!=curr_component_num && complex_comp_indicator[best_comp_p2]))
+            {
+                int re_num_kmer2;
+                comp_count_map_p2.clear();
+                update_comp_map(comp_count_map_p2, is_forward,
+                              component_array_aux, seq_ptr_p2, seq_len_p2,
+                              (kmer_count_t*)pair_2_kmer_counts, re_num_kmer2);
+
+                if(decide_best_comp(comp_count_map_p2, best_comp_p2))
+                {
+                    if(best_comp_p1 != best_comp_p2)
+                    {
+                        assign_pair_best_comp(mfs_p1, mfs_p2,
+                           best_comp_p2, seq_ptr_p1, seq_ptr_p2, header_ptr_p1,
+                           header_ptr_p2, seq_len_p1, seq_len_p2, is_forward, num_kmer1, num_kmer2);
+                    }
+                }
+            }
+        }
+    //}
+    //else
+    //{
+    //    int num_kmer1, num_kmer2;
+    //    std::map<comp_num_t, int> comp_count_map;
+    //    update_comp_map(comp_count_map, is_forward, component_array,
+    //                    seq_ptr_p1, seq_len_p1, num_kmer1);
+    //    update_comp_map(comp_count_map, is_forward, component_array,
+    //                    seq_ptr_p2, seq_len_p2, num_kmer2);
+    //    if (metis_setup.is_multiple_partition)
+    //    {
+    //        update_comp_map(comp_count_map, is_forward, component_array_aux,
+    //                        seq_ptr_p1, seq_len_p1, num_kmer1);
+    //        update_comp_map(comp_count_map, is_forward, component_array_aux,
+    //                        seq_ptr_p2, seq_len_p2, num_kmer2);
+    //    }
+
+    //    assign_pair_all_comp(mfs_p1, mfs_p2, comp_count_map,
+    //            seq_ptr_p1, seq_ptr_p2, header_ptr_p1, header_ptr_p2,
+    //            seq_len_p1, seq_len_p2, is_forward);
+    //}
 }
 
 
 comp_num_t Contig_graph_handler::
 assign_pair_best_comp(struct Single_dumper & mfs_p1,
-             struct Single_dumper & mfs_p2, std::map<comp_num_t, int> & comp_count,
+             struct Single_dumper & mfs_p2, comp_num_t comp_i,
                 char * seq_ptr_p1, char * seq_ptr_p2, char * header_ptr_p1,
                 char * header_ptr_p2, int seq_len_p1, int seq_len_p2, bool is_forward,
-                double & avg_count_p1, double & avg_count_p2)
+                int num_kmer1, int num_kmer2)
 {
-    comp_num_t comp_i;
-    double prob_to_sample_1 = -1;
-    double  prob_to_sample_2 = -1;
-    if(decide_best_comp(comp_count, comp_i))
+    if( read_sampler.is_store_all_reads_and_features ||
+        read_sampler.decide_to_keep_read(comp_i, pair_1_kmer_counts, num_kmer1) ||
+        read_sampler.decide_to_keep_read(comp_i, pair_2_kmer_counts, num_kmer2) )
     {
-        bool is_read1_keep =
-            read_sampler.decide_to_keep_read(avg_count_p1, comp_i, prob_to_sample_1);
-        bool is_read2_keep =
-            read_sampler.decide_to_keep_read(avg_count_p2, comp_i, prob_to_sample_2);
-        if( is_read1_keep || is_read2_keep )
+        if(is_forward)
         {
-            if(is_forward)
-            {
-                mfs_p1.write_fasta(comp_i, seq_ptr_p1, header_ptr_p1, seq_len_p1);
-                mfs_p2.write_fasta(comp_i, seq_ptr_p2, header_ptr_p2, seq_len_p2);
-            }
-            else
-            {
-                mfs_p1.write_reverse_fasta(comp_i, seq_ptr_p2, header_ptr_p2, seq_len_p2);
-                mfs_p2.write_reverse_fasta(comp_i, seq_ptr_p1, header_ptr_p1, seq_len_p1);
-                /*
-                mfs_p1.write_reverse_fasta(comp_i, seq_ptr_p1, header_ptr_p1,
-                    seq_len_p1);
-                mfs_p2.write_reverse_fasta(comp_i, seq_ptr_p2, header_ptr_p2,
-                    seq_len_p2);
-                */
-            }
-
-            if((prob_to_sample_1==0.0 || prob_to_sample_2==0.0))
-            {
-                shc_log_info(shc_logname, "prob %f %f\n", prob_to_sample_1, prob_to_sample_2);
-                shc_log_info(shc_logname, "ave count %f %f\n", avg_count_p1, avg_count_p2);
-                std::string seq1(seq_ptr_p1, seq_len_p1);
-                std::string seq2(seq_ptr_p2, seq_len_p2);
-                shc_log_info(shc_logname, "%s\n", seq1.c_str());
-                shc_log_info(shc_logname, "%s\n", seq2.c_str());
-            }
-
-            read_prob_dumper.dump_read_prob(comp_i,
-                                  std::min(std::max(prob_to_sample_1, prob_to_sample_2), 1.0) );
-
-            if(comp_i !=curr_component_num)
-            {
-                if(avg_count_p1<=kmer_count_thresh && avg_count_p2<=kmer_count_thresh)
-                {
-                    //comp_total_kmer_count[comp_i].push_back((avg_count_p2+avg_count_p1)/2);
-                    //comp_num_reads[comp_i] += 1;
-                }
-            }
-            return comp_i;
+            mfs_p1.write_fasta(comp_i, seq_ptr_p1, header_ptr_p1, seq_len_p1);
+            mfs_p2.write_fasta(comp_i, seq_ptr_p2, header_ptr_p2, seq_len_p2);
         }
         else
-            return curr_component_num;
+        {
+            mfs_p1.write_reverse_fasta(comp_i, seq_ptr_p2, header_ptr_p2, seq_len_p2);
+            mfs_p2.write_reverse_fasta(comp_i, seq_ptr_p1, header_ptr_p1, seq_len_p1);
+        }
+        if(read_sampler.is_store_all_reads_and_features)
+        {
+            //read_features_dumper.dump_read_prob(comp_i,
+            //    std::min(std::max(prob_to_sample_1, prob_to_sample_2), 1.0) );
+            paired_read_features_dumper.dump_paired_read_features(comp_i,
+                        pair_1_kmer_counts, num_kmer1,
+                        pair_2_kmer_counts, num_kmer2);
+        }
+
+        return comp_i;
     }
     else
-        return curr_component_num; // which is the impossible components
-
+        return curr_component_num;
 }
 
 void Contig_graph_handler::
@@ -1611,48 +1679,28 @@ assign_single_read_to_file_mmap(struct Single_dumper & mfs,
 
 comp_num_t Contig_graph_handler::
 assign_single_best_comp(struct Single_dumper & mfs,
-    std::map<comp_num_t, int> & comp_count, char * seq_ptr, char * header_ptr,
-                                int seq_len, bool is_forward, double & avg_count)
-{
-    comp_num_t comp_i;
-    if(decide_best_comp(comp_count, comp_i))
+    comp_num_t comp_i, char * seq_ptr, char * header_ptr,
+                                int seq_len, bool is_forward, int num_kmer)
+{    
+    if( read_sampler.is_store_all_reads_and_features  ||
+        read_sampler.decide_to_keep_read(comp_i, single_kmer_counts, num_kmer))
     {
-        double prob_to_sample;
-        if(read_sampler.decide_to_keep_read(avg_count, comp_i, prob_to_sample))
-        {
-            if (is_forward)
-                mfs.write_fasta(comp_i, seq_ptr, header_ptr, seq_len);
-            else
-                mfs.write_reverse_fasta(comp_i, seq_ptr, header_ptr, seq_len);
-
-            if((prob_to_sample==0.0))
-            {
-                shc_log_info(shc_logname, "prob %f\n",
-                            prob_to_sample);
-                std::string seq1(seq_ptr, seq_len);
-                shc_log_info(shc_logname, "%s\n",
-                            seq1.c_str());
-            }
-            read_prob_dumper.dump_read_prob(comp_i, std::min(prob_to_sample, 1.0) );
-            //char read_out[1000];
-            //uint64_t len = seq_ptr-header_ptr;
-            //memcpy(read_out, header_ptr, len);
-            //read_out[len] = '\0';
-            //shc_log_info(shc_logname, "%s", read_out);
-            //memcpy(read_out, seq_ptr, seq_len);
-
-
-            // collect stat
-            if(avg_count < kmer_count_thresh)
-            {
-                //comp_total_kmer_count[comp_i].push_back(avg_count);
-                //comp_num_reads[comp_i] += 1;
-            }
-
-            return comp_i;
-        }
+        if (is_forward)
+            mfs.write_fasta(comp_i, seq_ptr, header_ptr, seq_len);
         else
-            return curr_component_num;
+            mfs.write_reverse_fasta(comp_i, seq_ptr, header_ptr, seq_len);
+
+        if(read_sampler.is_store_all_reads_and_features)
+            single_read_features_dumper.dump_read_features(comp_i, single_kmer_counts, num_kmer);
+        //char read_out[1000];
+        //uint64_t len = seq_ptr-header_ptr;
+        //memcpy(read_out, header_ptr, len);
+        //read_out[len] = '\0';
+        //shc_log_info(shc_logname, "%s", read_out);
+        //memcpy(read_out, seq_ptr, seq_len);
+
+
+        return comp_i;
     }
     else
         return curr_component_num;
@@ -1678,43 +1726,50 @@ void Contig_graph_handler::
 assign_single_read_to_file_mmap_helper(struct Single_dumper & mfs,
                         char * header_ptr, char * seq_ptr, int seq_len, bool is_forward)
 {
-    if(is_assign_best)
-    {
-        double avg_count;
+    //if(is_assign_best)
+    //{
+        int num_tested_kmer;
         std::map<comp_num_t, int> comp_count_map;
-        update_comp_map(comp_count_map, is_forward, component_array,
-                        seq_ptr, seq_len, avg_count);
         comp_num_t best_comp = curr_component_num;
-        best_comp = assign_single_best_comp(mfs, comp_count_map, seq_ptr, header_ptr,
-                                                seq_len, is_forward, avg_count);
+        update_comp_map(comp_count_map, is_forward, component_array,
+                        seq_ptr, seq_len, (kmer_count_t*)single_kmer_counts, num_tested_kmer);
+        if(decide_best_comp(comp_count_map, best_comp))
+        {
+            assign_single_best_comp(mfs, best_comp, seq_ptr, header_ptr,
+                                                    seq_len, is_forward, num_tested_kmer);
+        }
 
         if(metis_setup.is_multiple_partition)
         {
             if(best_comp!=curr_component_num &&complex_comp_indicator[best_comp]) // is complex component
             {
-                double re_avg_count;
-                std::map<comp_num_t, int> re_comp_count_map;
-                update_comp_map(re_comp_count_map, is_forward,
-                        component_array_aux, seq_ptr, seq_len, re_avg_count);
-                best_comp = assign_single_best_comp(mfs, re_comp_count_map, seq_ptr,
-                                     header_ptr, seq_len, is_forward, re_avg_count);
+                int re_num_tested_kmer;
+                comp_count_map.clear();
+                update_comp_map(comp_count_map, is_forward,
+                        component_array_aux, seq_ptr, seq_len,
+                        (kmer_count_t*)single_kmer_counts, re_num_tested_kmer);
+                if(decide_best_comp(comp_count_map, best_comp))
+                {
+                    assign_single_best_comp(mfs, best_comp, seq_ptr,
+                                     header_ptr, seq_len, is_forward, re_num_tested_kmer);
+                }
             }
         }
-    }
-    else
-    {
-        double avg_count;
-        std::map<comp_num_t, int> comp_count_map;
-        update_comp_map(comp_count_map, is_forward, component_array,
-                        seq_ptr, seq_len, avg_count);
-        if (metis_setup.is_multiple_partition)
-        {
-            update_comp_map(comp_count_map, is_forward, component_array_aux,
-                            seq_ptr, seq_len, avg_count);
-        }
-        assign_single_all_comp(mfs, comp_count_map, seq_ptr, header_ptr,
-                                            seq_len, is_forward);
-    }
+    //}
+    //else
+    //{
+    //    double avg_count;
+    //    std::map<comp_num_t, int> comp_count_map;
+    //    update_comp_map(comp_count_map, is_forward, component_array,
+    //                    seq_ptr, seq_len, avg_count);
+    //    if (metis_setup.is_multiple_partition)
+    //    {
+    //        update_comp_map(comp_count_map, is_forward, component_array_aux,
+    //                        seq_ptr, seq_len, avg_count);
+    //    }
+    //    assign_single_all_comp(mfs, comp_count_map, seq_ptr, header_ptr,
+    //                                        seq_len, is_forward);
+    //}
 }
 
 

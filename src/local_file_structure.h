@@ -143,8 +143,9 @@ struct Local_files {    //"/test_data"
 
         output_components_read_dir = output_path + "/components_reads";
         output_components_kmer_dir = output_path + "/components_kmer";
-        output_components_read_prob_dir = output_path + "/components_reads_prob";
+        output_components_read_features_dir = output_path + "/components_reads_features";
         output_components_dump_read_dir = output_path + "/components_dump_reads";
+        output_components_thworn_read_dir = output_path + "/components_thrown_reads";
         // Multibridge
         graph_coll_dir_name = "/comp_graph";
         output_seq_graph_path = output_path + graph_coll_dir_name;
@@ -164,8 +165,8 @@ struct Local_files {    //"/test_data"
         duplicate_removed_read_dir = output_path + "/duplicate_remove_reads";
         comp_read_prefix = "/comp";
         comp_kmer_prefix = "/kmer";
-        comp_read_prob_prefix = "/prob";
-        comp_pair_read_prob_prefix = "/prob_pair";
+        comp_read_features_prefix = "/feature";
+        comp_pair_read_features_prefix = "/feature_pair";
 
         eval_dir_path = output_path + "/eval_files";
         eval_path = eval_dir_path + "/eval_" + start_time + ".log";
@@ -236,8 +237,9 @@ struct Local_files {    //"/test_data"
 
         output_components_read_dir = output_path + "/components_reads";
         output_components_kmer_dir = output_path + "/components_kmer";
-        output_components_read_prob_dir = output_path + "/components_reads_prob";
+        output_components_read_features_dir = output_path + "/components_reads_features";
         output_components_dump_read_dir = output_path + "/components_dump_reads";
+        output_components_thworn_read_dir = output_path + "/components_thrown_reads";
         // Multibridge
         graph_coll_dir_name = "/comp_graph";
         output_seq_graph_path = output_path + graph_coll_dir_name;
@@ -252,12 +254,14 @@ struct Local_files {    //"/test_data"
         reconstructed_sf_path = reconstructed_seq_path + "_sf";
         unfiltered_length_reconst_seq = reconstructed_seq_path + "_unfiltered_len";
 
+        
+
         // others
         duplicate_removed_read_dir = output_path + "/duplicate_remove_reads";
         comp_read_prefix = "/comp";
         comp_kmer_prefix = "/kmer";
-        comp_read_prob_prefix = "/prob";
-        comp_pair_read_prob_prefix = "/prob_pair";
+        comp_read_features_prefix = "/feature";
+        comp_pair_read_features_prefix = "/feature_pair";
 
         eval_dir_path = output_path + "/eval_files";
         eval_path = eval_dir_path + "/eval_" + start_time + ".log";
@@ -333,13 +337,14 @@ struct Local_files {    //"/test_data"
     // after contig graph dump
     std::string output_components_read_dir;
     std::string output_components_kmer_dir;
-    std::string output_components_read_prob_dir;
+    std::string output_components_read_features_dir;
     std::string output_components_dump_read_dir;
+    std::string output_components_thworn_read_dir;
 
     std::string comp_read_prefix;
     std::string comp_kmer_prefix;
-    std::string comp_read_prob_prefix;
-    std::string comp_pair_read_prob_prefix;
+    std::string comp_read_features_prefix;
+    std::string comp_pair_read_features_prefix;
     // for dumping multibridged graph
     std::string output_seq_graph_path;
     std::string output_seq_graph_result_path;

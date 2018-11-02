@@ -125,6 +125,30 @@ struct Collect_reads {
         }
     }
 
+    void correct_read_count(read_num_t i, read_count_t read_count)
+    {
+        if(i<s_reads.get_num_reads())
+        {
+            //shc_log_info(shc_logname, "%d read, single\n", i);
+            return s_reads.correct_read_count(i, read_count);
+        }
+        else if(i < vs_p2_read)
+        {
+            //shc_log_info(shc_logname, "%d read, pair 1\n", i);
+            return p1_reads.correct_read_count(i-vs_p1_read, read_count);
+        }
+        else if(i < get_num_reads())
+        {
+            //shc_log_info(shc_logname, "%d read, pair 2\n", i);
+            return p2_reads.correct_read_count(i-vs_p2_read, read_count);
+        }
+        else
+        {
+            shc_log_error("comp %d, encounter unknown num read %u\n", comp_id, i);
+            exit(1);
+        }
+    }
+
     read_num_t get_num_reads()
     {
         size_t total_num =

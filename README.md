@@ -7,9 +7,12 @@ This is a **C++** implementatin for the work **ShannonRNA: an Information-Optima
 - [Installing](#installing)
 - [Input requirement](#input-requirement)
 - [Getting started](#getting-started)
+- [Reconstructed output](#reconstructed-output)
+- [Reproduce the same output](#reproduce-the-same-output)
 - [Flowchart](#flowchart)
 - [Output file structure](#output-file-structure)
-- [Usage](#usage)
+- [Manual](#manual)
+- [Analysis](#analysis)
 - [Config file](#config-file)
 - [Memory parameter](#memory-parameter)
 - [Versioning](#versioning)
@@ -200,6 +203,29 @@ A developer interface, which takes a config file.
 ./Shannon_RNASeq_Cpp ref-align --input path_to_reconstructed_transcriptome --output_dir output_dir --ref path_to_reference_transcriptome
 ```
 
+## Reconstructed output
+Shannon puts assembled transcriptome into a file, 'reconstructed.fasta', which contains three types of transcripts: s_xx_xx, comp_xx_graph_xx_xx, Contig_xx.
+
+### General information
+```
+Both s_xx_xx and comp_xx_graph_xx_xx comes from traversing a path inside the de bruijn graph. 
+
+s_xx_xx indicates that there is an isolated node after multi-bridging and condensing, so that this node represents a transcript. The first xx gives the component index, and the second xx gives the ith transcript information, because it is likely that there are multiple isolated nodes in the end.   
+
+comp_xx_graph_xx_xx is a product from sparse-flow algorithm. The first xx gives component index, the xx after graph give graph index, and the last xx gives ith transcript index.
+
+Contig_xx is made of kmer extension, xx gives ith transcript index.
+```
+
+### Read count
+```
+Read count information is contained in the header line for comp_xx_graph_xx_xx and s_xx_xx. It counts for the number of exact supportive reads for a transcript. Read count is accurate within 5% difference when -g (sampling parameter) is set to 0, i.e. no sampling. When -g is specified to a number, say 50. Some reads are missed. I will make updates later, when it is solved.
+```
+
+## Reproduce the same output
+A parameter "random-seed" is supported in "./Shannon_RNASeq_Cpp shannon" to let user to avoid all randomness, (set it to number other than 0), such that given an input dataset, Shannon will always produce the same output. It has been tested on Ubuntu and Centos. Let me know if you find problem. 
+
+
 ## Flowchart
 The following flow chart illustrates how this implementation works:
 * each cylinder represents a data storage, which is listed in the **output file structure** section. Item with [] means this file was just created by last functional block.
@@ -227,7 +253,9 @@ The following flow chart illustrates how this implementation works:
     	* comp0_p1_0, comp0_p2_0, comp0_p1_1, comp0_p2_1 ... 
     	* ....
     	* compN_p1_0, compN_p2_0, compN_p1_1, compN_p2_1 ... 
-* comp_array (a file for recording property of each component)
+* components_dump_reads
+    * comp0, comp1, comp2 ....
+* comp_array 
 * comp_graph (# represents component index)
 	* Graph_nodes_#
 		* node0, node1, ... ,  single_node_#
@@ -243,7 +271,6 @@ The following flow chart illustrates how this implementation works:
 * reconstructed_seq.fasta_unfiltered (simply combine fasta_single, fasta_sf and contig_filtered.fasta)
 * mem_summary (a file summarizing memory usage)
 * Shannon.timing ( a file keeping the time stamps once major tasks finish)
-
 
 ## Manual
 
@@ -521,6 +548,50 @@ Allowed options:
 	* run evaluation            	 : choose 16 (provided reference is given)
 ```
 
+## Analysis
+For a transcript starting with 'comp_xxx' or 's_xxxx', Shannon can fetch its supportive reads in linear time and dumped those reads in a file. For a read to support a transcript, all bases of the read need to have perfect matches to a sub-string of the transcript, so it will not allow any mismatches. Three python scripts are written for this purpose. They can be found at 'analysis' directory under this git repo:
+1.  fetch_supportive_reads_by_header.py
+    ```
+    Purpose: fetch all supportive reads for one transcirpt
+    
+    input:  
+    a.  a fasta file containing only one header-seq pair
+    b.  shannon output directory
+    c.  indicator to double check if all reads matches substring in sequence, enter 1 for double-checking
+    
+    output:
+    a.  it creates a file whose name follows the format: '[header].read.fasta'. Within the file, lines starting with '@', specify the repeating times of a read, and line after each '@' gives actual reads.
+    b.  it prints three message: overall number of supportive reads for a transcript copied from its header; number of supportive reads computed from reads id lookup; number of unique read id
+    c.  if in the input argument, check indicator is set to be 1, and there is non-supportive read, it will exit and print out error message. Contact me if it shows up. :)
+    ``` 
+2.  fetch_comp_supportive_reads.py
+    ```
+    Purpose: fetch all supportive reads for one component, which in general includes many transcripts
+    
+    input:  
+    a.  shannon reconstruction file, (reconstructed_seq.fasta)
+    b.  shannon output directory
+    c.  component number (0,1,2,3 ...)
+    d.  output directory, if not exist python script will create one.
+    e.  indicator to double check if all reads matches substring in sequence, enter 1 for double-checking
+    
+    output:
+    a.  Inside output directory, each transcript has its own '.read.fasta' file in the format discussed above. In addition, a file of name 'comp[X].read.fasta' is created to include all unique supportive reads for this component
+    ```
+3.  fetch_all_supportive_reads.py
+     ```
+    Purpose: fetch all supportive reads for all component, each component has its own directory
+    
+    input:  
+    a.  shannon reconstruction file, (reconstructed_seq.fasta)
+    b.  shannon output directory
+    d.  output directory, if not exist python script will create one.
+    e.  indicator to double check if all reads matches substring in sequence, enter 1 for double-checking
+    
+    output:
+    a.  similar to 'fetch_comp_supportive_reads.py'
+    ```
+
 ## Config file
 Every task have various parameter, it is cumbumsome to have them all in argument. The config file serves to fit default value
 
@@ -577,4 +648,3 @@ To address the memory issue, two several are defined
 Shannon is distributed under a GPL 3.0 license.
 
 ## Acknowledgments
-

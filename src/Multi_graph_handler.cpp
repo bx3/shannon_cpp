@@ -49,7 +49,10 @@ int Multi_graph_handler::count_num_component_seq_graph()
 void Multi_graph_handler::dump_all_single_nodes_to_reconstruct_output()
 {
     std::string all_files_path(setting.local_files.single_node_dir + "/*");
-    std::string cmd("cat " + all_files_path + " > " + setting.local_files.reconstructed_single_path);
+
+    std::string cmd("find " + setting.local_files.single_node_dir +
+                    " -name 'single_node_*' | sort -V | xargs cat"
+                    " > " + setting.local_files.reconstructed_single_path);
     run_command(cmd, true);
 
     std::string rm_cmd("rm " + all_files_path);
@@ -136,29 +139,23 @@ void Multi_graph_handler::collect_process_file(int num_parallel)
 
     if(num_parallel > 0)
     {
-        std::string cmd("cat ");
-        for(int i=0; i<num_parallel; i++)
-        {
-            std::string file_path =
-                        setting.local_files.output_seq_graph_result_path +
-                        "/process"+std::to_string(i);
-            cmd += file_path + " ";
-        }
+        std::string cmd("find " + setting.local_files.output_seq_graph_result_path +
+                    " -name '*.fasta'| sort -V | xargs cat");
         cmd += " > " + setting.local_files.reconstructed_sf_path;
         //std::cout << "cmd " << cmd << std::endl;
         run_command(cmd, true);
 
         //rm all temp process
-        for(int i=0; i<num_parallel; i++)
-        {
-            std::string rm_cmd("rm ");
-            std::string file_path =
-                        setting.local_files.output_seq_graph_result_path +
-                        "/process"+std::to_string(i);
-            rm_cmd += file_path;
-            run_command(rm_cmd, false);
-        }
-        std::cout << "remove all temp process sparse flow output file under comp_graph_output" << std::endl;
+        //for(int i=0; i<num_parallel; i++)
+        //{
+        //    std::string rm_cmd("rm ");
+        //    std::string file_path =
+        //                setting.local_files.output_seq_graph_result_path +
+        //                "/process"+std::to_string(i);
+        //    rm_cmd += file_path;
+        //    run_command(rm_cmd, false);
+        //}
+        //std::cout << "remove all temp process sparse flow output file under comp_graph_output" << std::endl;
     }
 }
 
@@ -434,6 +431,12 @@ void Multi_graph_handler::process_multi_seq_graph(int num_parallel, int num_comp
                 setting.local_files.output_components_dump_read_dir << std::endl;
     add_or_overwrite_directory(setting.local_files.output_components_dump_read_dir,
                                setting.local_files.output_path);
+
+    //std::cout <<  "setting.local_files.output_components_thworn_read_dir " <<
+    //       setting.local_files.output_components_thworn_read_dir << std::endl;
+    //add_or_overwrite_directory(setting.local_files.output_components_thworn_read_dir,
+    //                          setting.local_files.output_path);
+
     if(!setting.local_files.single_node_dir.empty())
     {
         //std::cout <<"single_node_dir " << setting.local_files.single_node_dir << std::endl;
@@ -818,6 +821,8 @@ void Multi_graph_handler::process_sparse_flow_graph(int & num_parallel, int num_
         }
     }
 
+    std::cout << "work_queue " << work_queue.size() << std::endl;
+
     if(num_parallel > work_queue.size())
         num_parallel = work_queue.size();
 
@@ -842,6 +847,10 @@ void Multi_graph_handler::process_sparse_flow_graph(int & num_parallel, int num_
     }
 
     //exit(0);
+    add_or_overwrite_directory(setting.local_files.output_seq_graph_result_path,
+                               setting.local_files.output_path);
+
+
 
     pid_t pid;
     int i;
@@ -1037,6 +1046,7 @@ find_representatives(std::string in_file, std::string output_file)
     rmer.resize(rmer_length);
     uint64_t contig_num = 0;
     rmer_contig_map.reserve(num_seq*ave_read_length);
+    uint64_t index = 0;
 
 
 
@@ -1051,6 +1061,7 @@ find_representatives(std::string in_file, std::string output_file)
             if( line[0] == '>')
             {
                 header = line.substr(1);
+                //header = "hellio" + std::to_string(index++);
                 headers.push_back(header);
                 if(contig_num %SHOW_STEP == 0)
                 {
@@ -1113,6 +1124,8 @@ find_representatives(std::string in_file, std::string output_file)
 
     contig_num = 0;
     std::ofstream file_writer(output_file);
+    Block_timer write_timer;
+    start_timer(&write_timer);
     for(uint64_t i=0; i<seqs.size(); i++)
     {
         bool duplicate_suspect = duplicate_check_ends(seqs, i, false);
@@ -1126,6 +1139,8 @@ find_representatives(std::string in_file, std::string output_file)
             std::cout << "[" << percentage << "%] "
                       << "written " << contig_num << " sequences from checked "
                       << i << "sequences out of " << seqs.size() << std::endl;
+            stop_timer(&write_timer);
+            start_timer(&write_timer);
         }
         if(!duplicate_suspect)
         {
@@ -1248,8 +1263,6 @@ duplicate_check_ends(std::vector<std::string> & seqs, uint64_t header, bool rc)
         }
     }
     return false;
-
-
 }
 
 

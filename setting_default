@@ -40,9 +40,10 @@
 	},
     
 	"contig_graph_setup" : {
-		"num_test": "3",
+		"num_feature": "3",
 		"is_assign_best": "true",
-		"read_sampler_k": "0"
+		"read_sampler_k": "0",
+		""is_store_all_reads_and_features":	"false"
 	},
     
 	"metis_setup" : {
@@ -68,14 +69,6 @@
 
 	"find_rep": {
 		"rmer_length":	"24"
-	},
-    
-	"output_setup" : {
-		"kmer_with_info":	  "true",
-		"contig":		  "true",
-		"component_array":	  "true",
-		"read_to_component":	  "true",
-		"kmer_to_component": 	  "true"
 	}
 }
  

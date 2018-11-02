@@ -54,6 +54,7 @@
 #define KMER_PROGRESS_STEP 1000000
 
 extern uint8_t get_num_bit[256];
+#define NUM_FEAT_RESERVED 1000
 
 //#define LOG_CONTIG_GRAPH
 //#define LOG_METIS
@@ -250,20 +251,22 @@ public:
          Contig_handler * chp, Shannon_C_setting & setting_):
          k1mer_len(length), kh(khp), ch(chp),
          component_array(chp->num_contig, IMPOSSIBLE_COMP_NUM),
-         setting(setting_), num_test(setting_.contig_graph_setup.num_test),
+         setting(setting_), num_feature(setting_.contig_graph_setup.num_feature),
          metis_setup(setting_.metis_setup), lf(setting_.local_files),
          kmer_length(khp->kmer_length), explorable_contig_set(chp->num_contig),
          is_double_stranded(setting_.is_double_stranded),
          fasta_dumper(INIT_SIZE, THRESH, setting_.has_single, setting_.has_pair),
          kmer_dumper(), conn_contig_set(chp->num_contig),
          is_assign_best(setting_.contig_graph_setup.is_assign_best),
-         read_sampler(setting_.contig_graph_setup.read_sampler_k, setting_.random_seed),
+         read_sampler(setting_.contig_graph_setup.is_store_all_reads_and_features,
+                setting_.contig_graph_setup.read_sampler_k, setting_.random_seed),
          compress_ratio(khp->compress_ratio)
     {
         //explorable_contig_set.set_empty_key(chp->num_contig+2);
         //explorable_contig_set.set_deleted_key(chp->num_contig+3);
         //explorable_contig_set.resize(chp->num_contig*2);
-
+        std::cout << "read_sampler.is_store_all_reads_and_features " <<
+                    ((read_sampler.is_store_all_reads_and_features)?("yes"):("no")) << std::endl;
         //contig_stack.reserve(chp->num_contig);
         if(setting_.has_single)
             num_single_read_file = get_num_seq(setting_.local_files.input_read_path);
@@ -339,7 +342,10 @@ private:
 
     void update_comp_map(std::map<comp_num_t, int> & comp_map, bool is_forward,
          std::vector<comp_num_t> & comp_array,  char * seq,  int len,
-         double & avg_count);
+         kmer_count_t * kmer_counts, int & num_kmer);
+    //void update_comp_array(int * comps, int , bool is_forward,
+     // std::vector<comp_num_t> & comp_array,  char * seq,  int len,
+      //double & avg_count);
 
     void update_comp_count(std::vector<comp_num_t> & components,
                          std::vector<comp_num_t> & counts, bool is_forward,
@@ -349,18 +355,18 @@ private:
                                                         comp_num_t & best_comp);
 
     inline comp_num_t assign_single_best_comp(struct Single_dumper & mfs,
-        std::map<comp_num_t, int> & comp_count, char * seq_ptr, char * header_ptr,
-                                int seq_len, bool is_forward, double & avg_count);
+        comp_num_t comp_i, char * seq_ptr, char * header_ptr,
+                                int seq_len, bool is_forward, int num_kmer);
 
     inline void assign_single_all_comp(struct Single_dumper & mfs,
         std::map<comp_num_t, int> & comp_count, char * seq_ptr, char * header_ptr,
                                             int seq_len, bool is_forward);
 
     inline comp_num_t assign_pair_best_comp(struct Single_dumper & mfs_p1,
-        struct Single_dumper & mfs_p2, std::map<comp_num_t, int> & comp_count,
+        struct Single_dumper & mfs_p2, comp_num_t comp_i,
         char * seq_ptr_p1, char * seq_ptr_p2, char * header_ptr_p1,
         char * header_ptr_p2, int seq_len_p1, int seq_len_p2, bool is_forward,
-        double & avg_count_p1, double & avg_count_p2);
+        int num_kmer1, int num_kmer2);
     inline void assign_pair_all_comp(struct Single_dumper & mfs_p1,
         struct Single_dumper & mfs_p2, std::map<comp_num_t, int> & comp_count,
         char * seq_ptr_p1, char * seq_ptr_p2, char * header_ptr_p1,
@@ -393,6 +399,8 @@ private:
     void log_comp_content();
     void log_contigs(std::string file_path);
 
+
+
     kmer_len_t k1mer_len;
 
     Explorable_contig_set explorable_contig_set;
@@ -401,7 +409,8 @@ private:
 
     struct FASTA_dumper fasta_dumper;
     struct KMER_dumper kmer_dumper;
-    struct KMER_dumper read_prob_dumper;
+    struct KMER_dumper single_read_features_dumper;
+    struct KMER_dumper paired_read_features_dumper;
 
 
     // capture mapping from contig index to component index, the comp in
@@ -429,7 +438,7 @@ private:
     struct Metis_setup metis_setup;
     Local_files & lf;
     uint8_t kmer_length;
-    int num_test;
+    int num_feature;
     bool is_double_stranded;
     int num_read_files;
     int num_kmer_files;
@@ -439,6 +448,10 @@ private:
 
     uint64_t total_query;
     std::vector<uint64_t> component_size;
+
+    kmer_count_t single_kmer_counts[NUM_FEAT_RESERVED];
+    kmer_count_t pair_1_kmer_counts[NUM_FEAT_RESERVED];
+    kmer_count_t pair_2_kmer_counts[NUM_FEAT_RESERVED];
 
     bool is_assign_best;
 

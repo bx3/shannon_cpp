@@ -163,7 +163,7 @@ int64_t Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
     find_approximate_copy_count();
 
     start_timer(&part_timer);
-    //break_self_loops();
+    break_self_loops();
 
 #ifdef PRINT_TIME
     std::cout << "break_self_loops, " << (get_num_nodes()) << " num edge "
@@ -256,6 +256,15 @@ int64_t Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
     start_timer(&dump_timer);
     //log_classify_edge_types();
     //log_graph_to_file(graph_writer , 104);
+
+    //std::vector<Vd_graph_pair> vd_ids;
+    //sort_vds_by_node_ids(vd_ids);
+    //for(int i=0; i<vd_ids.size(); i++)
+    //{
+    //    vd_t vd = vd_ids[i].vd;
+    //    temp_writer << graph[vd].seq << std::endl;
+    //}
+
     output_components(node_dir, edge_dir, path_dir, read_dir);
     dump_reads(dump_reads_path);
 #ifdef PRINT_TIME
@@ -414,21 +423,6 @@ void Sequence_graph_handler::setup_input_file_path(int comp_i)
     //std::cout << "kmer_path " << kmer_path << std::endl;
     if(has_single)
     {
-        read_prob_path = setting.local_files.output_components_read_prob_dir
-                       + setting.local_files.comp_read_prob_prefix
-                       + std::to_string(comp_i);
-        if(!exist_path(read_prob_path.c_str()))
-        {
-            is_apply_read_prob = false;
-            //std::string message ("read prob file not exist, assume all read are kept "
-            //                    "with prob 1.0, i.e. -g=0\n");
-            //print_yellow_cmd(message);
-        }
-        else
-        {
-            is_apply_read_prob = true;
-        }
-
         read_path_single_prefix = setting.local_files.output_components_read_dir
                          + setting.local_files.comp_read_prefix
                          + std::to_string(comp_i);
@@ -439,22 +433,6 @@ void Sequence_graph_handler::setup_input_file_path(int comp_i)
     }
     if(has_pair)
     {
-        read_pair_prob_path = setting.local_files.output_components_read_prob_dir
-                       + setting.local_files.comp_pair_read_prob_prefix
-                       + std::to_string(comp_i);
-        //std::cout << "read_pair_prob_path " << read_pair_prob_path << std::endl;
-        if(!exist_path(read_pair_prob_path.c_str()))
-        {
-            is_apply_read_pair_prob = false;
-            std::string message ("read prob file not exist, assume all read are kept "
-                               "with prob 1.0, i.e. -g=0\n");
-            print_yellow_cmd(message);
-        }
-        else
-        {
-            is_apply_read_pair_prob = true;
-        }
-
         read_path_p1_prefix = setting.local_files.output_components_read_dir
                      + setting.local_files.comp_read_prefix
                      + std::to_string(comp_i)+"_p1";
@@ -495,6 +473,11 @@ void Sequence_graph_handler::build_kmer_graph_from_edges()
 
     Kmer_Node_map kmer_node_map;
     kmer_node_map.set_empty_key("");
+
+    //shc_log_info(shc_logname, "start build de bruijn graph\n");
+
+    Block_timer ltimer;
+    start_timer(&ltimer);
 
     // create nodes and
     while(  std::getline(file_reader, kmer_base, '\t') &&
@@ -549,14 +532,14 @@ void Sequence_graph_handler::build_kmer_graph_from_edges()
     vip_t vip = boost::vertices(graph);
     for(vi_t it=vip.first; it!=vip.second; it++)
     {
-        uint64_t out_sum_p = 0;
+        double out_sum_p = 0;
         out_eip_t out_eip = boost::out_edges(*it, graph);
         for(out_ei_t out_ei=out_eip.first; out_ei!=out_eip.second; out_ei++)
         {
             out_sum_p += graph[*out_ei].count;
         }
 
-        uint64_t in_sum_p = 0;
+        double in_sum_p = 0;
         in_eip_t in_eip = boost::in_edges(*it ,graph);
         for(in_ei_t in_ei=in_eip.first; in_ei!=in_eip.second; in_ei++)
         {
@@ -564,11 +547,16 @@ void Sequence_graph_handler::build_kmer_graph_from_edges()
         }
 
 
-        graph[*it].prevalence = (in_sum_p+out_sum_p)/2;
+        graph[*it].prevalence = std::ceil((in_sum_p+out_sum_p)/2.0); // in case one side has no edge
+        assert(graph[*it].prevalence > 0);
 
         //shc_log_info(shc_logname, "%s: %u\n", graph[*it].seq.c_str(),
         //                            graph[*it].prevalence);
     }
+    //shc_log_info(shc_logname, "finish build de bruijn graph\n");
+    //std::cout << "finish build graph using, ";
+    //stop_timer(&ltimer);
+
     load_all_read(kmer_node_map);
 }
 
@@ -633,19 +621,27 @@ process_one_read_to_build_graph( Kmer_Node_map& kmer_node_map,
 
 void Sequence_graph_handler::load_all_read(Kmer_Node_map & kmer_node_map)
 {
+    Read_count_map read_count_map;
+    read_count_map.set_deleted_key("d");
+    read_count_map.set_empty_key("");
+    Block_timer ltimer;
+    start_timer(&ltimer);
+
+    //shc_log_info(shc_logname, "start load all reads\n");
+    //std::string thrown_read_path(
+    //        setting.local_files.output_components_thworn_read_dir +
+    //        "/comp"  + std::to_string(curr_comp));
+    //thrown_read_writer.open(thrown_read_path);
+
     if(has_single)
     {
-        std::ifstream read_prob_file_reader;
-        if(is_apply_read_prob)
-        {
-            read_prob_file_reader.open(read_prob_path);
-        }
         //std::cout << "read_path_single_prefix " << read_path_single_prefix << std::endl;
         if(exist_path(read_path_single_prefix)) //load direct path first
         {
             //std::cout << "load_all_single_read " << std::endl;
 
-            load_all_single_read(read_path_single_prefix, read_prob_file_reader, kmer_node_map);
+            load_all_single_read(read_path_single_prefix,
+                        kmer_node_map, read_count_map);
         }
         else
         {
@@ -654,16 +650,14 @@ void Sequence_graph_handler::load_all_read(Kmer_Node_map & kmer_node_map)
             while(exist_path(file_path))
             {
                 //std::cout << "load read " << read_path_single_prefix << std::endl;
-                load_all_single_read(file_path, read_prob_file_reader, kmer_node_map);
+                load_all_single_read(file_path,
+                        kmer_node_map, read_count_map);
                 i++;
                 file_path = read_path_single_prefix + "_" + std::to_string(i);
 
             }
         }
-        if(is_apply_read_prob)
-        {
-            read_prob_file_reader.close();
-        }
+
     }
     if(has_pair)
     {
@@ -671,19 +665,36 @@ void Sequence_graph_handler::load_all_read(Kmer_Node_map & kmer_node_map)
         {
             //std::cout << "load_all_paired_read_no_concat " << std::endl;
             load_all_paired_read_no_concat(read_path_p1_prefix,
-                            read_path_p2_prefix, kmer_node_map);
+                            read_path_p2_prefix, kmer_node_map, read_count_map);
         }
         else
         {
-            load_all_paired_read(kmer_node_map);
+            load_all_paired_read(kmer_node_map, read_count_map);
         }
     }
+    //thrown_read_writer.close();
     // since after declare and finish, a temporary dictionary mem is released
     int64_t curr_mem = get_mem(getpid());
     if(curr_mem > peak_mem)
         peak_mem = curr_mem;
 
     coll_read_list.declare_read_finish();
+
+    // correct for read count
+    /*
+    for(read_num_t i=0; i< coll_read_list.get_num_reads(); i++)
+    {
+        Read_acc acc = coll_read_list.get_read(i);
+        std::string read_base(acc.read_ptr, acc.len);
+        Read_count_map_iterator selected_it = read_count_map.find(read_base);
+        assert(selected_it != read_count_map.end());
+        coll_read_list.correct_read_count(i, selected_it->second);
+    }
+    */
+    //shc_log_info(shc_logname, "finish load all reads\n");
+    //std::cout << "finish load all reads using, ";
+    //stop_timer(&ltimer);
+
 #ifdef LOG_SEQ_GRAPH
     shc_log_info(shc_logname, "s_reads %u unique reads\n", coll_read_list.s_reads.get_num_reads());
     shc_log_info(shc_logname, "p1_reads %u unique reads\n", coll_read_list.p1_reads.get_num_reads());
@@ -726,11 +737,12 @@ bool Sequence_graph_handler::trim_read(std::string & read, uint64_t i_read)
 
 void Sequence_graph_handler::
 load_all_paired_read_no_concat(
-    std::string read_path_p1, std::string read_path_p2, Kmer_Node_map & kmer_node_map)
+    std::string read_path_p1, std::string read_path_p2,
+            Kmer_Node_map & kmer_node_map, Read_count_map & read_count_map)
 {
     Single_read_list & read_list_p1 = coll_read_list.p1_reads;
     Single_read_list & read_list_p2 = coll_read_list.p2_reads;
-    std::string temp, read_base_p1, read_base_p2;
+    std::string temp1, temp2, read_base_p1, read_base_p2;
     std::ifstream reads_p1_reader(read_path_p1);
     std::ifstream reads_p2_reader(read_path_p2);
     std::ifstream reads_prob_reader;
@@ -744,17 +756,17 @@ load_all_paired_read_no_concat(
 
     Kmer_counter_map temp_kmer_map;
     //Read_subsampler read_subsampler(subsample_factor);
-    std::string read_prob_str;
+    std::string feature_str;
     double read_prob = 1.0;
 
     while(true)
     {
-        if((std::getline(reads_p1_reader, temp, '\n')).eof())
+        if((std::getline(reads_p1_reader, temp1, '\n')).eof())
             break;
         else
             std::getline(reads_p1_reader, read_base_p1, '\n');
 
-        if((std::getline(reads_p2_reader, temp, '\n')).eof())
+        if((std::getline(reads_p2_reader, temp2, '\n')).eof())
             break;
         else
             std::getline(reads_p2_reader, read_base_p2, '\n');
@@ -766,8 +778,17 @@ load_all_paired_read_no_concat(
 
         if(is_apply_read_pair_prob)
         {
-            std::getline(reads_prob_reader, read_prob_str);
-            read_prob = boost::lexical_cast<double>(read_prob_str);
+            double avg_count = 0;
+            std::getline(reads_prob_reader, feature_str);
+            std::vector<std::string> tokens;
+            boost::algorithm::split(tokens, feature_str, boost::is_any_of("\t"));
+            for(int i=0; i<tokens.size(); i++)
+            {
+                avg_count += boost::lexical_cast<kmer_count_t>(tokens[i]);
+            }
+            avg_count /= tokens.size();
+
+            read_prob = std::min(setting.contig_graph_setup.read_sampler_k/avg_count, 1.0);
         }
 
         bool is_valid_pair_vd = false;
@@ -784,9 +805,30 @@ load_all_paired_read_no_concat(
             }
         }
         // add reads
-
-        read_list_p1.add_read(read_base_p1, read_index_p1, read_prob); //read index local to its dict
-        read_list_p2.add_read(read_base_p2, read_index_p2, read_prob); //read index local to its dict
+        /*
+        Read_count_map_iterator selected_it = read_count_map.find(read_base_p1);
+        if (selected_it != read_count_map.end())
+            selected_it->second += 1;
+        else
+            read_count_map.insert(std::make_pair(read_base_p1, 1));
+        selected_it = read_count_map.find(read_base_p2);
+        if (selected_it != read_count_map.end())
+            selected_it->second += 1;
+        else
+            read_count_map.insert(std::make_pair(read_base_p2, 1));
+        */
+        //if(sampler(read_prob))
+        //{
+            read_list_p1.add_read(read_base_p1, read_index_p1, read_prob); //read index local to its dict
+            read_list_p2.add_read(read_base_p2, read_index_p2, read_prob); //read index local to its dict
+        //}
+        //else
+        //{
+        //    thrown_read_writer << temp1 << std::endl;
+        //    thrown_read_writer << read_base_p1 << std::endl;
+        //    thrown_read_writer << temp2 << std::endl;
+        //    thrown_read_writer << read_base_p2 << std::endl;
+        //}
 
         // assign terminal nodes for each pair of read
         if(is_valid_pair_vd)
@@ -820,16 +862,28 @@ load_all_paired_read_no_concat(
     reads_p1_reader.clear();
     reads_p2_reader.close();
     reads_p2_reader.clear();
+
+    for(read_num_t i=0; i< read_list_p1.get_num_reads(); i++)
+    {
+        Read_acc acc = read_list_p1.get_read(i);
+        read_list_p1.correct_read_count(i, std::ceil(acc.read_count/2.0));
+    }
+    for(read_num_t i=0; i< read_list_p2.get_num_reads(); i++)
+    {
+        Read_acc acc = read_list_p2.get_read(i);
+        read_list_p2.correct_read_count(i, std::ceil(acc.read_count/2.0));
+    }
 }
 
-void Sequence_graph_handler::load_all_paired_read(Kmer_Node_map & kmer_node_map)
+void Sequence_graph_handler::
+load_all_paired_read(Kmer_Node_map & kmer_node_map, Read_count_map & read_count_map)
 {
 #ifdef LOG_SEQ_GRAPH
     shc_log_info(shc_logname, "start load pair read\n");
 #endif
     Single_read_list & read_list_p1 = coll_read_list.p1_reads;
     Single_read_list & read_list_p2 = coll_read_list.p2_reads;
-    std::string temp, read_base_p1, read_base_p2;
+    std::string temp1, temp2, read_base_p1, read_base_p2;
 
     int p1_i = 0;
     int p2_i = 0;
@@ -839,10 +893,8 @@ void Sequence_graph_handler::load_all_paired_read(Kmer_Node_map & kmer_node_map)
     std::ifstream reads_p1_reader(read_path_p1);
     std::ifstream reads_p2_reader(read_path_p2);
 
-    std::ifstream reads_prob_reader;
-    if(is_apply_read_pair_prob)
-        reads_prob_reader.open(read_pair_prob_path);
-    std::string read_prob_str;
+
+    std::string feature_str;
     double read_prob = 1.0;
 
     //std::ofstream p1_d(setting.local_files.output_path + "/read1");
@@ -861,7 +913,7 @@ void Sequence_graph_handler::load_all_paired_read(Kmer_Node_map & kmer_node_map)
         //update_edge_count_with_read(read_base_p1, kmer_node_map);
         //shc_log_info(shc_logname, "%u: read1 %s\n", i_th_read, read_base_p1.c_str());
         //shc_log_info(shc_logname, "%u: read2 %s\n", i_th_read, read_base_p2.c_str());
-        if((std::getline(reads_p1_reader, temp, '\n')).eof())
+        if((std::getline(reads_p1_reader, temp1, '\n')).eof())
         {
             reads_p1_reader.close();
             reads_p1_reader.clear();
@@ -870,7 +922,7 @@ void Sequence_graph_handler::load_all_paired_read(Kmer_Node_map & kmer_node_map)
             if(exist_path(read_path_p1))
             {
                 reads_p1_reader.open(read_path_p1);
-                std::getline(reads_p1_reader, temp, '\n');
+                std::getline(reads_p1_reader, temp1, '\n');
                 std::getline(reads_p1_reader, read_base_p1, '\n');
                 //std::cout << "read_base_p2: " << read_base_p1 << std::endl;
             }
@@ -886,7 +938,7 @@ void Sequence_graph_handler::load_all_paired_read(Kmer_Node_map & kmer_node_map)
 
         //p1_d << temp << std::endl << read_base_p1 << std::endl;
 
-        if((std::getline(reads_p2_reader, temp, '\n')).eof())
+        if((std::getline(reads_p2_reader, temp2, '\n')).eof())
         {
             reads_p2_reader.close();
             reads_p2_reader.clear();
@@ -895,7 +947,7 @@ void Sequence_graph_handler::load_all_paired_read(Kmer_Node_map & kmer_node_map)
             if(exist_path(read_path_p2))
             {
                 reads_p2_reader.open(read_path_p2);
-                std::getline(reads_p2_reader, temp, '\n');
+                std::getline(reads_p2_reader, temp2, '\n');
                 std::getline(reads_p2_reader, read_base_p2, '\n');
                 //std::cout << "read_base_p2: " << read_base_p2 << std::endl;
             }
@@ -917,11 +969,6 @@ void Sequence_graph_handler::load_all_paired_read(Kmer_Node_map & kmer_node_map)
         //read_base_p1.resize(setting.pair_1_read_length);
         //read_base_p2.resize(setting.pair_2_read_length);
 
-        if(is_apply_read_pair_prob)
-        {
-            std::getline(reads_prob_reader, read_prob_str);
-            read_prob = boost::lexical_cast<double>(read_prob_str);
-        }
 
         bool is_valid_pair_vd = false;
         vd_t p1_vd_end = traverse_read_is_all_kmer_node_valid(read_base_p1,
@@ -937,30 +984,48 @@ void Sequence_graph_handler::load_all_paired_read(Kmer_Node_map & kmer_node_map)
             }
         }
         // add reads
-
-        //if(read_subsampler.simple_decider())
+        /*
+        Read_count_map_iterator selected_it = read_count_map.find(read_base_p1);
+        if (selected_it != read_count_map.end())
+            selected_it->second += 1;
+        else
+            read_count_map.insert(std::make_pair(read_base_p1, 1));
+        selected_it = read_count_map.find(read_base_p2);
+        if (selected_it != read_count_map.end())
+            selected_it->second += 1;
+        else
+            read_count_map.insert(std::make_pair(read_base_p2, 1));
+        */
+        //if(sampler(read_prob))
         //{
-            read_list_p1.add_read(read_base_p1, read_index_p1, read_prob); //read index local to its dict
-            read_list_p2.add_read(read_base_p2, read_index_p2, read_prob); //read index local to its dict
+        read_list_p1.add_read(read_base_p1, read_index_p1, read_prob); //read index local to its dict
+        read_list_p2.add_read(read_base_p2, read_index_p2, read_prob); //read index local to its dict
 
-            // assign terminal nodes for each pair of read
-            if(is_valid_pair_vd)
-            {
-                //shc_log_info(shc_logname, "%u\n", i_th_read);
-                //shc_log_info(shc_logname, "p1 %s\n", read_base_p1.c_str());
-                //shc_log_info(shc_logname, "p2 %s\n", read_base_p2.c_str());
+        // assign terminal nodes for each pair of read
+        if(is_valid_pair_vd)
+        {
+            //shc_log_info(shc_logname, "%u\n", i_th_read);
+            //shc_log_info(shc_logname, "p1 %s\n", read_base_p1.c_str());
+            //shc_log_info(shc_logname, "p2 %s\n", read_base_p2.c_str());
 
-                graph[p1_vd_end].term_nodes_info.emplace_back(PAIR_END_NODE, i_th_read);
-                graph[p2_vd_front].term_nodes_info.emplace_back(PAIR_FRONT_NODE, i_th_read);
-                num_valid_pair++;
-                p1_end.push_back(p1_vd_end);
-                p2_front.push_back(p2_vd_front);
-            }
-            else
-            {
-                p1_end.push_back(NULL);
-                p2_front.push_back(NULL);
-            }
+            graph[p1_vd_end].term_nodes_info.emplace_back(PAIR_END_NODE, i_th_read);
+            graph[p2_vd_front].term_nodes_info.emplace_back(PAIR_FRONT_NODE, i_th_read);
+            num_valid_pair++;
+            p1_end.push_back(p1_vd_end);
+            p2_front.push_back(p2_vd_front);
+        }
+        else
+        {
+            p1_end.push_back(NULL);
+            p2_front.push_back(NULL);
+        }
+        //}
+        //else
+        //{
+        //    thrown_read_writer << temp1 << std::endl;
+        //    thrown_read_writer << read_base_p1 << std::endl;
+        //    thrown_read_writer << temp2 << std::endl;
+        //    thrown_read_writer << read_base_p2 << std::endl;
         //}
 
         // link two read regardless
@@ -970,12 +1035,22 @@ void Sequence_graph_handler::load_all_paired_read(Kmer_Node_map & kmer_node_map)
 #ifdef LOG_SEQ_GRAPH
     shc_log_info(shc_logname, "finish load pair read\n");
 #endif
-    if(is_apply_read_pair_prob)
-        reads_prob_reader.close();
+
     reads_p1_reader.close();
     reads_p1_reader.clear();
     reads_p2_reader.close();
     reads_p2_reader.clear();
+
+    for(read_num_t i=0; i< read_list_p1.get_num_reads(); i++)
+    {
+        Read_acc acc = read_list_p1.get_read(i);
+        read_list_p1.correct_read_count(i, std::ceil(acc.read_count/2.0));
+    }
+    for(read_num_t i=0; i< read_list_p2.get_num_reads(); i++)
+    {
+        Read_acc acc = read_list_p2.get_read(i);
+        read_list_p2.correct_read_count(i, std::ceil(acc.read_count/2.0));
+    }
 }
 
 
@@ -1017,13 +1092,14 @@ traverse_read_is_all_kmer_node_valid(std::string & base,
 }
 
 void Sequence_graph_handler::
-load_all_single_read(std::string& read_path, std::ifstream & read_prob_file_reader, Kmer_Node_map & kmer_node_map)
+load_all_single_read(std::string& read_path,
+            Kmer_Node_map & kmer_node_map, Read_count_map & read_count_map)
 {
     Single_read_list & read_list = coll_read_list.s_reads;
     std::string kmer_base, temp, read_base;
     std::ifstream read_file_reader(read_path);
 
-    std::string prob_str;
+    std::string feature_str;
 
     kmer_base.resize(kmer_length);
 
@@ -1045,25 +1121,31 @@ load_all_single_read(std::string& read_path, std::ifstream & read_prob_file_read
         if(!trim_read(read_base, i))
             continue;
 
-        if(is_apply_read_prob)
+        Read_count_map_iterator selected_it = read_count_map.find(read_base);
+        if (selected_it != read_count_map.end())
         {
-            std::getline(read_prob_file_reader, prob_str);
-            prob = boost::lexical_cast<double>(prob_str);
+            selected_it->second += 1;
+        }
+        else
+        {
+            read_count_map.insert(std::make_pair(read_base, 1));
         }
 
-        //shc_log_info(shc_logname, "read %s, prob %f\n", read_base.c_str(), prob);
+
         read_list.add_read(read_base, read_index, prob);
-        headers.push_back(temp);
-        j++;
-
-
-        i++;
+            //headers.push_back(temp);
+        //else
+        //{
+        //    thrown_read_writer << temp << std::endl;
+        //    thrown_read_writer << read_base << std::endl;
+        //}
     }
     read_file_reader.close();
 
 #ifdef LOG_SEQ_GRAPH
     shc_log_info(shc_logname, "load %d single reads\n", j);
 #endif
+
 }
 
 void Sequence_graph_handler::
@@ -2210,6 +2292,7 @@ int Sequence_graph_handler::get_num_xnodes()
     return num_xnode;
 }
 
+
 void Sequence_graph_handler::update_xnode_set()
 {
     start_timer(&timer);
@@ -2224,6 +2307,19 @@ void Sequence_graph_handler::update_xnode_set()
             xnode_set.insert(*it);
         }
     }
+
+    /*
+    temp_writer << "num_iter:" << num_iter << std::endl;
+    std::vector<Vd_graph_pair> vds;
+    sort_set_vd(xnode_set, vds);
+    for(int i=0; i<vds.size(); i++)
+    {
+        temp_writer << graph[vds[i].vd].seq << std::endl;
+    }
+    */
+
+
+
     //shc_log_info(shc_logname, "Finish getting all xnodes\n");
 #ifdef SHOW_SEQ_GRAPH_PROGRESS
     std::cout << "get " << xnode_set.size() << " xnode out of " << boost::num_vertices(graph) <<" finish ";
@@ -2676,16 +2772,19 @@ void Sequence_graph_handler::bridge_all_xnodes()
 
     start_timer(&timer);
 
+    //log_all_node(true, false);
+
 #ifdef LOG_SEQ_GRAPH
     shc_log_info(shc_logname, "Start bridging xnode\n");
 #endif
-    int num_iter = 0;
+
 
     std::set<vd_t> nodes_visited;
     //shc_log_info(shc_logname, "\t\tbefore resolve\n");
     //log_term_array(false);
 
     start_timer(&resolve_pair_timer);
+    /*
     if(setting.has_pair && get_num_edges()>0 &&
         setting.seq_graph_setup.max_hop_pair >= 0)
     {
@@ -2702,6 +2801,7 @@ void Sequence_graph_handler::bridge_all_xnodes()
             }
         }
     }
+    */
     #ifdef PRINT_TIME
         std::cout << " finish resolve_pair_timer" << std::endl;
         stop_timer(&resolve_pair_timer);
@@ -2789,6 +2889,8 @@ void Sequence_graph_handler::bridge_all_xnodes()
         else
         {
             update_xnode_set();
+            //if (num_iter > 1)
+            //    exit(1);
         }
     }
 
@@ -2805,6 +2907,14 @@ void Sequence_graph_handler::perform_bridging(vd_t vd)
     std::vector<vd_t> u_list, w_list;
     //std::cout << "bridging " << curr_node.seq << std::endl;
     //shc_log_info(shc_logname, "bridging %s\n", curr_node.seq.c_str());
+
+    /*
+    if(curr_node.seq.find("GTGTGTGTGTGTGTGTGTGTGTG") != std::string::npos)
+    {
+        log_node_info(vd, true, false, false);
+    }
+    */
+
 
     bool contain_loop = false;
     vd_t u_loop_node, w_loop_node;
@@ -2887,16 +2997,14 @@ void Sequence_graph_handler::perform_bridging(vd_t vd)
     std::set<vd_t> bridged_w;
 
     // make sure reads of vertex are not repeated
-#ifdef LOG_SEQ_GRAPH
-    shc_log_info(shc_logname, "bridging between extension nodes\n");
-#endif
+
     //shc_log_info(shc_logname, "start read\n");
     for(std::vector<Bdg_read_info>::iterator ri_it=reads_info.begin();
                                       ri_it!=reads_info.end(); ++ri_it)
     {
         // if the same read is processed, ignore the rest
         Read_acc acc = coll_read_list.get_read(ri_it->read_id);
-        //std::string read(acc.read_ptr, acc.len);
+        std::string read(acc.read_ptr, acc.len);
         //shc_log_info(shc_logname, "read unique id %d, %s\n", unique_read_index, read.c_str());
         //shc_log_info(shc_logname, "bridge u size %d, bridge w size %d\n", bridged_u.size(), bridged_w.size());
 
@@ -2930,7 +3038,9 @@ void Sequence_graph_handler::perform_bridging(vd_t vd)
         if(matched_u.size()!=1 || matched_w.size()!=1)
         {
 
-            shc_log_info(shc_logname, "in special case that some kmer in read is missing while building the graph\n");
+            shc_log_info(shc_logname, "in special case that some kmer "
+                "in read is missing while building the graph, %d %d\n",
+                matched_u.size(), matched_w.size());
 
             matched_u.clear();
             matched_w.clear();
@@ -2940,6 +3050,18 @@ void Sequence_graph_handler::perform_bridging(vd_t vd)
         // create edge between nodes and link read
         vd_t u = matched_u[0];
         vd_t w = matched_w[0];
+
+
+        vd_t left_u = get_only_in_vd(u);
+        vd_t right_w = get_only_out_vd(w);
+        if(left_u == right_w)
+        {
+            //std::cout << "skip extension node connect to cycle edge" << std::endl;
+            matched_u.clear();
+            matched_w.clear();
+            continue;
+        }
+
         node_link_read(u, ri_it->read_id, ri_it->start-1);
         node_link_read(w, ri_it->read_id, ri_it->start);
 
@@ -2957,6 +3079,20 @@ void Sequence_graph_handler::perform_bridging(vd_t vd)
             aer = boost::add_edge(u, w, graph);
             graph[aer.first] = bundled_edge_p(curr_node.seq_len(), acc.get_estimated_read_count());
             num_edge_added++;
+
+            /*
+            if(curr_node.seq.find("TGTGTGTGTGTGTGTGTGTGTGT")!=std::string::npos ||
+               curr_node.seq.find("GTGTGTGTGTGTGTGTGTGTGTG")!=std::string::npos)
+            {
+                vd_t left_u = get_only_in_vd(u);
+                vd_t right_w = get_only_out_vd(w);
+
+                shc_log_info(shc_logname, "link %u(%u) %u(%u)\n",
+                                    graph[u].node_id, graph[left_u].node_id,
+                                    graph[w].node_id, graph[right_w].node_id);
+                shc_log_info(shc_logname, "read %s\n", read.c_str());
+            }
+            */
         }
         else
         {
@@ -3003,6 +3139,15 @@ void Sequence_graph_handler::perform_bridging(vd_t vd)
         aer_t aer = boost::add_edge(*u_it, *w_it, graph);
         graph[aer.first] = bundled_edge_p(curr_node.seq_len(), 1);
         num_edge_added++;
+
+        if(curr_node.seq.find("TGTGTGTGTGTGTGTGTGTGTGT")!=std::string::npos ||
+           curr_node.seq.find("GTGTGTGTGTGTGTGTGTGTGTG")!=std::string::npos)
+        {
+            vd_t left_u = get_only_in_vd(*u_it);
+            vd_t right_w = get_only_out_vd(*w_it);
+            shc_log_info(shc_logname, "special link %u %u\n",
+                                graph[left_u].node_id, graph[right_w].node_id);
+        }
 
         //shc_log_info(shc_logname, "special %s link to %s\n", graph[*u_it].seq.c_str(), graph[*w_it].seq.c_str());
 
@@ -3340,7 +3485,7 @@ local_condense(vd_t vd, std::set<vd_t> & vd_remove_set)
         vd_t vd_new = boost::add_vertex(graph);
         exist_vd.insert(vd_new);
         graph[vd_new] = bundled_node_p(graph[vd].seq, glob_node_id++);
-
+        graph[vd_new].prevalence = graph[vd].prevalence;
         graph[vd_new].reads_info.clear();
         graph[vd_new].term_nodes_info.clear();
         transfer_read_align_index(vd, vd_new);
@@ -3693,6 +3838,7 @@ int Sequence_graph_handler::find_known_path(int max_hop)
         num_checked_read++;
         Read_acc acc = coll_read_list.get_read(i);
         std::string a_read(acc.read_ptr, acc.len);
+
         //read_writer <<a_read << std::endl;
         encode_kmer(acc.read_ptr, &start_byte, kmer_length);
         encode_kmer(acc.read_ptr+acc.len-kmer_length, &end_byte, kmer_length);
@@ -3770,6 +3916,11 @@ int Sequence_graph_handler::find_known_path(int max_hop)
                         std::map<std::vector<vd_t>, Read_count_Read_id_pair >::iterator
                                         path_it = known_path_map.find(path);
 
+                        //if(a_read =="GTCCCTGGGTACTTGAGATTAGGGAGTGGTGATGACTCTTAACGAGCATGCTGCCTTCAAGCATCTGTTTAACAAAGCACATCTTGCACCACCCTTAATCC")
+                        //{
+                        //    std::cout <<  "path >2 " << std::endl;
+                        //}
+
                         // it is possible that two slightly different read1 (of num 10)
                         // read2 (of num 20) map to the same path
                         if(path_it == known_path_map.end())
@@ -3779,9 +3930,9 @@ int Sequence_graph_handler::find_known_path(int max_hop)
                                     Read_count_Read_id_pair(
                                         acc.get_estimated_read_count(), read_id_lists))
                                 );
-                            for(int n=0; n<path.size(); n++)
-                                temp_writer << graph[path[n]].node_id << "\t";
-                            temp_writer << std::endl;
+                            //for(int n=0; n<path.size(); n++)
+                            //    temp_writer << graph[path[n]].node_id << "\t";
+                            //temp_writer << std::endl;
 
                         }
                         else
@@ -3807,24 +3958,26 @@ int Sequence_graph_handler::find_known_path(int max_hop)
                         //    temp_writer << ">" << "seq_" << (temp_writer_index++) << std::endl;
                         //    temp_writer << seq << std::endl;
                         //}
-                        std::map<vd_t, std::set<read_num_t> >::iterator vd_reads_it =
-                                            node_support_map.find(path[0]);
-                        if (vd_reads_it == node_support_map.end())
+                        if(acc.len < graph[path[0]].seq_len())
                         {
-                            std::set<read_num_t> read_set;
-                            read_set.insert(i);
-                            node_support_map.insert(std::make_pair(path[0], read_set));
-                        }
-                        else
-                        {
-                            (vd_reads_it->second).insert(i);
-                        }
+                            std::map<vd_t, std::set<read_num_t> >::iterator vd_reads_it =
+                                                node_support_map.find(path[0]);
+                            if (vd_reads_it == node_support_map.end())
+                            {
+                                std::set<read_num_t> read_set;
+                                read_set.insert(i);
+                                node_support_map.insert(std::make_pair(path[0], read_set));
+                            }
+                            else
+                            {
+                                (vd_reads_it->second).insert(i);
+                            }
 
-                        graph[path[0]].read_count += acc.get_estimated_read_count();
+                            graph[path[0]].read_count += acc.get_estimated_read_count();
+                        }
                     }
                     else //==2
                     {
-
                         Node_pair_adj node_pair(path[0], path[1]);
                         std::map<Node_pair_adj, Read_count_Read_id_pair>::iterator two_node_it =
                                                 two_nodes_reads.find(node_pair);
@@ -4202,6 +4355,16 @@ void Sequence_graph_handler::break_all_cycles()
     std::deque<vd_t> cycle_path;
     int i=0;
     int j=0;
+
+    //std::vector<Vd_graph_pair> vd_ids;
+    //sort_vds_by_node_ids(vd_ids);
+
+    //for(int i=0; i<vd_ids.size(); i++)
+    //{
+    //    vd_t vd = vd_ids[i].vd;
+    //    temp_writer << graph[vd].seq << std::endl;
+    //}
+
     while (find_cycle(acyclic_node_set, cycle_path))
     {
         //shc_log_info(shc_logname, "Start break cycle with size %d\n", cycle_path.size());
@@ -4241,7 +4404,7 @@ void Sequence_graph_handler::simple_break_cycle(std::deque<vd_t> & cycle_path)
 {
     vd_t vd_remove = cycle_path[1]; //according to python implementation, take 1
     //cycle_writer << graph[vd_remove].node_id << std::endl;
-    //std::cout << graph[vd_remove].seq << std::endl;
+    //std::cout << graph[vd_remove].node_id << "\t" << graph[vd_remove].seq << std::endl;
     //shc_log_info(shc_logname, "rm %u\n", graph[vd_remove].node_id);
     //boost::remove_edge(cycle_path[0], cycle_path[1], graph);
     boost::clear_vertex(vd_remove, graph);
@@ -4253,6 +4416,33 @@ bool Sequence_graph_handler::
 find_cycle(std::set<vd_t> & acyclic_node_set, std::deque<vd_t> & cycle_path)
 {
     //shc_log_info(shc_logname, "start find_cycle\n");
+    std::vector<Vd_graph_pair> vd_ids;
+    sort_vds_by_node_ids(vd_ids);
+    //for(int i=0; i<vd_ids.size(); i++)
+    //{
+    //    vd_t vd = vd_ids[i].vd;
+    //    temp_writer << graph[vd].seq << std::endl;
+    //}
+
+
+    for(int i=0; i<vd_ids.size(); i++)
+    {
+        vd_t vd = vd_ids[i].vd;
+
+        std::set<vd_t>::iterator an_it = acyclic_node_set.find(vd);
+        if(an_it == acyclic_node_set.end()) //not in the set
+        {
+            if(is_node_inside_cycle(vd, acyclic_node_set, cycle_path))
+            {
+                //shc_log_info(shc_logname, "finish find_cycle\n");
+                //for(int i=0; i<cycle_path.size(); i++)
+                //    cycle_writer << graph[cycle_path[i]].seq << "\t";
+                //cycle_writer << std::endl;
+                return true;
+            }
+        }
+    }
+    /*
     vip_t vip = boost::vertices(graph);
     for(vi_t it=vip.first; it!=vip.second; it++)
     {
@@ -4270,6 +4460,7 @@ find_cycle(std::set<vd_t> & acyclic_node_set, std::deque<vd_t> & cycle_path)
             }
         }
     }
+    */
     //shc_log_info(shc_logname, "finish find_cycle\n");
     return false;
 }
@@ -4286,6 +4477,61 @@ thread_safe_find(std::deque<vd_t> & cycle_path, vd_t vd_target)
     return cycle_path.end();
 }
 
+void Sequence_graph_handler::sort_vds_by_node_ids(std::vector<Vd_graph_pair> & vds_id)
+{
+    vip_t vip = boost::vertices(graph);
+    for(vi_t it=vip.first; it!=vip.second; it++)
+    {
+        vd_t vd = *it;
+        vds_id.emplace_back(vd, &graph);
+    }
+    std::sort (vds_id.begin(), vds_id.end());
+}
+
+void Sequence_graph_handler::
+sort_out_iterator(std::vector<Vd_graph_pair> & vds, out_eip_t & out_eip)
+{
+    vds.clear();
+    for(out_ei_t out_ei=out_eip.first; out_ei!=out_eip.second; out_ei++)
+    {
+        vd_t vd_target = boost::target(*out_ei, graph);
+        vds.emplace_back(vd_target, &graph);
+    }
+    std::sort(vds.begin(), vds.end());
+}
+void Sequence_graph_handler::
+sort_in_iterator(std::vector<Vd_graph_pair> & vds, in_eip_t & in_eip)
+{
+    vds.clear();
+    for(in_ei_t in_ei=in_eip.first; in_ei!=in_eip.second; in_ei++)
+    {
+        vd_t vd_source = boost::source(*in_ei, graph);
+        vds.emplace_back(vd_source, &graph);
+    }
+    std::sort(vds.begin(), vds.end());
+}
+
+void Sequence_graph_handler::
+sort_edges_based_on_node(std::set<ed_t> & edges, std::vector<Ed_graph_pair> & edges_array)
+{
+    edges_array.clear();
+    for(std::set<ed_t>::iterator it=edges.begin(); it!=edges.end(); it++)
+    {
+        //vd_t vd_target = boost::target(*it, graph);
+        //vd_t vd_source = boost::source(*it, graph);
+
+        //std::cout << "vd_target " << graph[vd_target].seq << std::endl;
+        //std::cout << "vd_source " << graph[vd_source].seq << std::endl;
+
+
+        //std::cout << "hello 03" << std::endl;
+        edges_array.emplace_back(*it, &graph);
+        //std::cout << "hello 04" << std::endl;
+    }
+    std::sort(edges_array.begin(), edges_array.end());
+}
+
+
 /**
  * Search cycle in depth first fashion
  * return true if cycle is detected, false otherwise
@@ -4299,9 +4545,11 @@ is_node_inside_cycle(vd_t vd, std::set<vd_t> & acyclic_node_set,
     //shc_log_info(shc_logname, "pushed a node %s\n", graph[vd].seq.c_str());
     // for all out edges
     out_eip_t out_eip = boost::out_edges(vd, graph);
-    for(out_ei_t out_ei=out_eip.first; out_ei!=out_eip.second; out_ei++)
+    std::vector<Vd_graph_pair> vds;
+    sort_out_iterator(vds, out_eip);
+    for(int j=0; j< vds.size(); j++)
     {
-        vd_t vd_target = boost::target(*out_ei, graph);
+        vd_t vd_target = vds[j].vd;// boost::target(*out_ei, graph);
         std::deque<vd_t>::iterator cycle_index_it;
         cycle_index_it = thread_safe_find(cycle_path, vd_target);
         //cycle_index_it = std::find(cycle_path.begin(), cycle_path.end(), vd_target);
@@ -4640,6 +4888,7 @@ void Sequence_graph_handler::seq_graph_output_dir_setup_helper(std::string & dir
         add_directory(dir_boost_path);
 }
 
+
 void Sequence_graph_handler::output_components(std::string & node_dir,
                 std::string & edge_dir, std::string & path_dir, std::string & read_dir)
 {
@@ -4657,7 +4906,7 @@ void Sequence_graph_handler::output_components(std::string & node_dir,
     //std::cout << "write to " << single_node_path << std::endl;
     std::ofstream sinlge_node_writer(single_node_path);
     std::ofstream node_s_writer(node_s_path);
-    node_s_writer << "VD\tBases(see single_node_x file)\tRead_count\tRead_id0, Read_id1 ... " << std::endl;
+    node_s_writer << "VD\tBases(see single_node_x file)\tCount\tRead_count\tRead_id0, Read_id1 ... " << std::endl;
 
     typedef std::multimap<vd_t, std::vector<vd_t> > Paths_by_start_MMap;
     typedef std::multimap<vd_t, std::vector<vd_t> >::iterator
@@ -4677,11 +4926,18 @@ void Sequence_graph_handler::output_components(std::string & node_dir,
 
     uint64_t num_edge_written = 0;
     uint64_t num_edge_skipped = 0;
+    std::vector<Ed_graph_pair> edges_array;
     //for all nodes
-    vip_t vip = boost::vertices(graph);
-    for(vi_t it=vip.first; it!=vip.second; it++)
+    //vip_t vip = boost::vertices(graph);
+
+
+    std::vector<Vd_graph_pair> vd_ids;
+    sort_vds_by_node_ids(vd_ids);
+
+    for(int vd_index=0; vd_index<vd_ids.size(); vd_index++)
+    //for(vi_t it=vip.first; it!=vip.second; it++)
     {
-        vd_t vd_curr = *it;
+        vd_t vd_curr = vd_ids[vd_index].vd;//*it;
         if(black_nodes.find(vd_curr) == black_nodes.end())
         {
             std::set<vd_t> nodes;
@@ -4689,6 +4945,10 @@ void Sequence_graph_handler::output_components(std::string & node_dir,
             std::set<ed_t> edges;
 
             add_component(vd_curr, nodes, edges);
+
+            sort_edges_based_on_node(edges, edges_array);
+
+
 
 #ifdef LOG_SEQ_GRAPH
             shc_log_info(shc_logname, "nodes has size %d\n", nodes.size());
@@ -4722,6 +4982,7 @@ void Sequence_graph_handler::output_components(std::string & node_dir,
                     // dump read id information
                     node_s_writer << curr_node.node_id << "\t"
                                   << "*" << "\t"
+                                  << curr_node.count << "\t"
                                   << curr_node.read_count << "\t";
                     std::map<vd_t, std::set<read_num_t> >::iterator node_read_it =
                               node_support_map.find(vd_curr);
@@ -4732,7 +4993,8 @@ void Sequence_graph_handler::output_components(std::string & node_dir,
                       for(std::set<read_num_t>::iterator read_it=read_set.begin();
                                           read_it!=read_set.end(); read_it++)
                       {
-                          node_s_writer << *read_it << "\t";
+                          Read_acc acc = coll_read_list.get_read(*read_it);
+                          node_s_writer << *read_it << "(" << acc.get_estimated_read_count() << ")" << "\t";
                       }
                     }
 
@@ -4772,12 +5034,13 @@ void Sequence_graph_handler::output_components(std::string & node_dir,
                 node_file << std::endl;
                 black_nodes.insert(*it);
             }
-
             read_file << "VD1\tVD2\tread_count\tread_id0, read_id1 ... " << std::endl;
-            for(std::set<ed_t>::iterator it=edges.begin(); it!=edges.end(); ++it)
+            //for(std::set<ed_t>::iterator ed_it=edges.begin(); ed_it!=edges.end(); ++ed_it)
+            for(int j=0; j<edges_array.size(); j++)
             {
-                vd_t source_vd = boost::source(*it, graph);
-                vd_t target_vd = boost::target(*it, graph);
+                ed_t ed = edges_array[j].ed;
+                vd_t source_vd = boost::source(ed, graph);
+                vd_t target_vd = boost::target(ed, graph);
                 Node_pair_adj node_pair_adj(source_vd, target_vd);
                 std::map<Node_pair_adj, Read_count_Read_id_pair>::iterator two_nodes_reads_it
                                      = two_nodes_reads.find(node_pair_adj);
@@ -4834,13 +5097,18 @@ void Sequence_graph_handler::output_components(std::string & node_dir,
 
             // output edge
             edge_file << "VD\tVD\tweight\tcount" << std::endl;
-            for(std::set<ed_t>::iterator it=edges.begin(); it!=edges.end(); ++it)
+
+            //for(std::set<ed_t>::iterator ed_it=edges.begin(); ed_it!=edges.end(); ++ed_it)
+            for(int j=0; j<edges_array.size(); j++)
             {
-                if(graph[*it].count > 0)
+                ed_t ed = edges_array[j].ed;
+
+                //ed_t ed = edges_array[j].ed;
+                if(graph[ed].count > 0)
                 {
-                    std::string temp = edge_to_string(*it);
+                    std::string temp = edge_to_string(ed);
                     //shc_log_info(shc_logname, "test %s\n", temp.c_str());
-                    edge_file << edge_to_string(*it) << std::endl;
+                    edge_file << edge_to_string(ed) << std::endl;
                     num_edge_written ++;
                 }
                 else
@@ -4891,6 +5159,31 @@ path_to_string(std::vector<vd_t> & path, std::string & out_string)
     }
 }
 
+void Sequence_graph_handler::
+sort_set_vd(std::set<vd_t> & vd_set, std::vector<Vd_graph_pair> & vds)
+{
+    for(std::set<vd_t>::iterator it=vd_set.begin(); it!=vd_set.end(); it++)
+    {
+        vd_t vd = *it;
+        vds.emplace_back(vd, &graph);
+    }
+    std::sort (vds.begin(), vds.end());
+}
+
+void Sequence_graph_handler::
+sort_stack_vd(std::stack<vd_t> & fringe)
+{
+    std::vector<Vd_graph_pair> vds;
+    while(!fringe.empty())
+    {
+        vds.emplace_back(fringe.top(), &graph);
+        fringe.pop();
+    }
+    std::sort(vds.begin(), vds.end());
+    for(int i=0; i<vds.size(); i++)
+        fringe.push((vds[i]).vd);
+}
+
 // return false when the graph is not a DAC
 bool Sequence_graph_handler::
 variant_topological_sort(std::set<vd_t> & nodes, std::vector<vd_t> & sorted_nodes)
@@ -4904,6 +5197,7 @@ variant_topological_sort(std::set<vd_t> & nodes, std::vector<vd_t> & sorted_node
         if(boost::in_degree(vd_curr, graph) == 0 )
             fringe.push(vd_curr);
     }
+    sort_stack_vd(fringe);
 
     while (fringe.size()>0)
     {
@@ -4914,9 +5208,11 @@ variant_topological_sort(std::set<vd_t> & nodes, std::vector<vd_t> & sorted_node
         added.insert(vd);
         sorted_nodes.push_back(vd);
         out_eip_t out_eip = boost::out_edges(vd, graph);
-        for(out_ei_t out_ei=out_eip.first; out_ei!=out_eip.second; out_ei++)
+        std::vector<Vd_graph_pair> vds;
+        sort_out_iterator(vds, out_eip);
+        for(int i=0; i<vds.size(); i++)
         {
-            vd_t vd_target = boost::target(*out_ei, graph);
+            vd_t vd_target = vds[i].vd;//boost::target(*out_ei, graph);
             if(is_all_predecessors_included(vd_target, added))
                 fringe.push(vd_target);
         }
@@ -4931,9 +5227,11 @@ bool Sequence_graph_handler::
 is_all_predecessors_included(vd_t vd_root, std::set<vd_t> & added_nodes)
 {
     in_eip_t in_eip = boost::in_edges(vd_root,graph);
-    for(in_ei_t in_ei=in_eip.first; in_ei!=in_eip.second; in_ei++)
+    std::vector<Vd_graph_pair> vds;
+    sort_in_iterator(vds, in_eip);
+    for(int i=0; i<vds.size(); i++)
     {
-        vd_t vd_source = boost::source(*in_ei, graph);
+        vd_t vd_source = vds[i].vd;//boost::source(*in_ei, graph);
         if(added_nodes.find(vd_source) == added_nodes.end())
             return false;
     }
@@ -4979,6 +5277,12 @@ bool Sequence_graph_handler::is_suspicious(vd_t vd)
     int outD = boost::out_degree(vd, graph);
     //std::cout << "size_threshold " << size_threshold << std::endl;
     //std::cout << "prevalence_threshold " << prevalence_threshold << std::endl;
+    //if(curr_node.seq == "CTCGGCCTCCCAAAGTGCTAGGACTA")
+    //{
+    //    shc_log_info(shc_logname, "%s\n", curr_node.seq.c_str());
+    //    shc_log_info(shc_logname, "avg pre %f  thresh %f\n", average_prevalence(vd), prevalence_threshold);
+    //    shc_log_info(shc_logname, "pre %u  count %u\n", curr_node.prevalence, curr_node.count);
+    //}
     if((inD==0 || outD==0) && curr_node.seq_len()<=size_threshold)
         return true;
 
@@ -5001,12 +5305,20 @@ bool Sequence_graph_handler::remove_suspicious_nodes(uint64_t & node_removed)
     vip_t vip = boost::vertices(graph);
     //walk through the graph list, and update if
     std::vector<Node_Count_Pair> suspicous_nodes;
-    for(vi_t it=vip.first; it!=vip.second; it++)
+
+    std::vector<Vd_graph_pair> vd_ids;
+    sort_vds_by_node_ids(vd_ids);
+
+
+    //for(vi_t it=vip.first; it!=vip.second; it++)
+    for(int i=0; i<vd_ids.size(); i++)
     {
-        if(is_suspicious(*it))
+        vd_t vd = vd_ids[i].vd;
+        if(is_suspicious(vd))
         {
             //shc_log_info(shc_logname, "Suspicious\n");
-            suspicous_nodes.emplace_back(*it, average_prevalence(*it));
+            //temp_writer << graph[vd].seq << std::endl;
+            suspicous_nodes.emplace_back(vd, average_prevalence(vd));
         }
     }
 
@@ -5015,6 +5327,7 @@ bool Sequence_graph_handler::remove_suspicious_nodes(uint64_t & node_removed)
 
     Node_count_sorter sorter;
     std::sort(suspicous_nodes.begin(), suspicous_nodes.end(), sorter);
+    //std::cout << "suspicous_nodes " << suspicous_nodes.size() << std::endl;
 
     //for(int i=0; i<suspicous_nodes.size() ; i++)
     //{
@@ -5553,13 +5866,14 @@ void Sequence_graph_handler::log_node_info(vd_t vd, bool is_log_nodes ,
     if(is_log_read_info)
     {
         std::vector<Bdg_read_info> & reads_info = curr_node.reads_info;
-        for(std::vector<Bdg_read_info>::iterator it=reads_info.begin();
-                it!=reads_info.end(); it++)
+        //for(std::vector<Bdg_read_info>::iterator it=reads_info.begin();
+        //        it!=reads_info.end(); it++)
+        for(uint64_t i=0; i<10; i++) //reads_info.size()
         {
             //shc_log_info(shc_logname, "total_num read %u\n", coll_read_list.get_num_read());
-
-            shc_log_info(shc_logname, "read id %u, start %u\n", it->read_id, it->start);
-            log_read_seq(coll_read_list.get_read(it->read_id));
+            Bdg_read_info read_info = reads_info[i];
+            shc_log_info(shc_logname, "read id %u, start %u\n", read_info.read_id, read_info.start);
+            log_read_seq(coll_read_list.get_read(read_info.read_id));
         }
     }
     assert(boost::in_degree(vd,graph)<=4 && boost::out_degree(vd,graph)<=4);
@@ -5770,4 +6084,22 @@ void Sequence_graph_handler::dump_reads(std::string output_path)
         writer << a_read << std::endl;
     }
     writer.close();
+}
+
+vd_t Sequence_graph_handler::get_only_in_vd(vd_t vd)
+{
+    int num_in = boost::in_degree(vd, graph);
+    assert(num_in == 1);
+    in_eip_t in_eip = boost::in_edges(vd,graph);
+    return  boost::source(*(in_eip.first), graph);
+}
+
+
+vd_t Sequence_graph_handler::get_only_out_vd(vd_t vd)
+{
+    int num_out = boost::out_degree(vd, graph);
+    assert(num_out == 1);
+    out_eip_t out_eip = boost::out_edges(vd,graph);
+    return boost::target(*(out_eip.first), graph);
+
 }
