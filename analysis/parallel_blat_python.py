@@ -45,7 +45,7 @@ def parallel_blat(target_fasta,query_fasta,out_file,QUERY_SPLIT,nJobs=60):
 	split_files = os.listdir(split_dir)
 	for f in split_files:
 		cmds.append('./blat -noHead '+ target_fasta + ' ' + split_dir+'/'+f + ' ' + out_file + '_' + str(n))
-		print('blat -noHead '+ target_fasta + ' ' + split_dir+'/'+f + ' ' +out_file + '_' + str(n))
+		#print('blat -noHead '+ target_fasta + ' ' + split_dir+'/'+f + ' ' +out_file + '_' + str(n))
 		n += 1
 
 	cmds = tuple(cmds)

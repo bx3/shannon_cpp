@@ -880,6 +880,8 @@ void command_line_for_shannon(int argc, char** argv, Shannon_C_setting  & settin
                      "specify available memory for running multi-graph multi-bridge")
             ("duplicate_rmer_length", po::value<int>()->default_value(24),
                       "rmer size used to check duplicates")
+            ("random_seed", po::value<int>()->default_value(0),
+                   "Reproduce the same output")
         ;
 
         add_multi_graph_options(desc);
@@ -907,6 +909,8 @@ void command_line_for_shannon(int argc, char** argv, Shannon_C_setting  & settin
         setting.num_parallel = vm["num_process"].as<int>();
         setting.seq_graph_setup.max_hop_path = vm["max_hop_for_known_path"].as<int>();
         setting.sparse_flow_setup.multiple_test = vm["multiple_test"].as<int>();
+        setting.random_seed = vm["random_seed"].as<int>();
+
 
         std::string avail_mem_str = vm["avail_mem"].as<std::string>();
         setting.avail_mem = format_memory_arg(avail_mem_str);
