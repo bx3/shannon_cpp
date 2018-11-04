@@ -59,11 +59,11 @@ struct hash_u64 {
     //const uin32_t base = 2166136261U;
     //const uin32_t p = 16777619UL;
 
-    size_t res = 2166136261U;
-    res ^= u;
-    res *= 16777619UL;
+    //size_t res = 2166136261U;
+    //res ^= u;
+    //res *= 16777619UL;
 
-    /*
+
     uint64_t v = u * 3935559000370003845 + 2691343689449507681;
 
     v ^= v >> 21;
@@ -75,8 +75,8 @@ struct hash_u64 {
     v ^= v << 20;
     v ^= v >> 41;
     v ^= v <<  5;
-    */
-    return res;
+
+    return v;
 
     //size_t operator()(uint64_t k) const { return (k ^ 14695981039346656037ULL) * 1099511628211ULL; }
   }
