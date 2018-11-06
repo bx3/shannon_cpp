@@ -19,7 +19,7 @@
 
 #define FILE_MODE (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
 
-#define NUM_OPEN_FILE 1000
+#define NUM_OPEN_FILE 1000 //0
 #define SRC_SIZE (2147483648)
 //2147483648 536870912 104857600 500M  2G 100M
 
@@ -165,6 +165,8 @@ struct Single_dumper {
             else
             {
                 File_man file_man(false);
+                file_man.file_sz = init_sz;
+                file_man.seq.reserve(file_man.file_sz);
                 file_man.chain_info.filename = file_path;
                 comp_fileman_map.insert(std::make_pair(i, file_man));
             }
@@ -263,6 +265,46 @@ struct Single_dumper {
         src_man.local_file_num_char = num_extra_byte;
         src_man.reset(src, mmap_size, header_ptr);
         shc_log_info(shc_logname, "finish remap src file\n");
+    }
+
+    void dump_file_increment_size(int i)
+    {
+        std::map<int, File_man>::iterator it = comp_fileman_map.find(i);
+        if(it != comp_fileman_map.end())
+        {
+            File_man & file_man = it->second;
+            std::string file_name(file_man.chain_info.filename + "_" +
+                                std::to_string(file_man.chain_info.num_file++));
+            int fdout;
+            void * dst;
+
+            if ((fdout = open (file_name.c_str(), O_RDWR | O_CREAT | O_TRUNC, FILE_MODE )) < 0)//edited here
+            {   printf ("can't create for writing");
+                exit(1);
+            }
+
+            uint64_t file_sz = file_man.seq.size();
+            if(file_sz > 0 )
+            {
+                if(ftruncate(fdout, file_sz) == -1) {printf("ftruncate fail\n"); exit(1);}
+                if ((dst = mmap (0, file_sz, PROT_WRITE | PROT_READ,
+                                        MAP_SHARED, fdout, 0)) == (void*) -1)
+                {perror ("mmap error for output\n"); exit(1); }
+                memcpy(dst, &file_man.seq.at(0), file_sz);
+                munmap(dst, file_sz);
+            }
+            close(fdout);
+            file_man.seq.clear();
+            uint64_t new_file_sz = get_new_sz(file_sz, i, file_man.num_resize);
+            file_man.seq.reserve(new_file_sz);
+            file_man.file_sz = new_file_sz;
+            file_man.offset = 0;
+        }
+        else
+        {
+            std::cerr << "does not contain component " << i << std::endl;
+            exit(1);
+        }
     }
 
     void append_file_increment_size(int i)
@@ -377,6 +419,20 @@ struct Single_dumper {
         }
     }
 
+    inline void reverse_complement_mem(char * start_ptr, int len, std::string & seq)
+    {
+        //std::string d_seq;
+
+        for(int i=len-1; i>=0; i--)
+        {
+            seq += complement(*(start_ptr+i));
+            //d_seq += complement(*(start_ptr+i));
+        }
+        //shc_log_info(shc_logname, "R %s\n", d_seq.c_str());
+    }
+
+
+
     //len cover next line
     inline void mmap_reverse_write(uint64_t len, char * start, File_man & file_man)
     {
@@ -424,7 +480,7 @@ struct Single_dumper {
         }
     }
 
-    inline uint64_t get_new_sz(uint64_t old_sz, int comp_i, int resize_times)
+    inline uint64_t get_new_sz(uint64_t old_sz, int comp_i, int & resize_times)
     {
         resize_times++;
         if(resize_times < resize_scale.size())
@@ -456,6 +512,8 @@ struct Single_dumper {
                                             int seq_len)
     {
         std::map<int, File_man>::iterator it = comp_fileman_map.find(comp_i);
+        //std::string seq(seq_ptr, seq_len);
+        //shc_log_info(shc_logname, "WF comp %d, seq %s\n", comp_i, seq.c_str());
         uint64_t len = seq_ptr - header_ptr + seq_len + 1; // include two next line
         if(it != comp_fileman_map.end())
         {
@@ -470,8 +528,15 @@ struct Single_dumper {
             }
             else
             {
-                std::string header(header_ptr, len);
-                file_man.seq += header;
+                if(is_increase_file_sz(len, file_man))
+                {
+                    dump_file_increment_size(comp_i);
+                }
+                //std::string header(header_ptr, len);
+                //shc_log_info(shc_logname, "F %s\n", header.c_str());
+
+                file_man.seq.append(header_ptr, len);
+                file_man.offset = file_man.seq.size();
             }
         }
         else
@@ -488,6 +553,8 @@ struct Single_dumper {
         uint64_t len = seq_ptr - header_ptr + seq_len + 1;
         if(it != comp_fileman_map.end())
         {
+            //std::string seq(seq_ptr, seq_len);
+            //shc_log_info(shc_logname, "WR comp %d, seq %s\n", comp_i, seq.c_str());
             File_man & file_man = it->second;
             if(file_man.is_disk)
             {
@@ -500,12 +567,21 @@ struct Single_dumper {
             }
             else
             {
-                std::string header(header_ptr, seq_ptr-header_ptr); // include next line
-                file_man.seq += header;
-                std::string seq(seq_ptr, seq_len);
-                reverse_complement_local(seq_ptr, seq_len);
+                if(is_increase_file_sz(len, file_man))
+                {
+                    dump_file_increment_size(comp_i);
+                }
+
+                //std::string header(header_ptr, seq_ptr-header_ptr); // include next line
+                //shc_log_info(shc_logname, "%d %d header %s\n", seq_len, len, header.c_str());
+                file_man.seq.append(header_ptr, seq_ptr-header_ptr);// += header;
+
+                //std::string seq(seq_ptr, seq_len);
+                //reverse_complement_local(seq_ptr, seq_len);
                 //std::reverse(seq.begin(), seq.end());
-                file_man.seq += seq + '\n';
+                //file_man.seq.append(seq_ptr, seq_len);
+                reverse_complement_mem(seq_ptr, seq_len, file_man.seq);
+                file_man.seq += '\n';
             }
         }
         else
@@ -579,7 +655,9 @@ struct Single_dumper {
                 File_chain_info & chain_info = file_man.chain_info;
                 int fdout;
                 void * dst;
-                std::string file_name = chain_info.filename + "_0";
+                std::string file_name(file_man.chain_info.filename + "_" +
+                                    std::to_string(file_man.chain_info.num_file++));
+
                 if ((fdout = open (file_name.c_str(), O_RDWR | O_CREAT | O_TRUNC, FILE_MODE )) < 0)//edited here
                 {   printf ("can't create for writing");
                     exit(1);
@@ -721,6 +799,8 @@ struct FASTA_dumper {
                     else
                     {
                         mem_comps.insert(comp_size_pair_array[i].first);
+                        shc_log_info(shc_logname, "pair comp %d is in mem\n",
+                                        comp_size_pair_array[i].first);
                     }
                 }
             }

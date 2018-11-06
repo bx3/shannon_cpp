@@ -18,8 +18,7 @@ void command_line_for_shannon(int argc, char** argv, Shannon_C_setting & setting
 void command_line_for_partition(int argc, char** argv, Shannon_C_setting & setting);
 void command_line_for_seq_graphs(int argc, char** argv, Shannon_C_setting & setting,
                         std::string& kmer_path, std::string& s_read_path,
-                        std::string& p1_read_path, std::string& p2_read_path,
-                        std::string& read_prob_path, std::string& read_pair_prob_path);
+                        std::string& p1_read_path, std::string& p2_read_path);
 void command_line_for_sparse_flow(int argc, char** argv,
             Shannon_C_setting & setting,
             std::string & node_path, std::string & edge_path,
@@ -195,7 +194,7 @@ int main(int argc, char** argv) {
             std::string read_prob_path;
             std::string read_pair_prob_path;
             command_line_for_seq_graphs(argc, argv, setting,
-                    kmer_path, s_read_path, p1_read_path, p2_read_path, read_prob_path, read_pair_prob_path);
+                    kmer_path, s_read_path, p1_read_path, p2_read_path);
             //profiler_pid = fork_mem_profiler(shannon_Cpp_pid, setting.local_files.mem_profiler.main_log_path);
 
             Sequence_graph_handler seq_graph_handler(setting);
@@ -342,6 +341,10 @@ void parse_required_multi_graph(
 
     lf.output_components_read_dir = vm["read_components_dir"].as<std::string>();
     if(!convert_to_abs_and_check_exist(lf.output_components_read_dir))
+        exit(0);
+
+    lf.output_components_kmer_dir = vm["kmer_components_dir"].as<std::string>();
+    if(!convert_to_abs_and_check_exist(lf.output_components_kmer_dir))
         exit(0);
 
     lf.output_components_kmer_dir = vm["kmer_components_dir"].as<std::string>();
@@ -615,8 +618,7 @@ void command_line_for_sparse_flow(
 
 void command_line_for_seq_graphs(int argc, char** argv, Shannon_C_setting & setting,
         std::string& kmer_path, std::string& s_read_path,
-        std::string& p1_read_path, std::string& p2_read_path,
-        std::string& read_prob_path, std::string& read_pair_prob_path)
+        std::string& p1_read_path, std::string& p2_read_path)
 {
     namespace po = boost::program_options;
     po::options_description desc("Allowed options");
@@ -625,12 +627,12 @@ void command_line_for_seq_graphs(int argc, char** argv, Shannon_C_setting & sett
             ("help", "produce help message")
             ("kmer_path,f", po::value<std::string>()->required(),
                       "kmer path used as trusted debruijn graph edge")
-            ("read_prob_path,", po::value<std::string>()->default_value(""),
-                      "probabilities of single ended reads for estimating "
-                      "number of supportive read for the final output")
-            ("read_pair_prob_path,", po::value<std::string>()->default_value(""),
-                        "probabilities of paired ended reads for estimating "
-                        "number of supportive read for the final output")
+            //("read_prob_path,", po::value<std::string>()->default_value(""),
+            //          "probabilities of single ended reads for estimating "
+            //          "number of supportive read for the final output")
+            //("read_pair_prob_path,", po::value<std::string>()->default_value(""),
+            //            "probabilities of paired ended reads for estimating "
+            //            "number of supportive read for the final output")
         ;
 
         add_read_length_options(desc);
@@ -654,8 +656,8 @@ void command_line_for_seq_graphs(int argc, char** argv, Shannon_C_setting & sett
 
         parse_output_options(vm, setting);
         kmer_path = vm["kmer_path"].as<std::string>();
-        read_prob_path = vm["read_prob_path"].as<std::string>();
-        read_pair_prob_path = vm["read_pair_prob_path"].as<std::string>();
+        //read_prob_path = vm["read_prob_path"].as<std::string>();
+        //read_pair_prob_path = vm["read_pair_prob_path"].as<std::string>();
         if(!convert_to_abs_and_check_exist(kmer_path))
             exit(0);
         setting.kmer_length = get_kmer_length_from_kmer_file(kmer_path);
@@ -671,8 +673,8 @@ void command_line_for_seq_graphs(int argc, char** argv, Shannon_C_setting & sett
         print_and_log_read_length_setting(setting);
         std::cout << "\033[1;33m";
         std::cout << "kmer_path:                " << kmer_path << std::endl;
-        std::cout << "read_prob_path:           " << read_prob_path << std::endl;
-        std::cout << "read_pair_prob_path:           " << read_pair_prob_path << std::endl;
+        //std::cout << "read_prob_path:           " << read_prob_path << std::endl;
+        //std::cout << "read_pair_prob_path:           " << read_pair_prob_path << std::endl;
         std::cout << "\033[0m";
         print_and_log_read_length_setting(setting);
         print_and_log_input_path_setting(setting);

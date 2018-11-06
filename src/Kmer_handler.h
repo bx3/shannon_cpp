@@ -298,6 +298,7 @@ public:
         is_polyA_del = true;
         complex_thresh = 2;
         num_skip_kmer = 0;
+        num_used_kmer = 0;
     }
 
     void run_kmer_handler();
@@ -393,6 +394,8 @@ private:
     Block_timer prog_timer;
     uint64_t init_kmer_size;
     uint64_t num_skip_kmer;
+
+    uint64_t num_used_kmer;
 };
 
 #endif	/* KMER_HANDLER_H */

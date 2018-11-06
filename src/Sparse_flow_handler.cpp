@@ -785,7 +785,7 @@ void Sparse_flow_handler::sparse_flow_on_all_nodes()
                     //            graph[vd_source].node_id, graph[vd_target].node_id);
                     //}
                 //}
-                shc_log_info(shc_logname, "Y vd: %s\n", graph[vd].seq.c_str());
+                //shc_log_info(shc_logname, "Y vd: %s\n", graph[vd].seq.c_str());
 
                 link_Y_path(vd);
 
@@ -796,8 +796,8 @@ void Sparse_flow_handler::sparse_flow_on_all_nodes()
             {
 
                 //shc_log_info(shc_logname, "X node modify\n");
-                shc_log_info(shc_logname, "SF vd: %s\n", graph[vd].seq.c_str());
-                
+                //shc_log_info(shc_logname, "SF vd: %s\n", graph[vd].seq.c_str());
+
 
 
                 node_iter++;

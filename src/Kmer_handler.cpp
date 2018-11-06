@@ -835,6 +835,7 @@ bool Kmer_handler::find_contig_helper(std::string & line_s, uint64_t count, bool
     if (!root_iter->second.used)
     {
         ITER_SET_USED(root_iter, true)
+        num_used_kmer++;
         ITER_SET_CONTIG(root_iter, ch->num_contig)
 
         double contig_mean_count = 0.0;
@@ -853,6 +854,7 @@ bool Kmer_handler::find_contig_helper(std::string & line_s, uint64_t count, bool
             total_kmer_in_contig++;
 
             ITER_SET_USED(next_iter, true)
+            num_used_kmer++;
         }
         // get everything in order
         std::reverse( ch->contig_list.begin() + ch->delimitor.back(),
@@ -886,6 +888,7 @@ bool Kmer_handler::find_contig_helper(std::string & line_s, uint64_t count, bool
             total_kmer_in_contig++;
 
             ITER_SET_USED(next_iter, true)
+            num_used_kmer++;
         }
 
         Contig_handler::size_type contig_len =
@@ -1137,6 +1140,7 @@ void Kmer_handler::restore_kmer_for_contig(uint8_t * contig_start,
         else
         {
             ITER_SET_USED(iter, false)
+            num_used_kmer--;
         }
     }
 }

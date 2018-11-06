@@ -163,7 +163,7 @@ int64_t Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
     find_approximate_copy_count();
 
     start_timer(&part_timer);
-    break_self_loops();
+    //break_self_loops();
 
 #ifdef PRINT_TIME
     std::cout << "break_self_loops, " << (get_num_nodes()) << " num edge "
@@ -230,6 +230,8 @@ int64_t Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
     find_known_path_time = part_timer.nTime;
 
     find_copy_count();
+
+    //condense_graph(); should not be used, since known path record vd_t, condensing will lose it
 
     Local_files & lf = setting.local_files;
 

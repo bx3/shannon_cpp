@@ -80,13 +80,15 @@ struct Read_subsampler {
 
         if(is_use_prob_strategy)
         {
+            if (num_kmer==0)
+                return false;
+
             double avg_count = 0;
+
             for(int i=0; i<num_kmer; i++)
                 avg_count += kmer_counts[i];
             avg_count /= num_kmer;
 
-            if (avg_count == 0)
-                return false;
             double prob_to_sample_read = k/avg_count;
             if(prob_to_sample_read >= 1.0)
                 return true;

@@ -54,7 +54,7 @@ This is a **C++** implementatin for the work **ShannonRNA: an Information-Optima
     * used for memory profiling
     * No action needed, already included
 
-* After all, go to CMakelist.txt directory and type
+* After all, go to the directory containing CMakelist.txt
 ```
     cmake .
     make
@@ -110,7 +110,8 @@ Shannon performs denovo transcriptome assembly by first partitioning reads into 
 CMD\<shannon> takes raw reads (or Rcorrected reads) as its input.
 
 **-s** specifies a single-ended fasta file at **path_to_single_ended_read** 
-**-l** specifies the maximal length among all read, its main purpose is for accessing read efficiently since all reads are stored in array, -l has indexing role. Any reads with higher length are truncated, and the rest of the reads don't lose any information. If input reads have been preprocessed and trimmed, it is safe to set it to the raw length.
+
+**-l** specifies the maximal length among all read, it is used for efficient read access using an array, as an indexing parameter. Any reads with higher length are truncated, and the rest of the reads have padding so they don't lose any information. If input reads have been preprocessed and trimmed, it is safe to set it to the raw length before pre-processing.
 
 Shannon processes and gives assembled transcriptome at **output_path**. 
 ```
@@ -125,11 +126,11 @@ For pair-ended fasta read file at **path_to_pair_ended_read_1** and **path_to_pa
 
 **-t** specifies the number of running processes (1 threads per process). 
 
-**-g** controls the read subsampling at components partition step. It has a great impact on the running speed when input read files are large, since the partitioned reads are later used for multibridging. Setting it to 0 disables subsample operation; otherwise a higher **g** tends to keep more reads. For read i, the sampling is based on the formula P_i(KEEP) = min(1, g/read_count_for_read_i), if it is not known, using 50-100 to avoid lossing too much reads (note it has same interpretation as trinity --normalize_max_read_cov inside in silico part)
+**-g** controls the read subsampling at components partition step. It has a great impact on the running speed when input read files are large, since the partitioned reads are later used for multibridging. Setting it to 0 disables subsample operation; otherwise a higher **g** tends to keep more reads. For read i, the sampling is based on the formula P_i(KEEP) = min(1, g/mean_kmer_count), if it is not known, using 50-100 to avoid lossing too much reads (note it has same interpretation as trinity --normalize_max_read_cov inside in silico part). Shannon does not test all kmer in the read for 'mean_kmer_count', the default is 3, user can change it with argument '--read_num_feature'.
 
-**-m** specifies max amount of memory allowed for Shannon in the multi-bridge step, to prevent process crushing due to memory overflow. User can indicate the memory value using number of byte (like 1234), or using a number with unit (1k,1M,1G,1T). Notice, this memory limit is only effective in the multi-bridge step, and it manages the number of working processes to prevent memory crashing due to too many processes working at the same time.
+**-m** specifies max amount of memory allowed for Shannon in the multi-bridge step to prevent crushing due to memory overflow. User can indicate the memory value using number of byte (like '1234'), or using a number with unit (1k,1M,1G,1T). Notice, this memory limit is only effective in the multi-bridge step by managing the number of working processes to prevent too many of them running at the same time.
 
-**-u** number of parallel passed to linux sort function. Sorting a large file consumes a lot of memory, and linux kernel migth silently kill the process if the system is severely out of memory. Set the number to 8 if more than 100G is available. One way to check if the process is silently killed by system is to check if the file (kmer_unfiltered_sorted) is empty in the output directory.
+**-u** specifies number of parallel within the linux sort function. Sorting a large file consumes a lot of memory, and linux kernel migth silently kill the process if the system is severely out of memory. Set the number to 8 if more than 100G is available. One way to check if the process is silently killed by system is to check if the file (kmer_unfiltered_sorted) is empty in the output directory.
 
 ### CMD\<partition>
 Given a large noisy fasta-reads, CMD\<partition> performs error correction, and partitions the reads into multiple components. Each component contains two files, a kmer file which holds all error-corrected kmer and read files which selectively include original input reads for that component depending on the partition algorithm. 
@@ -145,19 +146,27 @@ Given one component (for example component 2) with kmer-reads pair as its input,
 ```
 ./Shannon_RNASeq_Cpp multi-bridge -f path_to_kmer_file -l read_length -s path_to_read_file -o output_path 
 ```
-Shannon uses three files for storing a connected graph:
+
+Shannon uses 'path_to_kmer_file' to build a de bruijn graph, uses 'path_to_read_file' for multi-bridging. After the step, there might be multi disconnected graph components, so Shannon generates files for each graph component for storing all outputs.
+
+Shannon uses four types of file for storing a graph component:
 ```
-node0   contains node in topological sorted order, where each node has a numerical ID
-edge0   contains numerical ID pair to indicate a directed edge       
-path0   a list of numerical ID to indicate that a read overlap such path       
-where 0 is a tree component index
+node(i)   contains node in topological sorted order, where each node has a node ID
+edge(i)   contains numerical ID pair to indicate a directed edge       
+path(i)   contains a path made of a list of node ID (this list has length higher than 2) which covers some reads as indicated by read ID in the same line      
+read(i)   contains a pair of node Id, and which covers some reads specified by the read IDs
+
+where i is an index
+read id is used in the file 'components_dump_reads' 
 ```
-Here an index is introduced, since multi-bridge might break the graph into a forest. So for 10 tree components, 30 files are needed for storing the graph. Therefore For each graph component, three directories are used for storing such graph
+
 ```
-output_path/comp_graph/Graph_edges_2/node(0,1,...,n)          
-output_path/comp_graph/Graph_nodes_2/edge(0,1,...,n)                    
-output_path/comp_graph/Graph_paths_2/path(0,1,...,n)          
-where 2 is a graph component index
+output_path/comp_graph/Graph_edges_j/node(0,1,...,n)          
+output_path/comp_graph/Graph_nodes_j/edge(0,1,...,n)                    
+output_path/comp_graph/Graph_paths_j/path(0,1,...,n)          
+output_path/comp_graph/Graph_reads2_j/path(0,1,...,n)          
+
+where j is a component index
 ```
 
 ### CMD\<sparse-flow>
