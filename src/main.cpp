@@ -231,21 +231,21 @@ int main(int argc, char** argv) {
 
             multi_graph.find_representatives(infile, outfile);
         }
-        else if(subcommand == "ref-align")
-        {
-            std::string infile, outdir, ref_file;
-            command_line_for_ref_align(argc, argv, setting, infile, ref_file, outdir);
-            profiler_pid = fork_mem_profiler(shannon_Cpp_pid, setting.local_files.mem_profiler.main_log_path);
+        //else if(subcommand == "ref-align")
+        //{
+        //    std::string infile, outdir, ref_file;
+        //    command_line_for_ref_align(argc, argv, setting, infile, ref_file, outdir);
+        //    profiler_pid = fork_mem_profiler(shannon_Cpp_pid, setting.local_files.mem_profiler.main_log_path);
 
-            Local_files & lf = setting.local_files;
-            lf.output_path = outdir;
-            lf.summary_file_path = outdir + "/summary.log";
-            lf.eval_dir_path = outdir;
-            lf.eval_path = outdir + "/eval.log";
-            lf.reconstructed_seq_path = infile;
-            lf.reference_seq_path = ref_file;
-            eval_reconstructed_seq(lf);
-        }
+        //    Local_files & lf = setting.local_files;
+        //    lf.output_path = outdir;
+        //    lf.summary_file_path = outdir + "/summary.log";
+        //    lf.eval_dir_path = outdir;
+        //    lf.eval_path = outdir + "/eval.log";
+        //    lf.reconstructed_seq_path = infile;
+        //    lf.reference_seq_path = ref_file;
+        //    eval_reconstructed_seq(lf);
+        //}
         else
         {
             std::cout << "\033[1;31m";
@@ -277,7 +277,7 @@ int main(int argc, char** argv) {
         std::cout << "sparse-flow : " << " Given a graph stored in the format from multi-bridge, " << std::endl
                   << "              " << " it run sparse flow algorithm to get final output seq" << std::endl;
         std::cout << "find-rep    : " << " Reduce redundant transcripts" << std::endl;
-        std::cout << "ref-algin   : " << " Align to reference file, and generate evaulation files" << std::endl;
+        //std::cout << "ref-align   : " << " Align to reference file, and generate evaulation files" << std::endl;
         std::cout << std::endl;
         std::cout << "usage: [subcommand] [options]" << std::endl;
         std::cout << "usage: [subcommand] --help to see options" << std::endl;
