@@ -480,7 +480,7 @@ void Kmer_handler::sort_kmer_descending_count_external()
                 cmd += (lf->unfilter_file + " > " + lf->sorted_unfilter_file);
                 print_yellow_cmd(cmd);
                 if (execlp("sort", "sort", "-t","\t", "-k", "2", "-n", "-r",
-                            parallel_arg.c_str(), "-T", dup_setting.sort_tmp_dir, lf->unfilter_file.c_str(),
+                            parallel_arg.c_str(), "-T", dup_setting.sort_tmp_dir.c_str(), lf->unfilter_file.c_str(),
                             "-o", lf->sorted_unfilter_file.c_str(),  (char *)0) < 0)
                 {
                         printf("execlp error");
