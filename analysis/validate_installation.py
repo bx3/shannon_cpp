@@ -8,6 +8,11 @@ single_read_path = '../sample/SE_read.fasta'
 paired_read_1_path = '../sample/PE_read_1.fasta'
 paired_read_2_path = '../sample/PE_read_2.fasta'
 
+ 
+output_dir = '../sample/sample_output'
+if not os.path.exists(output_dir):
+	os.makedirs(output_dir)
+
 single_output_dir = '../sample/sample_output/single_out'
 paired_output_dir = '../sample/sample_output/paired_out'
 
@@ -36,12 +41,13 @@ def run_single_reads_Shannon():
 								   '-u', sort_threads,
 								   '-e', min_output_fasta_len,
 								   '--random_seed', random_seed]
-#print('run single end reads Shannon command')
-    #print(' '.join(x for x in cmd))
+	#print('run single end reads Shannon command')
+	#print(' '.join(x for x in cmd))
 	result = os.system(' '.join(x for x in cmd))
 	if result != 0:
 		print('Shannon single reads input returns error code', result)
 		sys.exit()
+
 	return 0
 
 
@@ -64,19 +70,19 @@ def run_paired_reads_Shannon():
 	if result != 0:
 		print('Shannon paired reads input returns error code', result)
 		sys.exit()
+
 	return 0
 
 def check_if_file_nonempty(f):
-    if(not os.path.exists(f)):
-        print('ERROR: Shannon Installation failed, it failed to create output ', f)
-        sys.exit()
-    else:
-        if(os.stat(f).st_size == 0):
-            print('ERROR: Shannon Installation failed, it created empty output ', f)
-            sys.exit()
-        else:
-            print('Shannon reconstructed transcriptomes for', f)
-	return True
+	if(not os.path.exists(f)):
+		print('ERROR: Shannon Installation failed, it failed to create output ', f)
+		sys.exit()
+	else:
+		if(os.stat(f).st_size == 0):
+			print('ERROR: Shannon Installation failed, it created empty output ', f)
+			sys.exit()
+		else:
+			print('Shannon reconstructed transcriptomes for', f)
 
 
 #def check_if_reproduce_same_output(new_f, seed_31_f):
