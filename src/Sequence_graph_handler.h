@@ -255,6 +255,7 @@ public:
         special_input = false;
         is_apply_read_prob = false;
         is_apply_read_pair_prob = false;
+		is_list_read_file = true;
 
 
         glob_node_id = NODE_ID_NORMAL_START;
@@ -321,7 +322,8 @@ public:
     void setup_input_file_path(int comp_i);
     void setup_input_file_path(std::string kmer_path, std::string s_read_path,
                             std::string p1_read_path, std::string p2_read_path,
-                            std::string read_prob_path_, std::string read_pair_prob_path_);
+                            std::string read_prob_path_, std::string read_pair_prob_path_,
+							bool is_list_read_file);
     void build_kmer_graph_from_reads();
     void build_kmer_graph_from_edges();
     void load_all_read(Kmer_Node_map & kmer_node_map);
@@ -568,6 +570,7 @@ private:
     std::string read_pair_prob_path;
     bool is_apply_read_prob;
     bool is_apply_read_pair_prob;
+	bool is_list_read_file;
 
     Block_timer timer;
 

@@ -193,6 +193,7 @@ int main(int argc, char** argv) {
             std::string p2_read_path;
             std::string read_prob_path;
             std::string read_pair_prob_path;
+			bool is_list_read_file = false;
             command_line_for_seq_graphs(argc, argv, setting,
                     kmer_path, s_read_path, p1_read_path, p2_read_path);
             //profiler_pid = fork_mem_profiler(shannon_Cpp_pid, setting.local_files.mem_profiler.main_log_path);
@@ -201,7 +202,8 @@ int main(int argc, char** argv) {
 
             int comp_i = -1;
             seq_graph_handler.setup_input_file_path(kmer_path, s_read_path,
-                                p1_read_path, p2_read_path, read_prob_path, read_pair_prob_path);
+                                p1_read_path, p2_read_path, read_prob_path, 
+								read_pair_prob_path, is_list_read_file);
             seq_graph_handler.run_it(comp_i, true);
         }
         else if(subcommand == "sparse-flow")

@@ -243,6 +243,8 @@ int64_t Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
         lf.output_seq_graph_path + lf.path_prefix + std::to_string(comp_i);
     std::string read_dir =
         lf.output_seq_graph_path + lf.read_prefix + std::to_string(comp_i);
+	
+	add_directory_if_not_exist(setting.local_files.output_components_dump_read_dir);
 
     std::string dump_reads_path =
                         setting.local_files.output_components_dump_read_dir
@@ -331,13 +333,15 @@ int64_t Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
 void Sequence_graph_handler::
 setup_input_file_path(std::string kmer_path_, std::string s_read_path_,
                         std::string p1_read_path_, std::string p2_read_path_,
-                        std::string read_prob_path_, std::string read_pair_prob_path_)
+                        std::string read_prob_path_, std::string read_pair_prob_path_,
+						bool is_list_read_file_)
 {
 #ifdef LOG_SEQ_GRAPH
     shc_log_info(shc_logname, "Start Custom file setup\n");
 #endif
     glob_node_id = NODE_ID_NORMAL_START;
     kmer_path = kmer_path_;
+	is_list_read_file = is_list_read_file_;
 
     if(!s_read_path_.empty())
     {
@@ -356,7 +360,7 @@ setup_input_file_path(std::string kmer_path_, std::string s_read_path_,
             get_num_seq(p2_read_path_));
     }
 
-    if(!read_prob_path_.empty())
+    if(read_prob_path_.empty())
     {
         read_prob_path = read_prob_path_;
         if(!exist_path(read_prob_path.c_str()))
@@ -370,7 +374,7 @@ setup_input_file_path(std::string kmer_path_, std::string s_read_path_,
         is_apply_read_prob = true;
     }
 
-    if(!read_pair_prob_path_.empty())
+    if(read_pair_prob_path_.empty())
     {
         read_pair_prob_path = read_pair_prob_path_;
         if(!exist_path(read_pair_prob_path.c_str()))
@@ -638,7 +642,7 @@ void Sequence_graph_handler::load_all_read(Kmer_Node_map & kmer_node_map)
     if(has_single)
     {
         //std::cout << "read_path_single_prefix " << read_path_single_prefix << std::endl;
-        if(exist_path(read_path_single_prefix)) //load direct path first
+        if(!is_list_read_file) //load direct path first
         {
             //std::cout << "load_all_single_read " << std::endl;
 
@@ -663,7 +667,7 @@ void Sequence_graph_handler::load_all_read(Kmer_Node_map & kmer_node_map)
     }
     if(has_pair)
     {
-        if(exist_path(read_path_p1_prefix) && exist_path(read_path_p2_prefix))
+        if(!is_list_read_file)
         {
             //std::cout << "load_all_paired_read_no_concat " << std::endl;
             load_all_paired_read_no_concat(read_path_p1_prefix,

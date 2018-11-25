@@ -1106,7 +1106,7 @@ find_representatives(std::string in_file, std::string output_file)
                             std::vector<Seq_info> list_seq(1, seq_info);
                             list_seq.shrink_to_fit();//reserve(VEC_INIT_SIZE);
                             rmer_contig_map.insert(std::make_pair(byte, list_seq));
-                        }
+                        }                        
                     }
                     contig_num++;
                     seqs_header_map.insert(std::make_pair(line, headers.back()));

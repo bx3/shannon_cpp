@@ -24,7 +24,7 @@ void Contig_handler::dump_all_contig(std::string & filename)
         std::string message = "Dumping " + std::to_string(num_contig)
                                +  " contig into file\n";
         Progress_bar progress{std::cout, 70u, message};
-        uint64_t progress_step = num_contig/100;
+            uint64_t progress_step = std::max(static_cast<contig_num_t>(2), num_contig/100);
 
         uint64_t num_contig_processed = 0;
 
