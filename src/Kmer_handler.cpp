@@ -458,15 +458,17 @@ void Kmer_handler::sort_kmer_descending_count_external()
     {
             std::string parallel_arg("--parallel=");
             parallel_arg += std::to_string(dup_setting.num_sort_thread);
-
+            std::string mem_arg("--buffer-size=" + std::to_string(setting.avail_mem) + "b");
             if(dup_setting.sort_tmp_dir.empty())
             {
                 std::string cmd(std::string("sort --parallel=") + std::to_string(dup_setting.num_sort_thread) +
-                                        std::string(" -t '\t' -k2 -nr "));
+                                        std::string(" -t '\t' -k2 -nr ") + mem_arg + " ");
                 cmd += (lf->unfilter_file + " > " + lf->sorted_unfilter_file);
                 print_yellow_cmd(cmd);
                 if (execlp("sort", "sort", "-t","\t", "-k", "2", "-n", "-r",
-                            parallel_arg.c_str(), lf->unfilter_file.c_str(),
+                            parallel_arg.c_str(),
+                            mem_arg.c_str(),
+                            lf->unfilter_file.c_str(),
                             "-o", lf->sorted_unfilter_file.c_str(),  (char *)0) < 0)
                 {
                         printf("execlp error");
@@ -480,7 +482,8 @@ void Kmer_handler::sort_kmer_descending_count_external()
                 cmd += (lf->unfilter_file + " > " + lf->sorted_unfilter_file);
                 print_yellow_cmd(cmd);
                 if (execlp("sort", "sort", "-t","\t", "-k", "2", "-n", "-r",
-                            parallel_arg.c_str(), "-T", dup_setting.sort_tmp_dir.c_str(), lf->unfilter_file.c_str(),
+                            parallel_arg.c_str(), mem_arg.c_str(),
+                            "-T", dup_setting.sort_tmp_dir.c_str(), lf->unfilter_file.c_str(),
                             "-o", lf->sorted_unfilter_file.c_str(),  (char *)0) < 0)
                 {
                         printf("execlp error");
