@@ -6,6 +6,7 @@ set(CMAKE_BUILD_TYPE Debug)
 
 include_directories(/usr/include/)
 include_directories(./sparsepp/)
+include_directories(./parallel_hashmap/)
 
 SET(BOOST_ROOT /usr)
 SET(CMAKE_INCLUDE_PATH /usr/include ${CMAKE_INCLUDE_PATH} )

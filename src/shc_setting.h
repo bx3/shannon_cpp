@@ -15,7 +15,8 @@
 //#define USE_DENSE_KMER
 //#define USE_SPARSE_KMER
 //#define USE_HOPSCOTCH
-#define USE_SPARSEPP
+//#define USE_SPARSEPP
+#define USE_PARALLEL_HASHMAP
 
 //#define NUM_OPEN_FILE 1000
 

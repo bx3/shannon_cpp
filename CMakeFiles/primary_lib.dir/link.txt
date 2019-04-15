@@ -1,0 +1,2 @@
+/usr/bin/ar qc lib_shannon/libprimary_lib.a  CMakeFiles/primary_lib.dir/src/log.cpp.o CMakeFiles/primary_lib.dir/src/basic_log.cpp.o CMakeFiles/primary_lib.dir/src/local_file_structure.cpp.o CMakeFiles/primary_lib.dir/src/json_parser.cpp.o CMakeFiles/primary_lib.dir/src/encoding.cpp.o CMakeFiles/primary_lib.dir/src/shannon_C_seq_helper.cpp.o
+/usr/bin/ranlib lib_shannon/libprimary_lib.a

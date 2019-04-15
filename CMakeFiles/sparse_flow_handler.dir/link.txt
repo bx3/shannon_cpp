@@ -1,0 +1,2 @@
+/usr/bin/ar qc lib_shannon/libsparse_flow_handler.a  CMakeFiles/sparse_flow_handler.dir/src/Sparse_flow_handler.cpp.o
+/usr/bin/ranlib lib_shannon/libsparse_flow_handler.a

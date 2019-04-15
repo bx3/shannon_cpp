@@ -1,0 +1,2 @@
+/usr/bin/ar qc lib_shannon/libcontig_graph_handler.a  CMakeFiles/contig_graph_handler.dir/src/Contig_graph_handler.cpp.o CMakeFiles/contig_graph_handler.dir/src/Kmer_handler.cpp.o CMakeFiles/contig_graph_handler.dir/src/Contig_handler.cpp.o
+/usr/bin/ranlib lib_shannon/libcontig_graph_handler.a

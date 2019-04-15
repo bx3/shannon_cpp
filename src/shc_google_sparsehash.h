@@ -5,6 +5,8 @@
  * Created on September 3, 2017, 2:48 PM
  */
 
+
+
 #ifndef SHC_GOOGLE_SPARSEHASH_H
 #define	SHC_GOOGLE_SPARSEHASH_H
 #include <stdint.h>
@@ -19,6 +21,7 @@
 #include "hopscotch_set.h"
 
 #include <sparsepp/spp.h>
+#include "phmap.h"
 #include "encoding.h"
 #include "shc_setting.h"
 
@@ -63,7 +66,16 @@ struct hash_u64 {
     //res ^= u;
     //res *= 16777619UL;
 
+    uint64_t key = (~u) + (u << 21); // key = (key << 21) - key - 1;
+    key = key ^ (key >> 24);
+    key = (key + (key << 3)) + (key << 8); // key * 265
+    key = key ^ (key >> 14);
+    key = (key + (key << 2)) + (key << 4); // key * 21
+    key = key ^ (key >> 28);
+    key = key + (key << 31);
+    return key;
 
+    /*
     uint64_t v = u * 3935559000370003845 + 2691343689449507681;
 
     v ^= v >> 21;
@@ -77,6 +89,7 @@ struct hash_u64 {
     v ^= v <<  5;
 
     return v;
+    */
 
     //size_t operator()(uint64_t k) const { return (k ^ 14695981039346656037ULL) * 1099511628211ULL; }
   }
@@ -241,6 +254,30 @@ typedef tsl::hopscotch_set<uint64_t, hash_u64, equ64>::const_iterator Rmer_set_c
 typedef spp::sparse_hash_map<uint64_t, std::vector<contig_num_t>, hash_u64, equ64> Rmer_contig_map;
 typedef spp::sparse_hash_map<uint64_t, std::vector<contig_num_t>, hash_u64, equ64>::iterator Rmer_contig_map_iterator;
 typedef spp::sparse_hash_map<uint64_t, std::vector<contig_num_t>, hash_u64, equ64>::const_iterator Rmer_contig_map_const_iterator;
+
+#endif
+
+#ifdef USE_PARALLEL_HASHMAP
+typedef phmap::parallel_flat_hash_map<uint64_t, Kmer_info, hash_u64, equ64> Kmer_counter_map;
+typedef phmap::parallel_flat_hash_map<uint64_t, Kmer_info, hash_u64, equ64>::iterator Kmer_counter_map_iterator;
+typedef phmap::parallel_flat_hash_map<uint64_t, Kmer_info, hash_u64, equ64>::const_iterator Kmer_counter_map_const_iterator;
+
+#define RESERVE_NUM_KMER(dict, size)                dict.reserve(size);
+#define ITER_GET_VALUE(iter)                  iter->second
+#define ITER_INCREMENT_COUNT(iter, count_)    iter->second.count = ADD_COUNT(iter->second.count ,count_);
+#define ITER_SET_CONTIG(iter, contig_)        iter->second.contig = contig_;
+#define ITER_SET_INFO(iter, info_)            iter->second.info = info_;
+#define ITER_SET_USED(iter, used_)            iter->second.used = used_;
+#define INIT_DICT(dict, empty_key, delete_key) \
+        do {;} while (0)
+
+typedef tsl::hopscotch_set<uint64_t, hash_u64, equ64> Rmer_set;
+typedef tsl::hopscotch_set<uint64_t, hash_u64, equ64>::iterator Rmer_set_iterator;
+typedef tsl::hopscotch_set<uint64_t, hash_u64, equ64>::const_iterator Rmer_set_const_iterator;
+
+typedef phmap::parallel_flat_hash_map<uint64_t, std::vector<contig_num_t>, hash_u64, equ64> Rmer_contig_map;
+typedef phmap::parallel_flat_hash_map<uint64_t, std::vector<contig_num_t>, hash_u64, equ64>::iterator Rmer_contig_map_iterator;
+typedef phmap::parallel_flat_hash_map<uint64_t, std::vector<contig_num_t>, hash_u64, equ64>::const_iterator Rmer_contig_map_const_iterator;
 
 #endif
 
