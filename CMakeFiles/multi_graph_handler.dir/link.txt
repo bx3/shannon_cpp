@@ -1,2 +1,0 @@
-/usr/bin/ar qc lib_shannon/libmulti_graph_handler.a  CMakeFiles/multi_graph_handler.dir/src/Multi_graph_handler.cpp.o
-/usr/bin/ranlib lib_shannon/libmulti_graph_handler.a

@@ -1,2 +1,0 @@
-/usr/bin/ar qc lib_shannon/libseq_graph_handler.a  CMakeFiles/seq_graph_handler.dir/src/Sequence_graph_handler.cpp.o
-/usr/bin/ranlib lib_shannon/libseq_graph_handler.a
