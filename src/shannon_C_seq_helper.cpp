@@ -598,6 +598,111 @@ void fasta_file_validator(std::string path)
     std::cout << "it is valid, has read " << i << " line " << std::endl;
 }
 
+void run_pre_error_correct(Shannon_C_setting & setting)
+{
+    std::cout << "run_pre_error_correct" << std::endl;
+
+    Local_files & lf = setting.local_files;
+    std::string num_thread_str = std::to_string(setting.num_parallel);
+
+    int num_field = 15;
+    char **argv = (char**) malloc(num_field*sizeof(char*));
+    for(int i=0;i<num_field;i++){
+        argv[i] = (char*) malloc(1000*sizeof(char));
+    }
+
+    int arg_n = 0;
+    strcpy(argv[arg_n++], "perl");
+    strcpy(argv[arg_n++], "./Rcorrector/run_rcorrector.pl");
+    strcpy(argv[arg_n++], "-t");
+    strcpy(argv[arg_n++], num_thread_str.c_str());
+    strcpy(argv[arg_n++], "-od");
+    strcpy(argv[arg_n++], lf.algo_input.c_str());
+
+
+    if(setting.has_single)
+    {
+        std::string filename = get_filename(lf.input_read_path);
+
+        lf.pre_corrected_read_path = lf.algo_input + "/" + filename + ".cor.fa";
+
+        strcpy(argv[arg_n++], "-r");
+        strcpy(argv[arg_n++], lf.input_read_path.c_str());
+    }
+
+    if(setting.has_pair)
+    {
+        std::string filename1 = get_filename(lf.input_read_path_1);
+        std::string filename2 = get_filename(lf.input_read_path_2);
+        lf.pre_corrected_read_path_1 = lf.algo_input + "/" + filename1 +".cor.fa";
+        lf.pre_corrected_read_path_2 = lf.algo_input + "/" + filename2 +".cor.fa";
+        strcpy(argv[arg_n++], "-1");
+        strcpy(argv[arg_n++], lf.input_read_path_1.c_str());
+        strcpy(argv[arg_n++], "-2");
+        strcpy(argv[arg_n++], lf.input_read_path_2.c_str());
+    }
+
+    if(setting.has_single && setting.has_pair)
+    {
+        if(exist_path(lf.pre_corrected_read_path) &&
+           exist_path(lf.pre_corrected_read_path_1) &&
+           exist_path(lf.pre_corrected_read_path_2)   )
+           {
+               lf.input_read_path = lf.pre_corrected_read_path;
+               lf.input_read_path_1 = lf.pre_corrected_read_path_1;
+               lf.input_read_path_2 = lf.pre_corrected_read_path_2;
+               return;
+           }
+    }
+    else if(setting.has_single)
+    {
+        if (exist_path(lf.pre_corrected_read_path))
+        {
+            lf.input_read_path = lf.pre_corrected_read_path;
+            return;
+        }
+    }
+    else
+    {
+        if (exist_path(lf.pre_corrected_read_path_1) &&
+            exist_path(lf.pre_corrected_read_path_2)   )
+        {
+            lf.input_read_path_1 = lf.pre_corrected_read_path_1;
+            lf.input_read_path_2 = lf.pre_corrected_read_path_2;
+            return;
+        }
+    }
+
+
+    argv[arg_n++] = NULL;
+
+    std::string cmd_count;
+    for(int i=0;i<arg_n-1;i++)
+    {
+        cmd_count += std::string(argv[i]) + " ";
+    }
+
+    //print_yellow_cmd(cmd_count);
+    run_command(cmd_count, true);
+    //if(execvp("perl", argv))
+    //{
+    //    printf("execlp error");
+    //    _exit(1);
+    //}
+
+    if(setting.has_single)
+    {
+        lf.input_read_path = lf.pre_corrected_read_path;
+    }
+
+    if(setting.has_pair)
+    {
+        lf.input_read_path_1 = lf.pre_corrected_read_path_1;
+        lf.input_read_path_2 = lf.pre_corrected_read_path_2;
+    }
+
+}
+
 void run_jellyfish(Shannon_C_setting & setting)
 {
     Local_files & lf = setting.local_files;

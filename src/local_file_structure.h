@@ -40,6 +40,7 @@ bool exist_path(std::string a_path);
 bool is_file_empty(std::string a_path);
 void overwirte_a_file(std::string file_path);
 void cp_file(std::string src, std::string dst);
+std::string get_filename(std::string path);
 
 size_t get_filesize(const std::string & filename);
 size_t estimate_num_read(const std::string & filename, size_t read_length);
@@ -254,7 +255,7 @@ struct Local_files {    //"/test_data"
         reconstructed_sf_path = reconstructed_seq_path + "_sf";
         unfiltered_length_reconst_seq = reconstructed_seq_path + "_unfiltered_len";
 
-        
+
 
         // others
         duplicate_removed_read_dir = output_path + "/duplicate_remove_reads";
@@ -329,6 +330,11 @@ struct Local_files {    //"/test_data"
     bool has_pair;
     std::string input_read_path_1;
     std::string input_read_path_2;
+    // corrected read
+    std::string pre_corrected_read_path;
+    std::string pre_corrected_read_path_1;
+    std::string pre_corrected_read_path_2;
+
     // contig graph
     std::string output_contig_path;
     std::string output_kmer_path;
@@ -378,6 +384,8 @@ struct Local_files {    //"/test_data"
 
     Mem_profiler mem_profiler;
     std::string component_mem_info;
+
+
 
 private:
     //input name

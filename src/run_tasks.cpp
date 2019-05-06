@@ -327,18 +327,21 @@ void test_all(Shannon_C_setting * setting)
     }
 #endif
 
+    if (setting->is_pre_error_correct) {
+        run_pre_error_correct(*setting);
+    }
 
     Block_timer main_timer;
     start_timer(&main_timer);
 
     Block_timer part_timer;
     start_timer(&part_timer);
+    std::cout << "start running jellyfish" << std::endl;
     run_jellyfish(*setting);
     std::cout << "Jellyfish task finishes, using time " << std::endl;
     stop_timer(&part_timer);
     shc_log_info(shc_logname, "finish run jellyfish\n");
     log_stop_timer(&part_timer);
-
 
     info_log_info(setting->local_files.timing_path.c_str(),
                         "jellyfish finish at %u sec\n", take_time(&part_timer));

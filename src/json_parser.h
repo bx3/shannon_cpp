@@ -229,7 +229,7 @@ struct Shannon_C_setting {
             pair_2_read_length(0), has_single(false), has_pair(false),
             is_double_stranded(true), is_compress(false), num_parallel(1),
             take_single_node_seq(true), take_contig_seq(true), rmer_length(24),
-            is_log_mem(true), avail_mem(0), random_seed(0) {}
+            is_log_mem(true), avail_mem(0), random_seed(0), is_pre_error_correct(true) {}
 
     bool has_single;
     uint8_t kmer_length;
@@ -271,6 +271,8 @@ struct Shannon_C_setting {
     Seq_graph_setup seq_graph_setup;
 
     Sparse_flow_setup sparse_flow_setup;
+
+    bool is_pre_error_correct;
 };
 
 

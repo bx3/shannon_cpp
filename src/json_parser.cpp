@@ -65,6 +65,7 @@ void parser_setting_file(std::string & file_path, Shannon_C_setting & setting)
     bool take_single_node_seq = pt.get<bool>("take_single_node_seq");
     bool take_contig_seq = pt.get<bool>("take_contig_seq");
     unsigned int random_seed = pt.get<unsigned int>("random_seed");
+    bool is_pre_error_correct = pt.get<bool>("is_pre_error_correct");
 
 
     //int num_parallel = pt.get<int>("num_parallel");
@@ -84,6 +85,8 @@ void parser_setting_file(std::string & file_path, Shannon_C_setting & setting)
     setting.take_contig_seq = take_contig_seq;
 
     setting.random_seed = random_seed;
+
+    setting.is_pre_error_correct = is_pre_error_correct;
 
     ptree multi_graph_setup = pt.get_child("multi_graph_setup");
     setting.num_parallel = multi_graph_setup.get<int>("num_parallel");

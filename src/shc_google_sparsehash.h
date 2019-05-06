@@ -63,6 +63,15 @@ struct hash_u64 {
     //res ^= u;
     //res *= 16777619UL;
 
+    //uint64_t key = (~u) + (u << 21); // key = (key << 21) - key - 1;
+    //key = key ^ (key >> 24);
+    //key = (key + (key << 3)) + (key << 8); // key * 265
+    //key = key ^ (key >> 14);
+    //key = (key + (key << 2)) + (key << 4); // key * 21
+    //key = key ^ (key >> 28);
+    //key = key + (key << 31);
+    //return key;
+
 
     uint64_t v = u * 3935559000370003845 + 2691343689449507681;
 

@@ -15,6 +15,13 @@ bool convert_to_abs_and_check_exist(std::string & path)
     return true;
 }
 
+std::string get_filename(std::string path)
+{
+    boost::filesystem::path p(path.c_str());
+    std::string filename = p.stem().string();
+    return filename;
+}
+
 void convert_relative_path_to_abs(std::string rel_path, std::string & abs_path)
 {
     char resolved_path[PATH_MAX];
@@ -113,8 +120,9 @@ void add_directory_if_not_exist(std::string & dir)
     }
     else
     {
-        std::cout << "dir already exists, use the existing one : "
-                  << dir << std::endl << std::endl;
+        ;
+        //std::cout << "dir already exists, use the existing one : "
+        //          << dir << std::endl << std::endl;
     }
 
 }

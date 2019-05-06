@@ -202,7 +202,7 @@ int main(int argc, char** argv) {
 
             int comp_i = -1;
             seq_graph_handler.setup_input_file_path(kmer_path, s_read_path,
-                                p1_read_path, p2_read_path, read_prob_path, 
+                                p1_read_path, p2_read_path, read_prob_path,
 								read_pair_prob_path, is_list_read_file);
             seq_graph_handler.run_it(comp_i, true);
         }
@@ -859,7 +859,7 @@ void add_partition_options(boost::program_options::options_description & desc)
 }
 
 void command_line_for_shannon(int argc, char** argv, Shannon_C_setting  & setting)
-{
+{    
     namespace po = boost::program_options;
     Local_files & lf = setting.local_files;
 
@@ -886,6 +886,8 @@ void command_line_for_shannon(int argc, char** argv, Shannon_C_setting  & settin
                       "rmer size used to check duplicates")
             ("random_seed", po::value<int>()->default_value(0),
                    "Reproduce the same output")
+            ("pre_correct_read", po::value<bool>()->default_value(true),
+                    "Run Rcorrector for initial error correction")
         ;
 
         add_multi_graph_options(desc);
@@ -914,6 +916,7 @@ void command_line_for_shannon(int argc, char** argv, Shannon_C_setting  & settin
         setting.seq_graph_setup.max_hop_path = vm["max_hop_for_known_path"].as<int>();
         setting.sparse_flow_setup.multiple_test = vm["multiple_test"].as<int>();
         setting.random_seed = vm["random_seed"].as<int>();
+        setting.is_pre_error_correct = vm["pre_correct_read"].as<bool>();
 
 
         std::string avail_mem_str = vm["avail_mem"].as<std::string>();

@@ -49,6 +49,8 @@ void run_jellyfish_for_file(Shannon_C_setting & setting, std::string & kmer_path
 void run_command(std::string cmd, bool print_cmd);
 void print_yellow_cmd(std::string cmd);
 
+void run_pre_error_correct(Shannon_C_setting & setting);
+
 void parse_jf_info(Local_files & lf, JF_stats & jf_info);
 
 void check_read_type_consistency(Shannon_C_setting & setting);
