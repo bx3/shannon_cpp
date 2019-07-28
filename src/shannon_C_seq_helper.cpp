@@ -611,9 +611,11 @@ void run_pre_error_correct(Shannon_C_setting & setting)
         argv[i] = (char*) malloc(1000*sizeof(char));
     }
 
+    std::string rcorrector_path = lf.shannon_env_path +  "/Rcorrector/run_rcorrector.pl";
+    std::cout << "rcorrector_path " << rcorrector_path << std::endl;
     int arg_n = 0;
     strcpy(argv[arg_n++], "perl");
-    strcpy(argv[arg_n++], "./Rcorrector/run_rcorrector.pl");
+    strcpy(argv[arg_n++], rcorrector_path.c_str());
     strcpy(argv[arg_n++], "-t");
     strcpy(argv[arg_n++], num_thread_str.c_str());
     strcpy(argv[arg_n++], "-od");

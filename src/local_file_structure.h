@@ -183,6 +183,17 @@ struct Local_files {    //"/test_data"
 
         component_mem_info = output_path + "/component_mem_info";
 
+        char* pPath;
+        pPath = getenv("SHANNON_RNA_SEQ_PATH");
+        if (pPath != NULL)
+        {
+            shannon_env_path = std::string(pPath);
+            std::cout << shannon_env_path << std::endl;
+        }
+        else
+        {
+            printf("please set env variable SHANNON_RNA_SEQ_PATH to use rcorrector");
+        }
 
         //std::cout << "output_path " << output_path << std::endl;
         //std::cout << "output_seq_graph_path " << output_seq_graph_path << std::endl;
@@ -277,7 +288,17 @@ struct Local_files {    //"/test_data"
         overwirte_a_file(timing_path);
         component_mem_info = output_path + "/component_mem_info";
 
-
+        char* pPath;
+        pPath = getenv("SHANNON_RNA_SEQ_PATH");
+        if (pPath != NULL)
+        {
+            shannon_env_path = std::string(pPath);
+            std::cout << shannon_env_path << std::endl;
+        }
+        else
+        {
+            printf("please set env variable SHANNON_RNA_SEQ_PATH to use rcorrector");
+        }
 
         // prepare dir and files
 
@@ -384,6 +405,8 @@ struct Local_files {    //"/test_data"
 
     Mem_profiler mem_profiler;
     std::string component_mem_info;
+
+    std::string shannon_env_path;
 
 
 
