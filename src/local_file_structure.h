@@ -297,7 +297,7 @@ struct Local_files {    //"/test_data"
         }
         else
         {
-            printf("please set env variable SHANNON_RNA_SEQ_PATH to use rcorrector");
+            printf("can set env variable SHANNON_RNA_SEQ_PATH to use rcorrector if rcorrector does not load");
         }
 
         // prepare dir and files

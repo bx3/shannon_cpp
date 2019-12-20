@@ -29,6 +29,7 @@
 #include "local_file_structure.h"
 #include "shc_type.h"
 
+
 uint64_t get_mem(pid_t id);
 int64_t get_machine_physical_limit_mem();
 
@@ -46,8 +47,14 @@ struct JF_stats {
 void fasta_file_validator(std::string path);
 void run_jellyfish(Shannon_C_setting & setting);
 void run_jellyfish_for_file(Shannon_C_setting & setting, std::string & kmer_path);
-void run_command(std::string cmd, bool print_cmd);
+bool run_command(std::string cmd, bool print_cmd);
 void print_yellow_cmd(std::string cmd);
+
+bool is_fasta_file(std::string filename);
+void transform_to_fasta(std::string * setting_read_path,
+    std::string output_name,
+    std::string & raw_input_read_path,
+    Local_files & lf);
 
 void run_pre_error_correct(Shannon_C_setting & setting);
 

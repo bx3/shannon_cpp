@@ -102,7 +102,7 @@ PS_FIELD_HELP = [
     ],
     ["CMD",
      """
-	 Running process path and command line arguments."""
+         Running process path and command line arguments."""
      ],
 ]
 
@@ -632,9 +632,9 @@ standard output and standard error ('-C'), or suppress all COMMAND output altoge
     if opts.syrupy_in_front:
         syrupy_output = sys.stdout
     else:
-	
+        
         #fname = base_title + ".ps.log"
-	fname = output_path  + ".ps.log"
+        fname = output_path  + ".ps.log"
         if not opts.quiet:
             sys.stderr.write("SYRUPY: Writing process resource usage samples to '%s'\n" % fname)
         syrupy_output = open_file(fname, "w", replace=opts.replace)
@@ -642,12 +642,12 @@ standard output and standard error ('-C'), or suppress all COMMAND output altoge
     if opts.suppress_raw_process_log:
         raw_ps_log = None
     else:
-	fname = output_path  + ".ps.raw"
+        fname = output_path  + ".ps.raw"
         #fname = base_title + ".ps.raw"
         if not opts.quiet:
             sys.stderr.write("SYRUPY: Writing raw process resource usage logs to '%s'\n" % fname)
         raw_ps_log = open_file(fname, "w", replace=opts.replace)
-	#raw_ps_log = open_file(base_title + ".ps.raw", "w", replace=opts.replace)
+        #raw_ps_log = open_file(base_title + ".ps.raw", "w", replace=opts.replace)
 
     if opts.poll_pid is not None or opts.poll_command is not None or opts.poll_mem is not None:
         if not opts.quiet:

@@ -118,6 +118,28 @@ int main(int argc, char** argv) {
         else if(subcommand == "shannon")
         {
             command_line_for_shannon(argc, argv, setting);
+
+            if (setting.is_pre_error_correct) {
+                run_pre_error_correct(setting);
+            }
+
+            Local_files & lf = setting.local_files;
+            if (setting.has_single)
+            {
+                if(!setting.bypass_read_reformat)
+                    transform_to_fasta(&lf.input_read_path, "SE_read.fasta", lf.input_read_path, lf);
+            }
+
+            if (setting.has_pair)
+            {
+                if(!setting.bypass_read_reformat)
+                {
+                    transform_to_fasta(&lf.input_read_path_1, "PE_read_1.fasta", lf.input_read_path_1, lf);
+                    transform_to_fasta(&lf.input_read_path_2, "PE_read_2.fasta", lf.input_read_path_2, lf);
+                }
+            }
+
+
             profiler_pid = fork_mem_profiler(shannon_Cpp_pid, setting.local_files.mem_profiler.main_log_path);
             test_all(&setting);
         }
@@ -781,7 +803,6 @@ void add_multi_graph_options(boost::program_options::options_description & desc)
 void parse_kmer_strand_options(
     boost::program_options::variables_map & vm, Shannon_C_setting  & setting)
 {
-    parse_read_len_and_path(vm, setting);
     setting.kmer_length = vm["kmer_length"].as<int>();
     setting.is_double_stranded = vm["double_strand"].as<bool>();
 }
@@ -859,7 +880,7 @@ void add_partition_options(boost::program_options::options_description & desc)
 }
 
 void command_line_for_shannon(int argc, char** argv, Shannon_C_setting  & setting)
-{    
+{
     namespace po = boost::program_options;
     Local_files & lf = setting.local_files;
 
@@ -886,8 +907,10 @@ void command_line_for_shannon(int argc, char** argv, Shannon_C_setting  & settin
                       "rmer size used to check duplicates")
             ("random_seed", po::value<int>()->default_value(0),
                    "Reproduce the same output")
-            ("pre_correct_read", po::value<bool>()->default_value(true),
+            ("bypass_pre_correct_read",
                     "Run Rcorrector for initial error correction")
+            ("bypass_read_reformat",
+                    "do not reformat reads which would lead to increases of disk space, assuming input reads are single line fasta file")
         ;
 
         add_multi_graph_options(desc);
@@ -906,18 +929,28 @@ void command_line_for_shannon(int argc, char** argv, Shannon_C_setting  & settin
         }
         po::notify(vm);
 
-        parse_kmer_strand_options(vm, setting);
-        parse_output_options(vm, setting);
-        parse_read_len_and_path(vm, setting);
-        parse_partition_option(vm, setting);
-
         setting.rmer_length = vm["duplicate_rmer_length"].as<int>();
         setting.num_parallel = vm["num_process"].as<int>();
         setting.seq_graph_setup.max_hop_path = vm["max_hop_for_known_path"].as<int>();
         setting.sparse_flow_setup.multiple_test = vm["multiple_test"].as<int>();
         setting.random_seed = vm["random_seed"].as<int>();
-        setting.is_pre_error_correct = vm["pre_correct_read"].as<bool>();
+        setting.is_pre_error_correct = true;
+        if (vm.count("bypass_pre_correct_read"))
+        {
+            setting.is_pre_error_correct = false;
+        }
 
+        setting.bypass_read_reformat = false;
+        if (vm.count("bypass_read_reformat"))
+        {
+            setting.bypass_read_reformat = true;
+        }
+
+
+        parse_kmer_strand_options(vm, setting);
+        parse_output_options(vm, setting);
+        parse_read_len_and_path(vm, setting);
+        parse_partition_option(vm, setting);
 
         std::string avail_mem_str = vm["avail_mem"].as<std::string>();
         setting.avail_mem = format_memory_arg(avail_mem_str);
@@ -1137,25 +1170,28 @@ void parse_read_len_and_path(
 
     if (vm.count("SE_read_path"))
     {
-        lf.input_read_path = vm["SE_read_path"].as< std::string >();
-        if(!convert_to_abs_and_check_exist(lf.input_read_path))
+        std::string raw_input_read_path = vm["SE_read_path"].as< std::string >();
+        if(!convert_to_abs_and_check_exist(raw_input_read_path))
             exit(0);
+        lf.input_read_path = raw_input_read_path;
 
         lf.has_single = true;
         se_path = true;
     }
 
     if (vm.count("PE_read_path")) {
-        lf.has_pair = true;
-        lf.input_read_path_1 = vm["PE_read_path"].as< std::vector<std::string> >().at(0);
-        lf.input_read_path_2 = vm["PE_read_path"].as< std::vector<std::string> >().at(1);
+        std::string raw_input_read_path_1 = vm["PE_read_path"].as< std::vector<std::string> >().at(0);
+        std::string raw_input_read_path_2 = vm["PE_read_path"].as< std::vector<std::string> >().at(1);
 
-        if(!convert_to_abs_and_check_exist(lf.input_read_path_1) ||
-           !convert_to_abs_and_check_exist(lf.input_read_path_2) )
+        if(!convert_to_abs_and_check_exist(raw_input_read_path_1) ||
+           !convert_to_abs_and_check_exist(raw_input_read_path_2) )
         {
             exit(0);
         }
 
+        lf.has_pair = true;
+        lf.input_read_path_1 = raw_input_read_path_1;
+        lf.input_read_path_2 = raw_input_read_path_2;
         pe_path = true;
     }
 

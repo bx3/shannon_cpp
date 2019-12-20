@@ -1,6 +1,9 @@
 #include "shannon_C_seq_helper.h"
 #include <boost/tokenizer.hpp>
+#include <zlib.h>
+#include "kseq.h"
 
+KSEQ_INIT(gzFile, gzread)
 
 uint64_t get_mem(pid_t id)
 {
@@ -107,6 +110,8 @@ void get_mem_statistics(int num_parallel, Mem_profiler & mp)
     writer << "sort_RSS  " << sort_RSS/1024.0 << " MB <=> " << sort_RSS/1024.0/1014.0 << " GB" << std::endl;
     writer.close();
 }
+
+
 
 uint64_t get_max_RSS(std::string filename)
 {
@@ -530,7 +535,7 @@ void print_yellow_cmd(std::string cmd)
     std::cout << "\033[0m" << std::endl << std::endl;
 }
 
-void run_command(std::string cmd, bool print_cmd)
+bool run_command(std::string cmd, bool print_cmd)
 {
     if(system(NULL))
         ;
@@ -543,7 +548,9 @@ void run_command(std::string cmd, bool print_cmd)
         std::cout << cmd << std::endl;
         std::cout << "\033[0m" << std::endl << std::endl;
     }
-    system(cmd.c_str());
+    if(system(cmd.c_str())!=0)
+        return false;
+    return true;
 }
 
 void fasta_file_validator(std::string path)
@@ -598,6 +605,116 @@ void fasta_file_validator(std::string path)
     std::cout << "it is valid, has read " << i << " line " << std::endl;
 }
 
+// Assume the validity of fasta only check either fasta or fastq
+bool is_fasta_file(std::string filename)
+{
+    gzFile fp;
+    kseq_t *seq;
+    int l;
+    fp = gzopen(filename.c_str(), "r");
+    seq = kseq_init(fp);
+    while ((l = kseq_read(seq)) >= 0) {
+        if(seq->qual.l)
+        {
+            kseq_destroy(seq);
+            gzclose(fp);
+            return false;
+        }
+        else
+        {
+            kseq_destroy(seq);
+            gzclose(fp);
+            return true;
+        }
+    }
+
+    std::cout << "\033[1;31m";
+    std::cout << "Input is neither a fasta or fastq file" << std::endl;
+    std::cout << "\033[0m" << std::endl;
+    _exit(1);
+}
+
+
+bool is_gz_file(std::string filename)
+{
+    int len = filename.size();
+    if (filename[len - 1] == 'z' && filename[len - 2] == 'g')
+        return true;
+    else
+        return false;
+}
+
+void transform_to_fasta(
+    std::string * setting_read_path,
+    std::string output_name,
+    std::string & raw_input_read_path,
+    Local_files & lf)
+{
+    gzFile fp;
+	kseq_t *seq;
+	int l;
+    fp = gzopen(raw_input_read_path.c_str(), "r");
+    *setting_read_path = lf.algo_input + "/" + output_name;
+    std::ofstream outfile (*setting_read_path);
+
+	seq = kseq_init(fp);
+	while ((l = kseq_read(seq)) >= 0) {
+        outfile << ">" << seq->name.s << std::endl;
+        outfile << seq->seq.s << std::endl;
+	}
+
+	kseq_destroy(seq);
+	gzclose(fp);
+}
+
+void rcorrector_GetFileName( char *in, char *out )
+{
+	int i, j ;
+	int len = (int)strlen( in ) ;
+	for ( i = len ; i >= 0 && in[i] != '.' && in[i] != '/' ; --i )
+		;
+	if ( i >= 0 && !strcmp( &in[i], ".gz" ) )
+	{
+		int tmp = i ;
+		for ( i = i - 1 ; i >= 0 && in[i] != '.' && in[i] != '/' ; --i )
+			;
+		in[tmp] = '\0' ;
+		if ( i >= 0 && ( !strcmp( &in[i], ".fastq" ) || !strcmp( &in[i], ".fasta" ) ||
+			!strcmp( &in[i], ".fq" ) || !strcmp( &in[i], ".fa" ) ) )
+		{
+			;
+		}
+		else
+		{
+			i = tmp ;
+		}
+		in[tmp] = '.' ;
+	}
+
+	for ( j = len ; j >= 0 && in[j] != '/' ; --j )
+		;
+	if ( i >= 0 && in[i] == '.' )
+	{
+		in[i] = '\0' ;
+		strcpy( out, in + j + 1 ) ;
+		in[i] = '.' ;
+	}
+	else
+	{
+		strcpy( out, in + j + 1 ) ;
+	}
+}
+
+std::string get_filename_rcorrector(std::string & input)
+{
+    char fileName[1024];
+    char in[1024];
+    strcpy(in, input.c_str());
+    rcorrector_GetFileName(in, fileName);
+    std::string filename(fileName);
+    return filename;
+}
+
 void run_pre_error_correct(Shannon_C_setting & setting)
 {
     std::cout << "run_pre_error_correct" << std::endl;
@@ -612,9 +729,14 @@ void run_pre_error_correct(Shannon_C_setting & setting)
     }
 
     std::string rcorrector_path = lf.shannon_env_path +  "/Rcorrector/run_rcorrector.pl";
+    if (!exist_path(rcorrector_path))
+    {
+        rcorrector_path = std::string("run_rcorrector.pl");
+    }
+
     std::cout << "rcorrector_path " << rcorrector_path << std::endl;
     int arg_n = 0;
-    strcpy(argv[arg_n++], "perl");
+    //strcpy(argv[arg_n++], "perl");
     strcpy(argv[arg_n++], rcorrector_path.c_str());
     strcpy(argv[arg_n++], "-t");
     strcpy(argv[arg_n++], num_thread_str.c_str());
@@ -624,9 +746,16 @@ void run_pre_error_correct(Shannon_C_setting & setting)
 
     if(setting.has_single)
     {
-        std::string filename = get_filename(lf.input_read_path);
 
-        lf.pre_corrected_read_path = lf.algo_input + "/" + filename + ".cor.fa";
+        std::string filename = get_filename_rcorrector(lf.input_read_path);
+
+        if(is_fasta_file(lf.input_read_path))
+            lf.pre_corrected_read_path = lf.algo_input + "/" + filename + ".cor.fa";
+        else
+            lf.pre_corrected_read_path = lf.algo_input + "/" + filename + ".cor.fq";
+
+        if(is_gz_file(lf.input_read_path))
+            lf.pre_corrected_read_path += ".gz";
 
         strcpy(argv[arg_n++], "-r");
         strcpy(argv[arg_n++], lf.input_read_path.c_str());
@@ -634,10 +763,24 @@ void run_pre_error_correct(Shannon_C_setting & setting)
 
     if(setting.has_pair)
     {
-        std::string filename1 = get_filename(lf.input_read_path_1);
-        std::string filename2 = get_filename(lf.input_read_path_2);
-        lf.pre_corrected_read_path_1 = lf.algo_input + "/" + filename1 +".cor.fa";
-        lf.pre_corrected_read_path_2 = lf.algo_input + "/" + filename2 +".cor.fa";
+        std::string filename1 = get_filename_rcorrector(lf.input_read_path_1);
+        std::string filename2 = get_filename_rcorrector(lf.input_read_path_2);
+        if (is_fasta_file(lf.input_read_path_1))
+            lf.pre_corrected_read_path_1 = lf.algo_input + "/" + filename1 +".cor.fa";
+        else
+            lf.pre_corrected_read_path_1 = lf.algo_input + "/" + filename1 +".cor.fq";
+        if(is_gz_file(lf.input_read_path_1))
+            lf.pre_corrected_read_path_1 += ".gz";
+
+
+        if (is_fasta_file(lf.input_read_path_2))
+            lf.pre_corrected_read_path_2 = lf.algo_input + "/" + filename2 +".cor.fa";
+        else
+            lf.pre_corrected_read_path_2 = lf.algo_input + "/" + filename2 +".cor.fq";
+        if(is_gz_file(lf.input_read_path_2))
+            lf.pre_corrected_read_path_2 += ".gz";
+
+
         strcpy(argv[arg_n++], "-1");
         strcpy(argv[arg_n++], lf.input_read_path_1.c_str());
         strcpy(argv[arg_n++], "-2");
@@ -685,7 +828,8 @@ void run_pre_error_correct(Shannon_C_setting & setting)
     }
 
     //print_yellow_cmd(cmd_count);
-    run_command(cmd_count, true);
+    if(!run_command(cmd_count, true))
+        exit(EXIT_FAILURE);
     //if(execvp("perl", argv))
     //{
     //    printf("execlp error");

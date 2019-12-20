@@ -327,10 +327,6 @@ void test_all(Shannon_C_setting * setting)
     }
 #endif
 
-    if (setting->is_pre_error_correct) {
-        run_pre_error_correct(*setting);
-    }
-
     Block_timer main_timer;
     start_timer(&main_timer);
 

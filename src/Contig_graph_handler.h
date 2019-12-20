@@ -8,7 +8,7 @@
 #ifndef CONTIG_GRAPH_HANDLER_H
 #define	CONTIG_GRAPH_HANDLER_H
 
-#include <boost/config.hpp>
+#include "boost/config.hpp"
 #include <iostream>
 #include <fstream>
 #include <algorithm>
