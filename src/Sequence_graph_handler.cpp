@@ -1,5 +1,5 @@
 #include <boost/graph/compressed_sparse_row_graph.hpp>
-#include <bits/stl_vector.h>
+//#include <bits/stl_vector.h>
 #include <unistd.h>
 
 #include "Sequence_graph_handler.h"

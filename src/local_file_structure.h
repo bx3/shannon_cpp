@@ -8,7 +8,7 @@
 #ifndef LOCAL_FILE_STRUCTURE_H
 #define	LOCAL_FILE_STRUCTURE_H
 #include <iostream>
-#include <syscall.h>
+//#include <syscall.h>
 #include <unistd.h>
 #define BOOST_NO_CXX11_SCOPED_ENUMS
 #include <boost/filesystem.hpp>
@@ -18,7 +18,8 @@
 #include <fstream>
 #include <chrono>
 #include <ctime>
-#include <linux/limits.h>
+//#include <sys/syslimits.h>
+//#include <linux/limits.h>
 
 #include "log.h"
 #include <stdio.h>

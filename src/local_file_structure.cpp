@@ -24,7 +24,7 @@ std::string get_filename(std::string path)
 
 void convert_relative_path_to_abs(std::string rel_path, std::string & abs_path)
 {
-    char resolved_path[PATH_MAX];
+    char resolved_path[4096];
     realpath(rel_path.c_str(), resolved_path);
     std::string abs_out_path(resolved_path);
     abs_path = abs_out_path;
@@ -39,7 +39,7 @@ void cp_file(std::string src_file, std::string dst_file)
 
 void convert_relative_path_to_abs(std::string & a_path)
 {
-    char resolved_path[PATH_MAX];
+    char resolved_path[4096];
     realpath(a_path.c_str(), resolved_path);
     std::string abs_out_path(resolved_path);
     a_path = abs_out_path;

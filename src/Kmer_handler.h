@@ -22,7 +22,7 @@
 #include <inttypes.h>
 #include "Contig_handler.h"
 #include "shc_google_sparsehash.h"
-#include <bits/stringfwd.h>
+//#include <bits/stringfwd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <string>
