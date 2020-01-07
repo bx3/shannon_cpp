@@ -123,7 +123,7 @@ struct Metis_setup {
         non_partition_size = ms.non_partition_size;
     }
 
-    Metis_setup& operator = (const Metis_setup & ms)
+    /*Metis_setup& operator = (const Metis_setup & ms)
     {
         is_multiple_partition = ms.is_multiple_partition;
         partition_size = ms.partition_size;
@@ -132,7 +132,7 @@ struct Metis_setup {
         inMem = ms.inMem;
         ncon = ms.ncon;
         non_partition_size = ms.non_partition_size;
-    }
+    }*/
 
     void set_para(bool imp, idx_t partition_size_, real_t overload_,
                             idx_t penalty_, idx_t non_partition_size_)

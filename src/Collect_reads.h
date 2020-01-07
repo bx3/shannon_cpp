@@ -64,7 +64,7 @@ struct Collect_reads {
 
     read_num_t get_total_num_reads()
     {
-
+      return 0;
     }
 
     void clear()

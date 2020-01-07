@@ -347,7 +347,6 @@ bool Multi_graph_handler::get_read_file_size(int i, int64_t & size)
             i++;
             file_path = file_path_prefix + "_" + std::to_string(i);
         }
-        return true;
     }
     if(setting.has_pair)
     {
@@ -380,8 +379,8 @@ bool Multi_graph_handler::get_read_file_size(int i, int64_t & size)
             i++;
             file_path_p2 = read_path_p2_prefix + "_" + std::to_string(i);
         }
-        return true;
     }
+    return true;
 }
 
 void Multi_graph_handler::process_multi_seq_graph(int num_parallel, int num_components)

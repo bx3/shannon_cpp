@@ -41,6 +41,7 @@ struct Read_acc {
         len = l.len;
         read_count = l.read_count;
         read_prob = l.read_prob;
+        return *this;
     }
 
     inline read_count_t get_estimated_read_count() {return std::ceil(read_count);} // without prob /read_prob

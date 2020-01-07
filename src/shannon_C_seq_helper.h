@@ -31,6 +31,7 @@
 
 
 uint64_t get_mem(pid_t id);
+uint64_t getMemoryUsage(pid_t id);
 int64_t get_machine_physical_limit_mem();
 
 struct JF_stats {

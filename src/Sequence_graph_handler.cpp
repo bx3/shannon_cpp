@@ -12,7 +12,6 @@ int64_t Sequence_graph_handler::run_it(int comp_i, bool is_single_component)
 
     curr_comp  = comp_i;
 
-    //std::cout <<" \t\tworking on comp " << comp_i << std::endl;
     //curr_comp = comp_i;
     //std::cout << "start" << std::endl;
     //usleep(2000000);
@@ -1095,6 +1094,8 @@ traverse_read_is_all_kmer_node_valid(std::string & base,
         return it_last->second;
     if(read_type==PAIR_2)
         return it_begin->second;
+
+    return NULL;
 }
 
 void Sequence_graph_handler::
@@ -1724,7 +1725,7 @@ convert_vd_path_to_string(std::vector<vd_t> & path, std::string & middle,
     }
     else
     {
-        int64_t index = std::min(edge_p.weight, last_vd_begin.size());
+        int64_t index = std::min((int64_t)edge_p.weight, (int64_t)last_vd_begin.size());
         middle += last_vd_begin.substr(0, index);
         //shc_log_error("check for strange case\n");
         //exit(1);
@@ -3437,6 +3438,7 @@ bool Sequence_graph_handler::is_only_self_loop(vd_t vd)
     vd_t vd_target = boost::target(*(out_eip.first), graph);
     if(vd_target == vd)
         return true;
+    return false;
 }
 
 bool Sequence_graph_handler::is_contain_self_loop(vd_t vd, ed_t & self_edge)
@@ -5741,6 +5743,7 @@ update_edge_count_with_read(std::string & base, Kmer_Node_map & kmer_node_map)
             //shc_log_info(shc_logname, "%d:%s %s\n", i, base.substr(i, kmer_length).c_str(),((it_curr!=it_end)?("Yes"):("No")));
         }
     }
+    return NULL;
 }
 
 

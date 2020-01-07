@@ -7,6 +7,33 @@ KSEQ_INIT(gzFile, gzread)
 
 uint64_t get_mem(pid_t id)
 {
+    FILE *in;
+    char buff[512];
+
+    char mypid[6];
+    sprintf(mypid, "%d", id);
+    std::string pid_string(mypid);
+
+    std::string command = "ps -p " + pid_string + " -o rss | tail -n 2";
+    if(!(in = popen(command.c_str(), "r"))){
+        _exit(1);
+    }
+    while(fgets(buff, sizeof(buff), in)!=NULL){
+        //cout << buff;
+    }
+    pclose(in);
+
+    std::string str(buff);
+    str.erase(std::remove(str.begin(), str.end(), '\n'), str.end());
+    str.erase(std::remove(str.begin(), str.end(), ' '), str.end());
+    std::cout << "before lexical cast memory pid " << id << std::endl;
+    std::cout << "str:" << str << std::endl;
+    uint64_t RSS = boost::lexical_cast<uint64_t>(str) ;
+    return RSS;
+}
+
+uint64_t getMemoryUsage(pid_t id)
+{
     std::string mem_log_file = "/proc/" + std::to_string(id)+ "/status";
     if(exist_path(mem_log_file))
     {

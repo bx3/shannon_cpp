@@ -101,7 +101,7 @@ void run_custom(int argc, char** argv, Shannon_C_setting setting)
 
     print_and_log_all_setting(setting);
 
-    std::string log_suffix = "test" + desiredTest;
+    std::string log_suffix = "test" + std::to_string(desiredTest);
     setting.local_files.log_filename_path += log_suffix;
 
     shc_log_info(shc_logname, "Shannon C is starting\n");

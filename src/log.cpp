@@ -7,7 +7,7 @@ int init_mem = 0;
 void start_timer(struct Block_timer * bt)
 {
     clock_gettime(CLOCK_MONOTONIC, &bt->nano_start);
-    bt->mem_start = get_proc_mem_value();
+    //bt->mem_start = get_proc_mem_value();
 }
 
 void print_important_notice(std::string msg)
@@ -48,7 +48,7 @@ void stop_timer(struct Block_timer * bt)
 {
     clock_gettime(CLOCK_MONOTONIC,&bt->nano_stamp);
     bt->nTime = (bt->nano_stamp.tv_sec - bt->nano_start.tv_sec);
-    int mem_use = get_proc_mem_value() - bt->mem_start;
+    //int mem_use = get_proc_mem_value() - bt->mem_start;
     print_timer(bt);
 }
 
@@ -70,7 +70,7 @@ void log_stop_timer(struct Block_timer * bt)
 {
     clock_gettime(CLOCK_MONOTONIC,&bt->nano_stamp);
     bt->nTime = (bt->nano_stamp.tv_sec - bt->nano_start.tv_sec);
-    int mem_use = get_proc_mem_value() - bt->mem_start;
+    int mem_use = 0;// get_proc_mem_value() - bt->mem_start;
     shc_log_info(shc_logname, "**\t\tusing %d hours <=> %d minutes <=> %d sec, mem %d GB\n\n",
                     bt->nTime/MINUTE_PER_SEC/HOUR_PER_MINUTE,
                     bt->nTime/HOUR_PER_MINUTE, bt->nTime, mem_use);

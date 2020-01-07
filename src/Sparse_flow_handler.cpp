@@ -12,9 +12,9 @@ void * Sparse_flow_handler::run_sparse_flow_handler_helper( Comp_graph comp_grap
             std::string read_path,
             pthread_mutex_t * write_lock_ptr, std::string output_path)
 {
+
     comp_id = comp_graph.comp_i;
     graph_id = comp_graph.graph_i;
-
     if(!load_graph(node_path, edge_path))
     {
         clear();
@@ -22,15 +22,13 @@ void * Sparse_flow_handler::run_sparse_flow_handler_helper( Comp_graph comp_grap
         return NULL;
     }
 
-    //std::cout << "get_num_nodes " << get_num_nodes() << std::endl;
-    //std::cout << "get_num_nodes " << get_num_edges() << std::endl;
-
     load_path(path_path);
     load_read(read_path);
 
     add_start_end_node();
     num_out_seq = 0;
-    if (get_num_nodes() <= 3)
+    int curr_num_node = get_num_nodes();
+    if (curr_num_node <= 3)
     {
         dump_SF_seq(output_path, write_lock_ptr);
         clear();
@@ -38,10 +36,15 @@ void * Sparse_flow_handler::run_sparse_flow_handler_helper( Comp_graph comp_grap
     else
     {
         //log_graph_struct(false);
+        
+        //log_all_node(true);
+        //shc_log_info(shc_logname, "start sparse flow\n");
         sparse_flow_on_all_nodes();
+        //shc_log_info(shc_logname, "finish sparse flow and dump SF\n");
         dump_SF_seq(output_path, write_lock_ptr);
         clear();
     }
+    return NULL;
 }
 
 
@@ -1273,14 +1276,14 @@ void Sparse_flow_handler::remove_decomposed_node(std::set<vd_t> & remove_vd)
     }
 }
 
-bool is_connect_start_node(vd_t vd)
-{
+//bool is_connect_start_node(vd_t vd)
+//{
+  
+//}
+//bool is_connect_end_node(vd_t vd)
+//{
 
-}
-bool is_connect_end_node(vd_t vd)
-{
-
-}
+//}
 
 void Sparse_flow_handler::update_sorted_vds(bool is_reverse)
 {
@@ -1695,7 +1698,7 @@ double Sparse_flow_handler::path_decompose(vd_t vd, std::vector<double>& gamma,
     }
 #endif
     glp_delete_prob(lp);
-    glp_free_env();
+    //glp_free_env();
 
     //shc_log_info(shc_logname, "Finish decompose\n");
     return obj_value;
@@ -1747,16 +1750,20 @@ dump_SF_seq(std::string & out_file, pthread_mutex_t * writer_lock_ptr)
 #ifdef LOG_SF
     shc_log_info(shc_logname, "start reconstruct seq multi thread\n");
 #endif
+    //shc_log_info(shc_logname, "dump SF seq\n");
     std::string curr_seq;
     std::vector<int> delimit;
     std::vector<vd_t> stack_vd;
     stack_vd.push_back(vd_start);
+    delimit.push_back(0);
 
     std::ofstream file_writer;
     file_writer.open(out_file, std::ofstream::out | std::ofstream::app);
     read_count_t num_support_read = 0;
+    //shc_log_info(shc_logname, "%d invoke\n", graph[vd_start].node_id);
     output_seq_helper_mt(file_writer, writer_lock_ptr, curr_seq, delimit,
                         stack_vd);
+    //shc_log_info(shc_logname, "finish helper mt out_file\n");
 
     file_writer.close();
 }
@@ -1770,6 +1777,7 @@ output_seq_helper(std::ofstream & file_writer, std::string & curr_seq,
     //shc_log_info(shc_logname, "VD: %u\n", graph[vd].node_id);
     if( vd == vd_end)
     {
+        //shc_log_info(shc_logname, "vd == vd_end\n");
         std::string out_seq = curr_seq.substr(0, delimit.at(delimit.size()-2));
         if(out_seq.size() > setting.output_seq_min_len)
         {
@@ -1777,14 +1785,20 @@ output_seq_helper(std::ofstream & file_writer, std::string & curr_seq,
             std::vector<path_id_t> path3_ids;
             read_count_t reads_1_node, reads_2_node, reads_3_node;
             std::vector<vd_t> simple_vd_path;
+            //shc_log_info(shc_logname, "begin convert_composite_vds_to_vds\n");
             convert_composite_vds_to_vds(stack_vd, simple_vd_path);
+            //shc_log_info(shc_logname, "finish convert_composite_vds_to_vds\n");
+
             assert(simple_vd_path.size() > 0);
 
+            //shc_log_info(shc_logname, "begin get_num_supportive_read\n");
             read_count_t total_read_count =
                     get_num_supportive_read(simple_vd_path, reads_1_node,
                             reads_2_node, reads_3_node, path2_ids, path3_ids);
+            //shc_log_info(shc_logname, "finish get_num_supportive_read\n");
 
            uint64_t num_sf_node = get_num_sparse_flowed_node(simple_vd_path);
+            //shc_log_info(shc_logname, "finish get_num_sparse_flowed_node\n");
 
            file_writer << ">comp_" << comp_id << "_graph_" << graph_id << "_"
                        << (num_out_seq++) << "\t"
@@ -1818,6 +1832,7 @@ output_seq_helper(std::ofstream & file_writer, std::string & curr_seq,
     }
     else
     {
+        //shc_log_info(shc_logname, "exploring\n");
         out_eip_t out_eip = boost::out_edges(vd, graph);
         for(out_ei_t out_ei=out_eip.first; out_ei!=out_eip.second; out_ei++)
         {
@@ -1827,6 +1842,8 @@ output_seq_helper(std::ofstream & file_writer, std::string & curr_seq,
             delimit.push_back(curr_seq.size());
             stack_vd.push_back(vd_target);
 
+
+            //shc_log_info(shc_logname, "exploring vd_target %d\n", graph[vd_target].node_id);
             output_seq_helper(file_writer, curr_seq, delimit, stack_vd);
 
             stack_vd.pop_back();
@@ -1882,6 +1899,7 @@ convert_composite_vds_to_vds(std::vector<vd_t> & vd_path, std::vector<vd_t> & si
             simple_vd_path.push_back(node_path[j]);
         }
     }
+    return true;
 }
 
 uint64_t Sparse_flow_handler::
@@ -2089,8 +2107,10 @@ output_seq_helper_mt(std::ofstream & file_writer, pthread_mutex_t * writer_lock_
         std::vector<vd_t> & stack_vd)
 {
     vd_t vd = stack_vd.back();
-    //std::cout << "VD: " << graph[vd].node_id << std::endl;
-    //shc_log_info(shc_logname, "VD: %u\n", graph[vd].node_id);
+    //shc_log_info(shc_logname, "current vd %d\n", graph[vd].node_id);
+    //for (int i=0; i<delimit.size(); i++) {
+    //    shc_log_info(shc_logname, "delimit %d\n", delimit[i]);
+    //}
 
     if( vd == vd_end)
     {
@@ -2101,14 +2121,13 @@ output_seq_helper_mt(std::ofstream & file_writer, pthread_mutex_t * writer_lock_
             std::vector<path_id_t> path3_ids;
             read_count_t reads_1_node, reads_2_node, reads_3_node;
             std::vector<vd_t> simple_vd_path;
+
             convert_composite_vds_to_vds(stack_vd, simple_vd_path);
             assert(simple_vd_path.size() > 0);
-
             read_count_t total_read_count =
                     get_num_supportive_read(simple_vd_path, reads_1_node,
                                 reads_2_node, reads_3_node, path2_ids, path3_ids);
             uint64_t num_sf_node = get_num_sparse_flowed_node(simple_vd_path);
-
 
             pthread_mutex_lock(writer_lock_ptr);
             file_writer << ">comp_" << comp_id << "_graph_" << graph_id << "_"
@@ -2124,6 +2143,7 @@ output_seq_helper_mt(std::ofstream & file_writer, pthread_mutex_t * writer_lock_
                 file_writer << graph[simple_vd_path[i]].node_id
                             << "(" << graph[simple_vd_path[i]].read_count << ")" << "->";
             }
+
             file_writer << graph[simple_vd_path[simple_vd_path.size()-1]].node_id
                         << "(" << graph[simple_vd_path[simple_vd_path.size()-1]].read_count << ")"
                         <<  "\t";
@@ -2139,10 +2159,10 @@ output_seq_helper_mt(std::ofstream & file_writer, pthread_mutex_t * writer_lock_
             }
             file_writer << std::endl;
 
-
-
             file_writer << (curr_seq.substr(0, delimit.at(delimit.size()-2))) << std::endl;
+
             pthread_mutex_unlock(writer_lock_ptr);
+            //shc_log_info(shc_logname, "%d. end of vd == vd_end\n", graph[vd].node_id);
         }
     }
     else
@@ -2153,6 +2173,7 @@ output_seq_helper_mt(std::ofstream & file_writer, pthread_mutex_t * writer_lock_
             for(out_ei_t out_ei=out_eip.first; out_ei!=out_eip.second; out_ei++)
             {
                 vd_t vd_target = boost::target(*out_ei, graph);
+                //shc_log_info(shc_logname, "explore %d\n", graph[vd_target].node_id);
                 bundled_edge_p & edge_p = graph[*out_ei];
                 curr_seq += graph[vd_target].seq.substr(edge_p.weight);
                 delimit.push_back(curr_seq.size());
@@ -2161,16 +2182,27 @@ output_seq_helper_mt(std::ofstream & file_writer, pthread_mutex_t * writer_lock_
                 read_count_t read_from_one_node = graph[vd_target].read_count;
 
                 //num_support_read
-
+                //shc_log_info(shc_logname, "%d. invoke\n", graph[vd].node_id);
                 output_seq_helper_mt(file_writer, writer_lock_ptr,
                                 curr_seq, delimit, stack_vd);
+                //shc_log_info(shc_logname, "%d. after invoke\n", graph[vd].node_id);
 
                 stack_vd.pop_back();
+                //shc_log_info(shc_logname, "%d. stack_vd.pop_back\n", graph[vd].node_id);
                 delimit.pop_back();
+                //shc_log_info(shc_logname, "%d. delimit.pop_back size %d\n", graph[vd].node_id, delimit.size());
+                //shc_log_info(shc_logname, "%d. curr_seq.resize %d\n", graph[vd].node_id, curr_seq.size());
                 curr_seq.resize(delimit.back());
+                //shc_log_info(shc_logname, "%d. curr_seq.resize from %d to %d\n", graph[vd].node_id,
+                //    curr_seq.size(), delimit.back());
             }
         }
+        else 
+        {
+            //shc_log_info(shc_logname, "out degree 0\n"); 
+        }
     }
+    //shc_log_info(shc_logname, "%d. end of function output_seq_helper_mt \n", graph[vd].node_id); 
 }
 
 /**

@@ -586,6 +586,8 @@ void command_line_for_sparse_flow(
                       "minimal reconstructed output length")
             ("output_path", po::value<std::string>()->required(),
                                     "output path")
+            ("log_path", po::value<std::string>()->default_value("sf_log"),
+                                    "log path")
         ;
 
         add_sparse_flow_options(desc);
@@ -612,6 +614,12 @@ void command_line_for_sparse_flow(
         edge_path = vm["edge_path"].as<std::string>();
         path_path = vm["path_path"].as<std::string>();
         read_path = vm["read_path"].as<std::string>();
+
+        setting.local_files.log_filename_path = vm["log_path"].as<std::string>();
+        memcpy(shc_logname, setting.local_files.log_filename_path.c_str(),
+                                        setting.local_files.log_filename_path.size());
+        std::cout <<"log_filename_path " <<  setting.local_files.log_filename_path << std::endl;
+
         if (!convert_to_abs_and_check_exist(node_path) ||
             !convert_to_abs_and_check_exist(edge_path) ||
             !convert_to_abs_and_check_exist(path_path) ||
@@ -1203,7 +1211,7 @@ void parse_read_len_and_path(
         exit(0);
     }
 
-    if(pe_path && pe_len || !pe_path && !pe_len)
+    if((pe_path && pe_len) || (!pe_path && !pe_len))
         ;
     else
     {
@@ -1213,7 +1221,7 @@ void parse_read_len_and_path(
         exit(0);
     }
 
-    if(se_path && se_len || !se_path && !se_len)
+    if((se_path && se_len) || (!se_path && !se_len))
         ;
     else
     {
