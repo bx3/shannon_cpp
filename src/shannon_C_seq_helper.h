@@ -175,7 +175,9 @@ class Progress_bar
         } else {
             message += ' ';
         }
-        clock_gettime(CLOCK_MONOTONIC, &bt.nano_start);
+
+        bt.start = std::chrono::system_clock::now();
+
         write(0.0);
     }
 
@@ -200,9 +202,10 @@ class Progress_bar
         auto width = bar_width - message.size();
         auto offset = bar_width - static_cast<unsigned>(width * fraction);
 
-        clock_gettime(CLOCK_MONOTONIC,&bt.nano_stamp);
-        bt.nTime = (bt.nano_stamp.tv_sec - bt.nano_start.tv_sec);
-
+        bt.end = std::chrono::system_clock::now();
+        std::chrono::duration<double> elapsed_seconds = bt.end - bt.start;
+        bt.nTime = static_cast<uint64_t>(elapsed_seconds.count());
+         
         os << '\r' << message;
         os.write(full_bar.data() + offset, width);
         os << " [" << std::setw(3) << static_cast<int>(100*fraction) << "%] "

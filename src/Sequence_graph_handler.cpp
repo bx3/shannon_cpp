@@ -2821,7 +2821,7 @@ void Sequence_graph_handler::bridge_all_xnodes()
     //log_term_array(false);
 
     //std::ofstream f_write(setting.local_files.output_path + "/analysis/C_after_condense");
-    mb_condense_timer.time_us = 0;
+    //mb_condense_timer.time_us = 0;
     while(true)
     {
 #ifdef PRINT_TIME
@@ -2875,11 +2875,11 @@ void Sequence_graph_handler::bridge_all_xnodes()
                   << " num_xnode_bridged " << num_xnode_bridged
                   << " nodes_visited " << nodes_visited.size() << ". Checked "
                   << num_read << " reads"
-                  << "mb_condense_timer takes " << mb_condense_timer.time_us << " us"
+                  //<< "mb_condense_timer takes " << mb_condense_timer.time_us << " us"
                   << "num node " << get_num_nodes() << ", num edge " << get_num_edges()
                   << ", num_edge_added " << num_edge_added << std::endl;
 
-        mb_condense_timer.time_us = 0;
+        //mb_condense_timer.time_us = 0;
         shc_log_info(shc_logname, "comp %d, num iter %d num_xnode_bridged %d\n",
                         curr_comp, num_iter, num_xnode_bridged);
         stop_timer(&test_timer);

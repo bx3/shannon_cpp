@@ -355,7 +355,6 @@ void Contig_graph_handler::group_components()
                 start_timer(&progress_timer);
                 total_query=0;
                 total_length = 0;
-                get_set_timer.time_us = 0;
             }
 #endif
             //accurate_start_timer(&get_set_timer);

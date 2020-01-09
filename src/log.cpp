@@ -6,7 +6,8 @@ int init_mem = 0;
 
 void start_timer(struct Block_timer * bt)
 {
-    clock_gettime(CLOCK_MONOTONIC, &bt->nano_start);
+    bt->start = std::chrono::system_clock::now();
+    //clock_gettime(CLOCK_MONOTONIC, &bt->nano_start);
     //bt->mem_start = get_proc_mem_value();
 }
 
@@ -36,6 +37,7 @@ void print_warning_notice(std::string msg)
 
 void print_timer(struct Block_timer * bt)
 {
+    
     std::cout << "\033[0;33m";
     std::cout << "using "
               << bt->nTime/MINUTE_PER_SEC/HOUR_PER_MINUTE << " hours "
@@ -46,34 +48,43 @@ void print_timer(struct Block_timer * bt)
 
 void stop_timer(struct Block_timer * bt)
 {
-    clock_gettime(CLOCK_MONOTONIC,&bt->nano_stamp);
-    bt->nTime = (bt->nano_stamp.tv_sec - bt->nano_start.tv_sec);
+    //clock_gettime(CLOCK_MONOTONIC,&bt->nano_stamp);
+    bt->end = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed_seconds = bt->end - bt->start;
+    bt->nTime = static_cast<uint64_t>(elapsed_seconds.count());
     //int mem_use = get_proc_mem_value() - bt->mem_start;
     print_timer(bt);
 }
 
 uint64_t take_time(struct Block_timer * bt)
 {
-    struct Block_timer curr_bt;
-    clock_gettime(CLOCK_MONOTONIC,&(curr_bt.nano_stamp));
-    return (curr_bt.nano_stamp.tv_sec - bt->nano_start.tv_sec);
+    std::chrono::time_point<std::chrono::system_clock> now  = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed_seconds = now - bt->start;
+    uint64_t dur = static_cast<uint64_t>(elapsed_seconds.count());
+    return dur;
 }
 
 void stop_timer_np(struct Block_timer * bt)
 {
-    clock_gettime(CLOCK_MONOTONIC,&bt->nano_stamp);
-    bt->nTime = (bt->nano_stamp.tv_sec - bt->nano_start.tv_sec);
+    bt->end = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed_seconds = bt->end - bt->start;
+    bt->nTime = static_cast<uint64_t>(elapsed_seconds.count());
+    //clock_gettime(CLOCK_MONOTONIC,&bt->nano_stamp);
+    //bt->nTime = (bt->nano_stamp.tv_sec - bt->nano_start.tv_sec);
 }
 
 
 void log_stop_timer(struct Block_timer * bt)
 {
-    clock_gettime(CLOCK_MONOTONIC,&bt->nano_stamp);
-    bt->nTime = (bt->nano_stamp.tv_sec - bt->nano_start.tv_sec);
-    int mem_use = 0;// get_proc_mem_value() - bt->mem_start;
-    shc_log_info(shc_logname, "**\t\tusing %d hours <=> %d minutes <=> %d sec, mem %d GB\n\n",
+    bt->end = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed_seconds = bt->end - bt->start;
+    bt->nTime = static_cast<uint64_t>(elapsed_seconds.count());
+    //clock_gettime(CLOCK_MONOTONIC,&bt->nano_stamp);
+    //bt->nTime = (bt->nano_stamp.tv_sec - bt->nano_start.tv_sec);
+    //int mem_use = 0;// get_proc_mem_value() - bt->mem_start;
+    shc_log_info(shc_logname, "**\t\tusing %d hours <=> %d minutes <=> %d sec\n\n",
                     bt->nTime/MINUTE_PER_SEC/HOUR_PER_MINUTE,
-                    bt->nTime/HOUR_PER_MINUTE, bt->nTime, mem_use);
+                    bt->nTime/HOUR_PER_MINUTE, bt->nTime);
 }
 
 int parseLine(char* line){

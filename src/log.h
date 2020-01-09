@@ -23,6 +23,8 @@
 #include <iostream>
 #include <pthread.h>
 #include <unistd.h>
+#include <ctime>
+#include <chrono>
 
 //#define LOG_KMER_DETAIL
 
@@ -53,13 +55,22 @@ extern int init_mem;
     void shc_contig_log_info(const char* format, ...);
 #endif
 
+//struct Timer {
+    //Timer () : nTime(0), time_us(0) {}
+//    struct timespec nano_start;
+//    struct timespec nano_stamp;
+//    uint64_t nTime;
+//    int mem_start;
+//    uint64_t time_us;
+//};
+
 struct Block_timer {
-    Block_timer () : nTime(0), time_us(0) {}
-    struct timespec nano_start;
-    struct timespec nano_stamp;
+    Block_timer () : nTime(0) {
+        
+    }
+    std::chrono::time_point<std::chrono::system_clock> start;  
+    std::chrono::time_point<std::chrono::system_clock> end;  
     uint64_t nTime;
-    int mem_start;
-    uint64_t time_us;
 };
 
 extern char shc_logname[200];
@@ -86,22 +97,22 @@ void print_warning_notice(std::string msg);
 inline void accurate_start_timer(struct Block_timer * bt)
 {
     //
-    clock_gettime(CLOCK_MONOTONIC, &bt->nano_start);
+    //clock_gettime(CLOCK_MONOTONIC, &bt->nano_start);
 }
 
 inline void accurate_stop_timer(struct Block_timer * bt)
 {
-    clock_gettime(CLOCK_MONOTONIC,&bt->nano_stamp);
-    bt->nTime = (bt->nano_stamp.tv_sec - bt->nano_start.tv_sec)*NANO_PER_SEC +
-             bt->nano_stamp.tv_nsec - bt->nano_start.tv_nsec;
+    //clock_gettime(CLOCK_MONOTONIC,&bt->nano_stamp);
+    //bt->nTime = (bt->nano_stamp.tv_sec - bt->nano_start.tv_sec)*NANO_PER_SEC +
+    //         bt->nano_stamp.tv_nsec - bt->nano_start.tv_nsec;
 }
 
 inline void accurate_accumulate_timer(struct Block_timer * bt)
 {
-    clock_gettime(CLOCK_MONOTONIC,&bt->nano_stamp);
-    bt->nTime = (bt->nano_stamp.tv_sec - bt->nano_start.tv_sec)*NANO_PER_SEC +
-             bt->nano_stamp.tv_nsec - bt->nano_start.tv_nsec;
-    bt->time_us += bt->nTime/NANO_PER_MICRO;
+    //clock_gettime(CLOCK_MONOTONIC,&bt->nano_stamp);
+    //bt->nTime = (bt->nano_stamp.tv_sec - bt->nano_start.tv_sec)*NANO_PER_SEC +
+    //         bt->nano_stamp.tv_nsec - bt->nano_start.tv_nsec;
+    //bt->time_us += bt->nTime/NANO_PER_MICRO;
 }
 
 void log_stop_timer(struct Block_timer * bt);
