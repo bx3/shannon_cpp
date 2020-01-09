@@ -26,8 +26,6 @@ uint64_t get_mem(pid_t id)
     std::string str(buff);
     str.erase(std::remove(str.begin(), str.end(), '\n'), str.end());
     str.erase(std::remove(str.begin(), str.end(), ' '), str.end());
-    std::cout << "before lexical cast memory pid " << id << std::endl;
-    std::cout << "str:" << str << std::endl;
     uint64_t RSS = boost::lexical_cast<uint64_t>(str) ;
     return RSS;
 }
@@ -1337,6 +1335,6 @@ int unlock_memory(char   *addr,
   addr -= page_offset;  // Adjust addr to page boundary
   size += page_offset;  // Adjust size with page_offset
 
-  return ( munlock(addr, size) );  /* Unlock the memory
+  return ( munlock(addr, size) );  // Unlock the memory
 }
 */

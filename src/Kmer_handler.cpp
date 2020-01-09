@@ -788,7 +788,9 @@ void Kmer_handler::write_kmer_info(uint8_t num, bool is_prefix,
  */
 contig_num_t Kmer_handler::find_contig()
 {
-    find_contig_external();
+    contig_num_t num_contig_ = find_contig_external();
+    //std::cout << "finish find_contig_external " << num_contig_ << std::endl;
+    return num_contig_;
 }
 
 //return false if kmer is skipped
