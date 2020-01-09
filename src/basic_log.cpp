@@ -46,9 +46,9 @@ void log_file_write(cl_log_level level, const char *caller, const char* filename
     if(!wlan_logfile_cleared){
         FILE* fp = fopen(filename, "w");
         if(fp != NULL){
-            time_t rawtime;
-            time ( &rawtime );
-            fprintf(fp, "WLAN Log File: %s\n", ctime (&rawtime));
+            //time_t rawtime;
+            //time ( &rawtime );
+            //fprintf(fp, "WLAN Log File: %s\n", ctime (&rawtime));
             fclose(fp);
         }
         pthread_mutex_init(&log_lock, NULL);
@@ -63,12 +63,12 @@ void log_file_write(cl_log_level level, const char *caller, const char* filename
             va_list args;
             char s[1000];
 
-            struct timespec rawtime;
-            clock_gettime(CLOCK_MONOTONIC, &rawtime);
+            //struct timespec rawtime;
+            //clock_gettime(CLOCK_MONOTONIC, &rawtime);
             /* Write the log message */
             va_start(args, format);
             vsprintf(s, format, args);
-            fprintf(fp, "%.6f: [%s]%s", rawtime.tv_sec+rawtime.tv_nsec/1000000000.0, caller, s);
+            //fprintf(fp, "%.6f: [%s]%s", rawtime.tv_sec+rawtime.tv_nsec/1000000000.0, caller, s);
 
             if(level == CL_LOG_LEVEL_ERROR)
                 printf("[%s]%s", caller, s);
