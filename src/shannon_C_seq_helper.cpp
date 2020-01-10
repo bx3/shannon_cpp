@@ -1302,12 +1302,26 @@ void print_and_log_multi_graph_setting(Shannon_C_setting & setting)
 }
 
 //https://stackoverflow.com/questions/2513505/how-to-get-available-memory-c-g/26639774
+#ifdef __unix__ 
 int64_t get_machine_physical_limit_mem()
 {
+    std::cout << "detect linux/unix system" << std::endl;
     int64_t pages = sysconf(_SC_PHYS_PAGES);
     int64_t page_size = sysconf(_SC_PAGE_SIZE);
     return pages * page_size;
 }
+#endif
+
+#ifdef __APPLE__
+int64_t get_machine_physical_limit_mem()
+{
+    std::cout << "detect Mac OS" << std::endl;
+    size_t memorySize;
+    sysctlbyname("hw.memsize",nullptr,&memorySize,nullptr,0);
+
+    return static_cast<int64_t>(memorySize);
+}
+#endif
 
 /*
 int lock_memory(char   *addr,

@@ -28,6 +28,8 @@
 #include "json_parser.h"
 #include "local_file_structure.h"
 #include "shc_type.h"
+#include <unistd.h>
+#include <sys/sysctl.h>
 
 
 uint64_t get_mem(pid_t id);

@@ -78,11 +78,11 @@ struct Kmer_info {
     contig_num_t contig;
 
 
-    Kmer_info(): count(0), info(0), used(false), contig(IMPOSSIBLE_CONTIG_NUM){}
-    Kmer_info(kmer_count_t cp): count(cp), info(0), used(false),
+    Kmer_info(): used(false), info(0), count(0), contig(IMPOSSIBLE_CONTIG_NUM){}
+    Kmer_info(kmer_count_t cp): used(false), info(0), count(cp), 
                 contig(IMPOSSIBLE_CONTIG_NUM){}
     Kmer_info(kmer_count_t count_p, uint8_t info_p, bool up, contig_num_t contig_p
-           ): count(count_p), info(info_p), used(up), contig(contig_p){}
+           ): used(up), info(info_p), count(count_p), contig(contig_p){}
 };
 
 

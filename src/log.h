@@ -94,26 +94,26 @@ void print_important_notice(std::string msg);
 void print_warning_notice(std::string msg);
 
 
-inline void accurate_start_timer(struct Block_timer * bt)
-{
+//inline void accurate_start_timer(struct Block_timer * bt)
+//{
     //
     //clock_gettime(CLOCK_MONOTONIC, &bt->nano_start);
-}
+//}
 
-inline void accurate_stop_timer(struct Block_timer * bt)
-{
+//inline void accurate_stop_timer(struct Block_timer * bt)
+//{
     //clock_gettime(CLOCK_MONOTONIC,&bt->nano_stamp);
     //bt->nTime = (bt->nano_stamp.tv_sec - bt->nano_start.tv_sec)*NANO_PER_SEC +
     //         bt->nano_stamp.tv_nsec - bt->nano_start.tv_nsec;
-}
+//}
 
-inline void accurate_accumulate_timer(struct Block_timer * bt)
-{
+//inline void accurate_accumulate_timer(struct Block_timer * bt)
+//{
     //clock_gettime(CLOCK_MONOTONIC,&bt->nano_stamp);
     //bt->nTime = (bt->nano_stamp.tv_sec - bt->nano_start.tv_sec)*NANO_PER_SEC +
     //         bt->nano_stamp.tv_nsec - bt->nano_start.tv_nsec;
     //bt->time_us += bt->nTime/NANO_PER_MICRO;
-}
+//}
 
 void log_stop_timer(struct Block_timer * bt);
 
