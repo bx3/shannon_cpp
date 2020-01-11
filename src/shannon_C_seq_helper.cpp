@@ -893,8 +893,9 @@ void run_jellyfish(Shannon_C_setting & setting)
             std::string num_thread_str = std::to_string(setting.num_parallel);
             std::string kmer_length_str = std::to_string(setting.kmer_length);
 
-            int num_field = 15;
+            int num_field = 200; 
             char **argv = (char**) malloc(num_field*sizeof(char*));
+            //std::vector<std::string> argv;
             for(int i=0;i<num_field;i++){
                 argv[i] = (char*) malloc(1000*sizeof(char));
             }
@@ -927,7 +928,6 @@ void run_jellyfish(Shannon_C_setting & setting)
             {
                 //input_reads += lf.input_read_path;
                 strcpy(argv[arg_n++], lf.input_read_path.c_str());
-                argv[arg_n++] =  NULL;
             }
 
             if(setting.has_pair)
@@ -936,6 +936,10 @@ void run_jellyfish(Shannon_C_setting & setting)
                 strcpy(argv[arg_n++], lf.input_read_path_1.c_str());
                 strcpy(argv[arg_n++], lf.input_read_path_2.c_str());
                 argv[arg_n++] = NULL;
+            }
+            else
+            {
+                argv[arg_n++] =  NULL;
             }
 
 
