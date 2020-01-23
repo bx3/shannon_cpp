@@ -745,9 +745,14 @@ void run_pre_error_correct(Shannon_C_setting & setting)
     std::cout << "run_pre_error_correct" << std::endl;
 
     Local_files & lf = setting.local_files;
-    std::string num_thread_str = std::to_string(setting.num_parallel);
+    std::string num_thread_str;
+		// TODO it is a hack, rcorrector on MACOS fails if thread = 1
+		if (setting.num_parallel == 1)
+		    num_thread_str = std::to_string(setting.num_parallel*2);
+		else
+        num_thread_str = std::to_string(setting.num_parallel);
 
-    int num_field = 15;
+    int num_field = 200;
     char **argv = (char**) malloc(num_field*sizeof(char*));
     for(int i=0;i<num_field;i++){
         argv[i] = (char*) malloc(1000*sizeof(char));
@@ -893,9 +898,8 @@ void run_jellyfish(Shannon_C_setting & setting)
             std::string num_thread_str = std::to_string(setting.num_parallel);
             std::string kmer_length_str = std::to_string(setting.kmer_length);
 
-            int num_field = 200; 
+            int num_field = 200;
             char **argv = (char**) malloc(num_field*sizeof(char*));
-            //std::vector<std::string> argv;
             for(int i=0;i<num_field;i++){
                 argv[i] = (char*) malloc(1000*sizeof(char));
             }
@@ -937,10 +941,10 @@ void run_jellyfish(Shannon_C_setting & setting)
                 strcpy(argv[arg_n++], lf.input_read_path_2.c_str());
                 argv[arg_n++] = NULL;
             }
-            else
-            {
-                argv[arg_n++] =  NULL;
-            }
+						else
+						{
+							  argv[arg_n++] = NULL;
+						}
 
 
             // cmd_count += input_reads;
@@ -1319,11 +1323,23 @@ int64_t get_machine_physical_limit_mem()
 #ifdef __APPLE__
 int64_t get_machine_physical_limit_mem()
 {
-    std::cout << "detect Mac OS" << std::endl;
-    size_t memorySize;
-    sysctlbyname("hw.memsize",nullptr,&memorySize,nullptr,0);
+    FILE *in;
+    char buff[512];
 
-    return static_cast<int64_t>(memorySize);
+    std::string command("sysctl -n hw.memsize");
+    if(!(in = popen(command.c_str(), "r"))){
+        _exit(1);
+    }
+    while(fgets(buff, sizeof(buff), in)!=NULL){
+        //cout << buff;
+    }
+    pclose(in);
+
+    std::string str(buff);
+    str.erase(std::remove(str.begin(), str.end(), '\n'), str.end());
+    str.erase(std::remove(str.begin(), str.end(), ' '), str.end());
+    int64_t memorySize = boost::lexical_cast<int64_t>(str) ;
+    return memorySize;
 }
 #endif
 
